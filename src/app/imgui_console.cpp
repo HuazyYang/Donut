@@ -15,7 +15,7 @@
 * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
 * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARIPSING
 * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 * DEALINGS IN THE SOFTWARE.
 */
@@ -45,7 +45,6 @@ SOFTWARE.
 */
 
 #include <donut/app/imgui_console.h>
-#include <donut/app/imgui_renderer.h>
 
 #include <donut/engine/ConsoleInterpreter.h>
 #include <donut/engine/ConsoleObjects.h>
@@ -171,7 +170,7 @@ void ImGui_Console::Render(bool* open)
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 1)); // Tighten spacing
 
 	if (m_Options.font)
-		ImGui::PushFont(m_Options.font->GetScaledFont());
+		ImGui::PushFont(m_Options.font);
 	for (auto const& item : m_ItemsLog)
 	{
 		using namespace donut::log;
@@ -209,7 +208,7 @@ void ImGui_Console::Render(bool* open)
 
 	// Command line
 	if (m_Options.font)
-		ImGui::PushFont(m_Options.font->GetScaledFont());
+		ImGui::PushFont(m_Options.font);
 
 	bool reclaim_focus = false;
 	auto flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_CallbackHistory;

@@ -1,0 +1,852 @@
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include <condition_variable>
+#include <algorithm>
+#include <donut/core/object/MemoryAllocators.h>
+#include <donut/core/object/AutoPtr.h>
+#include <donut/core/object/ObjectBase.h>
+#include <donut/core/object/Threading.h>
+
+#include "gtest/gtest.h"
+
+using namespace donut;
+
+template <typename Type>
+Type* MakeNewObj() {
+    return MAKE_RC_OBJ0(Type)();
+}
+
+namespace Test {
+// {82AA31B6-F0DF-4C11-864B-FC1643660D0B}
+DONUT_CLSID(Object, "82aa31b6-f0df-4c11-864b-fc1643660d0b")
+class Object : public ObjectImpl<IWeakReferenceSource> {
+    DONUT_DECLARE_UUID_TRAITS(Object)
+ public:
+    static void Create(Object** ppObj) { *ppObj = MakeNewObj<Object>(); }
+
+    virtual FRESULT QueryInterface(const FIID& iid, void** ppInterface) override;
+
+    Object(IWeakReference* pRefCounters)
+        : ObjectImpl{ pRefCounters },
+          m_Value(0) {}
+
+    ~Object() {}
+    std::atomic_int m_Value;
+};
+
+class StrongObject : public ObjectImpl<IObject> {
+public:
+    StrongObject() {}
+
+    std::atomic_int m_Value;
+};
+
+DONUT_CLSID(DelegatingObj, "139d4e04-fb74-4070-b642-a2e6e2d1709b")
+class DelegatingObj : public DelegatingObjectImpl<IObject> {
+    DONUT_DECLARE_UUID_TRAITS(DelegatingObj)
+ public:
+    DelegatingObj(IObject* pOwner)
+        : DelegatingObjectImpl<IObject>(pOwner) {}
+
+    DONUT_BEGIN_NON_DELEGATING_INTERFACE_TABLE_INLINE(DelegatingObj)
+    DONUT_IMPLEMENTS_INTERFACE(DelegatingObj)
+    DONUT_END_INTERFACE_TABLE()
+};
+
+DONUT_BEGIN_INTERFACE_TABLE(Object)
+DONUT_IMPLEMENTS_INTERFACE(Object)
+DONUT_IMPLEMENTS_ROUTE_PARENT(ObjectImpl<IWeakReferenceSource>)
+DONUT_END_INTERFACE_TABLE()
+
+// {0CBC582D-66A2-452B-BAC4-CDACABA2D9A8}
+DONUT_CLSID(DerivedObject, "0cbc582d-66a2-452b-bac4-cdacaba2d9a8")
+class DerivedObject : public Object {
+    DONUT_DECLARE_UUID_TRAITS(DerivedObject)
+ public:
+    DerivedObject(IWeakReference* pRefCounters)
+        : Object{ pRefCounters },
+          m_Value2{ 1 } {}
+
+    FRESULT QueryInterface(FREFIID riid, void** ppInterface) override;
+
+    int m_Value2;
+};
+
+DONUT_BEGIN_INTERFACE_TABLE(DerivedObject)
+DONUT_IMPLEMENTS_INTERFACE(DerivedObject)
+DONUT_IMPLEMENTS_ROUTE_PARENT(Object)
+DONUT_END_INTERFACE_TABLE()
+
+using SmartPtr = AutoPtr<Object>;
+using WeakPtr = donut::WeakPtr<Object>;
+static_assert(
+    std::is_same<WeakPtr::WeakRefType, donut::WeakReferenceImpl>::value,
+    "Implement weak reference type is requrired for WeakPtr");
+
+TEST(Common, MakeNewRCObj) {
+    auto Obj1 = MAKE_RC_OBJ0(Object)();
+    auto Obj2 = MAKE_RC_OBJ0(StrongObject)();
+    Obj1->Release();
+    Obj2->Release();
+}
+
+TEST(Common_RefCntAutoPtr, Constructors) {
+    {
+        SmartPtr SP0;
+        SmartPtr SP1(nullptr);
+        auto* pRawPtr = MakeNewObj<Object>();
+        SmartPtr SP2(pRawPtr);
+        SmartPtr SP2_1(pRawPtr);
+        pRawPtr->Release();
+        EXPECT_EQ(SP2, SP2_1);
+
+        SmartPtr SP3(SP0);
+        SmartPtr SP4(SP2);
+        SmartPtr SP5(std::move(SP3));
+        EXPECT_TRUE(!SP3);
+        SmartPtr SP6(std::move(SP4));
+        EXPECT_TRUE(!SP4);
+
+        AutoPtr<DerivedObject> DerivedSP = TakeOver(MakeNewObj<DerivedObject>());
+
+        SmartPtr SP7(DerivedSP);
+        SmartPtr SP8(std::move(DerivedSP));
+        EXPECT_EQ(SP7, SP8);
+        EXPECT_TRUE(!DerivedSP);
+    }
+}
+
+TEST(Common_RefCntAutoPtr, AttachDetach) {
+    {
+        auto* pRawPtr = MakeNewObj<Object>();
+
+        SmartPtr SP0;
+        SP0.Attach(nullptr);
+        EXPECT_TRUE(!SP0);
+        SP0.Attach(pRawPtr);
+        EXPECT_TRUE(SP0);
+    }
+
+    {
+        auto* pRawPtr = MakeNewObj<Object>();
+
+        SmartPtr SP0;
+        SP0.Attach(pRawPtr);
+        EXPECT_TRUE(SP0);
+        SP0.Attach(nullptr);
+        EXPECT_TRUE(!SP0);
+    }
+
+    {
+        auto* pRawPtr = MakeNewObj<Object>();
+
+        SmartPtr SP0(TakeOver(MakeNewObj<Object>()));
+        SP0.Attach(pRawPtr);
+        EXPECT_TRUE(SP0);
+    }
+
+    {
+        SmartPtr SP0 = TakeOver(MakeNewObj<Object>());
+        EXPECT_TRUE(SP0);
+
+        auto* pRawPtr = MakeNewObj<Object>();
+        SP0.Attach(pRawPtr);
+        auto* pRawPtr2 = SP0.Detach();
+        pRawPtr2->Release();
+
+        auto* pRawPtr3 = SmartPtr().Detach();
+        EXPECT_TRUE(pRawPtr3 == nullptr);
+        auto* pRawPtr4 = SmartPtr(TakeOver(MakeNewObj<Object>())).Detach();
+        EXPECT_TRUE(pRawPtr4 != nullptr);
+        pRawPtr4->Release();
+    }
+}
+
+TEST(Common_RefCntAutoPtr, OperatorEqual) {
+    {
+        SmartPtr SP0;
+        auto pRawPtr1 = MakeNewObj<Object>();
+        SmartPtr SP1(pRawPtr1);
+        SmartPtr SP2(pRawPtr1);
+        SP0 = SP0;
+        SP0 = std::move(SP0);
+        SP0 = nullptr;
+        EXPECT_EQ(SP0, nullptr);
+
+        SP1 = pRawPtr1;
+        SP1 = SP1;
+        SP1 = std::move(SP1);
+        EXPECT_EQ(SP1.Get(), pRawPtr1);
+
+        SP1 = SP2;
+        SP1 = std::move(SP2);
+        EXPECT_EQ(SP1.Get(), pRawPtr1);
+
+        pRawPtr1->Release();
+
+        auto pRawPtr2 = MakeNewObj<Object>();
+        SmartPtr SP3(pRawPtr2);
+
+        SP0 = pRawPtr2;
+        SmartPtr SP4;
+        SP4 = SP3;
+        SmartPtr SP5;
+        SP5 = std::move(SP4);
+        EXPECT_TRUE(!SP4);
+
+        SP1 = pRawPtr2;
+        SP1 = nullptr;
+        SP1 = std::move(SP5);
+        EXPECT_TRUE(!SP5);
+
+        pRawPtr2->Release();
+
+        AutoPtr<DerivedObject> DerivedSP(TakeOver(MakeNewObj<DerivedObject>()));
+        SP1 = DerivedSP;
+        SP2 = std::move(DerivedSP);
+        EXPECT_TRUE(!DerivedSP);
+    }
+}
+
+TEST(Common_RefCntAutoPtr, LogicalOperators) {
+    {
+        auto pRawPtr1 = MakeNewObj<Object>();
+        auto pRawPtr2 = MakeNewObj<Object>();
+        SmartPtr SP0, SP1(pRawPtr1), SP2(pRawPtr1), SP3(pRawPtr2);
+        EXPECT_TRUE(!SP0);
+        bool b1 = SP0 != nullptr;
+        EXPECT_TRUE(!b1);
+
+        EXPECT_TRUE(!(!SP1));
+        EXPECT_TRUE(SP1);
+        EXPECT_TRUE(SP0 != SP1);
+        EXPECT_TRUE(SP0 == SP0);
+        EXPECT_TRUE(SP1 == SP1);
+        EXPECT_TRUE(SP1 == SP2);
+        EXPECT_TRUE(SP1 != SP3);
+        EXPECT_TRUE(SP0 < SP3);
+        EXPECT_TRUE((SP1 < SP3) == (pRawPtr1 < pRawPtr2));
+
+        pRawPtr1->Release();
+        pRawPtr2->Release();
+    }
+}
+
+TEST(Common_RefCntAutoPtr, OperatorAmpersand) {
+    {
+        SmartPtr SP0, SP1(TakeOver(MakeNewObj<Object>())), SP2, SP3, SP4(TakeOver(MakeNewObj<Object>()));
+        auto* pRawPtr = MakeNewObj<Object>();
+
+        *static_cast<Object**>(&SP0) = pRawPtr;
+        SP0.Detach();
+        SP2 = pRawPtr;
+        SP2.Detach();
+
+        Object::Create(&SP3);
+
+        Object::Create(&SP1);
+        *static_cast<Object**>(&SP4) = pRawPtr;
+
+        {
+            SmartPtr SP5(TakeOver(MakeNewObj<Object>()));
+            auto pDblPtr = &SP5;
+            *(Object**)&SP5 = MakeNewObj<Object>();
+            auto pDblPtr2 = &SP5;
+            Object::Create(pDblPtr2);
+        }
+
+        SmartPtr SP6(TakeOver(MakeNewObj<Object>()));
+        // This will not work:
+        // Object **pDblPtr3 = &SP6;
+        // *pDblPtr3 = new Object;
+
+        pRawPtr->Release();
+    }
+}
+
+TEST(Common_RefCntWeakPtr, Constructors) {
+    {
+        SmartPtr SP0, SP1(TakeOver(MakeNewObj<Object>()));
+        WeakPtr WP0;
+        WeakPtr WP1(WP0);
+        WeakPtr WP2(SP0);
+        WeakPtr WP3(SP1);
+        WeakPtr WP4(WP3);
+        WeakPtr WP5(std::move(WP0));
+        WeakPtr WP6(std::move(WP4));
+
+        auto* pRawPtr = MakeNewObj<Object>();
+        WeakPtr WP7(pRawPtr);
+        pRawPtr->Release();
+    }
+}
+
+TEST(Common_RefCntWeakPtr, OperatorEqual) {
+    {
+        auto* pRawPtr = MakeNewObj<Object>();
+        SmartPtr SP0, SP1(pRawPtr);
+        WeakPtr WP0, WP1(SP1), WP2(SP1);
+        WP0 = WP0;
+        WP0 = std::move(WP0);
+        WP1 = WP1;
+        WP1 = std::move(WP1);
+        WP1 = WP2;
+        WP1 = std::move(WP2);
+        WP1 = pRawPtr;
+        WP0 = pRawPtr;
+        WP0.Reset();
+        WP0 = WP2;
+
+        WP1 = WP0;
+        WP0 = SP1;
+        WP2 = std::move(WP1);
+
+        pRawPtr->Release();
+    }
+}
+
+TEST(Common_RefCntWeakPtr, Lock) {
+    {
+        SmartPtr SP0, SP1(TakeOver(MakeNewObj<Object>()));
+        WeakPtr WP0, WP1(SP0), WP2(SP1), WP3(SP1);
+        EXPECT_TRUE(WP0 == WP1);
+        EXPECT_TRUE(WP0 != WP2);
+        EXPECT_TRUE(WP2 == WP3);
+        SP1.Reset();
+        EXPECT_TRUE(WP2 == WP3);
+    }
+
+    // Test Lock()
+    {
+        SmartPtr SP0, SP1(TakeOver(MakeNewObj<Object>()));
+        WeakPtr WP0, WP1(SP0), WP2(SP1);
+        WeakPtr WP3(WP2);
+        auto L1 = WP0.Lock();
+        EXPECT_TRUE(!L1);
+        L1 = WP1.Lock();
+        EXPECT_TRUE(!L1);
+        L1 = WP2.Lock();
+        EXPECT_TRUE(L1);
+        L1 = WP3.Lock();
+        EXPECT_TRUE(L1);
+        auto pRawPtr = SP1.Detach();
+        L1.Reset();
+
+        L1 = WP3.Lock();
+        EXPECT_TRUE(L1);
+        L1.Reset();
+
+        pRawPtr->Release();
+
+        L1 = WP3.Lock();
+        EXPECT_TRUE(!L1);
+    }
+}
+
+TEST(Common_RefCntAutoPtr, Misc) {
+
+    {
+        class OwnerTest : public ObjectImpl<IWeakReferenceSource> {
+        public:
+            OwnerTest(IWeakReference* pRefCounters, int* pFlag)
+                : ObjectImpl<IWeakReferenceSource>(pRefCounters),
+                  m_pFlag{ pFlag } {
+                Obj = MakeNewRCDelegating<DelegatingObj>(this)();
+                // Retain a weak reference
+                GetWeakReference()->AddRef();
+                *pFlag = 0;
+            }
+
+            DONUT_BEGIN_INTERFACE_TABLE_INLINE(OwnerTest)
+            DONUT_IMPLEMENTS_ROUTE_MEMBER(Obj)
+            DONUT_END_INTERFACE_TABLE()
+
+            ~OwnerTest() {
+                *m_pFlag = 1;
+                Obj->DestroyObject();
+                GetWeakReference()->Release();  // Actually release weak reference
+            }
+
+        private:
+            int* m_pFlag;
+            DelegatingObj* Obj;
+        };
+
+        int Flag;
+        OwnerTest* pOwnerObject = MAKE_RC_OBJ0(OwnerTest)(&Flag);
+        AutoPtr<DelegatingObj> Obj;
+        pOwnerObject->QueryInterface(FIID_PPV_ARGS(&Obj));
+        EXPECT_TRUE(Obj != nullptr);
+        pOwnerObject->Release();
+        Obj.Reset();
+        EXPECT_EQ(Flag, 1);
+    }
+
+    {
+        class SelfRefTest : public ObjectImpl<IWeakReferenceSource> {
+        public:
+            SelfRefTest(IWeakReference* pRefCounters, int* pFlag)
+                : ObjectImpl<IWeakReferenceSource>(pRefCounters),
+                  wpSelf(this),
+                  m_pFlag{ pFlag } {
+                *m_pFlag = 0;
+            }
+
+            virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) { return FS_OK; }
+
+            ~SelfRefTest() { *m_pFlag = 1; }
+
+        private:
+            int* m_pFlag;
+            donut::WeakPtr<SelfRefTest> wpSelf;
+        };
+
+        int Flags;
+        SelfRefTest* pSelfRefTest = MAKE_RC_OBJ0(SelfRefTest)(&Flags);
+        pSelfRefTest->Release();
+        EXPECT_EQ(Flags, 1);
+
+        { AutoPtr<SelfRefTest> pSelfRefTest2 = TakeOver(MAKE_RC_OBJ0(SelfRefTest)(&Flags)); }
+        EXPECT_EQ(Flags, 1);
+    }
+
+    {
+        class ExceptionTest1 : public ObjectImpl<IWeakReferenceSource> {
+        public:
+            ExceptionTest1(IWeakReference* pRefCounters)
+                : ObjectImpl<IWeakReferenceSource>(pRefCounters),
+                  wpSelf(this) {
+                throw std::runtime_error("test exception");
+            }
+
+            virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) { return FS_OK; }
+
+        private:
+            donut::WeakPtr<ExceptionTest1> wpSelf;
+        };
+
+        try {
+            auto* pExceptionTest = MakeNewObj<ExceptionTest1>();
+            (void)pExceptionTest;
+        } catch (std::runtime_error&) {
+        }
+    }
+
+    {
+        class ExceptionTest2 : public ObjectImpl<IWeakReferenceSource> {
+        public:
+            ExceptionTest2(IWeakReference* pRefCounters)
+                : ObjectImpl<IWeakReferenceSource>(pRefCounters),
+                  wpSelf(this) {
+                throw std::runtime_error("test exception");
+            }
+
+            virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) { return FS_OK; }
+
+        private:
+            donut::WeakPtr<ExceptionTest2> wpSelf;
+        };
+
+        try {
+            auto* pExceptionTest =
+                MAKE_RC_OBJ0(ExceptionTest2)();
+            (void)pExceptionTest;
+        } catch (std::runtime_error&) {
+        }
+    }
+
+    {
+        class ExceptionTest3 : public ObjectImpl<IWeakReferenceSource> {
+        public:
+            ExceptionTest3(IWeakReference* pRefCounters)
+                : ObjectImpl<IWeakReferenceSource>(pRefCounters),
+                  m_Member(*this) {}
+
+            class Subclass {
+            public:
+                Subclass(ExceptionTest3& parent)
+                    : wpSelf(&parent) {
+                    throw std::runtime_error("test exception");
+                }
+
+            private:
+                donut::WeakPtr<ExceptionTest3> wpSelf;
+            };
+            virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) { return FS_OK; }
+
+        private:
+            Subclass m_Member;
+        };
+
+        try {
+            auto* pExceptionTest =
+                MAKE_RC_OBJ0(ExceptionTest3)();
+            (void)pExceptionTest;
+        } catch (std::runtime_error&) {
+        }
+    }
+
+    {
+        class OwnerObject : public ObjectImpl<IWeakReferenceSource> {
+        public:
+            OwnerObject(IWeakReference* pRefCounters)
+                : ObjectImpl<IWeakReferenceSource>(pRefCounters) {}
+
+            void CreateMember() {
+                try {
+                    m_pMember =
+                        MAKE_RC_OBJ0(ExceptionTest4)(*this);
+                } catch (...) {
+                }
+            }
+            virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) { return FS_OK; }
+
+            class ExceptionTest4 : public ObjectImpl<IWeakReferenceSource> {
+            public:
+                ExceptionTest4(IWeakReference* pRefCounters, OwnerObject& owner)
+                    : ObjectImpl<IWeakReferenceSource>(pRefCounters),
+                      m_Member(owner, *this) {}
+
+                class Subclass {
+                public:
+                    Subclass(OwnerObject& owner, ExceptionTest4& parent)
+                        : wpParent(&parent),
+                          wpOwner(&owner) {
+                        throw std::runtime_error("test exception");
+                    }
+
+                private:
+                    donut::WeakPtr<ExceptionTest4> wpParent;
+                    donut::WeakPtr<OwnerObject> wpOwner;
+                };
+                virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) { return FS_OK; }
+
+            private:
+                Subclass m_Member;
+            };
+
+            AutoPtr<ExceptionTest4> m_pMember;
+        };
+
+        AutoPtr<OwnerObject> pOwner(
+            TakeOver(MAKE_RC_OBJ0(OwnerObject)()));
+        pOwner->CreateMember();
+    }
+
+    {
+        class OwnerObject : public ObjectImpl<IWeakReferenceSource> {
+        public:
+            OwnerObject(IWeakReference* pRefCounters)
+                : ObjectImpl<IWeakReferenceSource>(pRefCounters) {
+                m_pMember = MAKE_RC_OBJ0(ExceptionTest4)(*this);
+            }
+
+            virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) { return FS_OK; }
+
+            class ExceptionTest4 : public ObjectImpl<IWeakReferenceSource> {
+            public:
+                ExceptionTest4(IWeakReference* pRefCounters, OwnerObject& owner)
+                    : ObjectImpl<IWeakReferenceSource>(pRefCounters),
+                      m_Member(owner, *this) {}
+
+                class Subclass {
+                public:
+                    Subclass(OwnerObject& owner, ExceptionTest4& parent)
+                        : wpParent(&parent),
+                          wpOwner(&owner) {
+                        throw std::runtime_error("test exception");
+                    }
+
+                private:
+                    donut::WeakPtr<ExceptionTest4> wpParent;
+                    donut::WeakPtr<OwnerObject> wpOwner;
+                };
+                virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) { return FS_OK; }
+
+            private:
+                Subclass m_Member;
+            };
+
+            AutoPtr<ExceptionTest4> m_pMember;
+        };
+
+        try {
+            AutoPtr<OwnerObject> pOwner(
+                TakeOver(MAKE_RC_OBJ0(OwnerObject)()));
+        } catch (...) {
+        }
+    }
+
+    {
+        class TestObject : public ObjectImpl<IWeakReferenceSource> {
+        public:
+            TestObject(IWeakReference* pRefCounters)
+                : ObjectImpl<IWeakReferenceSource>(pRefCounters) {}
+
+            virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) override final { return FS_OK; }
+
+            inline virtual FLONG Release() override final {
+                return ObjectImpl<IWeakReferenceSource>::Release([&]()                    //
+                                                                 { ppWeakPtr->Reset(); }  //
+                );
+            }
+            donut::WeakPtr<TestObject>* ppWeakPtr = nullptr;
+        };
+
+        AutoPtr<TestObject> pObj(
+            TakeOver(MAKE_RC_OBJ0(TestObject)()));
+        donut::WeakPtr<TestObject> pWeakPtr(pObj);
+
+        pObj->ppWeakPtr = &pWeakPtr;
+        pObj.Reset();
+    }
+}
+
+class RefCntAutoPtrThreadingTest {
+public:
+    ~RefCntAutoPtrThreadingTest();
+
+    void StartConcurrencyTest();
+    void RunConcurrencyTest();
+
+    static void WorkerThreadFunc(RefCntAutoPtrThreadingTest* This, size_t ThreadNum);
+
+    void StartWorkerThreadsAndWait(int SignalIdx);
+    void WaitSiblingWorkerThreads(int SignalIdx);
+
+    std::vector<std::thread> m_Threads;
+
+    Object* m_pSharedObject = nullptr;
+#ifdef DILIGENT_DEBUG
+    static const int NumThreadInterations = 10000;
+#else
+    static const int NumThreadInterations = 50000;
+#endif
+    Signal m_WorkerThreadSignal[2];
+    Signal m_MainThreadSignal;
+
+    std::mutex m_NumThreadsCompletedMtx;
+    std::atomic_int m_NumThreadsCompleted[2];
+    std::atomic_int m_NumThreadsReady;
+};
+
+RefCntAutoPtrThreadingTest::~RefCntAutoPtrThreadingTest() {
+    m_WorkerThreadSignal[0].Trigger(true, -1);
+
+    for (auto& t : m_Threads) t.join();
+
+    // ("Performed ", int{NumThreadInterations}, " iterations on ", m_Threads.size(), " threads");
+}
+
+void RefCntAutoPtrThreadingTest::WaitSiblingWorkerThreads(int SignalIdx) {
+    auto NumThreads = static_cast<int>(m_Threads.size());
+    if (++m_NumThreadsCompleted[SignalIdx] == NumThreads) {
+        EXPECT_FALSE(m_WorkerThreadSignal[1 - SignalIdx].IsTriggered());
+        m_MainThreadSignal.Trigger();
+    } else {
+        while (m_NumThreadsCompleted[SignalIdx] < NumThreads) std::this_thread::yield();
+    }
+}
+
+void RefCntAutoPtrThreadingTest::StartWorkerThreadsAndWait(int SignalIdx) {
+    m_NumThreadsCompleted[SignalIdx] = 0;
+    m_WorkerThreadSignal[SignalIdx].Trigger(true);
+
+    m_MainThreadSignal.Wait(true, 1);
+}
+
+void RefCntAutoPtrThreadingTest::WorkerThreadFunc(RefCntAutoPtrThreadingTest* This, size_t ThreadNum) {
+    const int NumThreads = static_cast<int>(This->m_Threads.size());
+    while (true) {
+        for (int i = 0; i < NumThreadInterations; ++i) {
+            // Wait until main() sends data
+            auto SignaledValue = This->m_WorkerThreadSignal[0].Wait(true, NumThreads);
+            if (SignaledValue < 0) {
+                return;
+            }
+
+            {
+                auto* pObject = This->m_pSharedObject;
+                for (int j = 0; j < 100; ++j) {
+                    // LOG_INFO_MESSAGE("t",std::this_thread::get_id(), ": AddRef" );
+                    pObject->m_Value++;
+                    pObject->AddRef();
+                }
+                This->WaitSiblingWorkerThreads(0);
+
+                This->m_WorkerThreadSignal[1].Wait(true, NumThreads);
+                for (int j = 0; j < 100; ++j) {
+                    // LOG_INFO_MESSAGE("t",std::this_thread::get_id(), ": Release" );
+                    pObject->m_Value--;
+                    pObject->Release();
+                }
+                This->WaitSiblingWorkerThreads(1);
+            }
+
+            {
+                This->m_WorkerThreadSignal[0].Wait(true, NumThreads);
+                auto* pObject = This->m_pSharedObject;
+                auto* pRefCounters = pObject->GetWeakReference();
+                if (ThreadNum % 3 == 0) {
+                    pObject->m_Value++;
+                    pObject->AddRef();
+                } else
+                    pRefCounters->AddRef();
+                This->WaitSiblingWorkerThreads(0);
+
+                This->m_WorkerThreadSignal[1].Wait(true, NumThreads);
+                if (ThreadNum % 3 == 0) {
+                    pObject->m_Value--;
+                    pObject->Release();
+                } else
+                    pRefCounters->Release();
+                This->WaitSiblingWorkerThreads(1);
+            }
+
+            {
+                // Test interferences of ReleaseStrongRef() and QueryObject()
+
+                // Goal: catch scenario when QueryObject() runs between
+                // AtomicDecrement() and acquiring the lock in ReleaseStrongRef():
+
+                //                       m_lNumStrongReferences == 1
+                //
+
+                //                                   Scenario I
+                //
+                //             Thread 1                 |                  Thread 2             |            Thread 3
+                //                                      |                                       |
+                //                                      |                                       |
+                //                                      |                                       |
+                //                                      |   1. Acquire the lock                 |
+                //                                      |   2. Increment m_lNumStrongReferences |
+                // 1. Decrement m_lNumStrongReferences  |   3. Read StrongRefCnt > 1            |
+                // 2. Test RefCount!=0                  |   4. Return the reference to object   |
+                // 3. DO NOT destroy the object         |                                       |
+                // 4. Wait for the lock                 |                                       |
+
+                //                                   Scenario I
+                //
+                //             Thread 1                 |                  Thread 2             |            Thread 3
+                //                                      |                                       |
+                //                                      |                                       |
+                // 1. Decrement m_lNumStrongReferences  |                                       |
+                //                                      |   1. Acquire the lock                 |
+                // 2. Test RefCount==0                  |   2. Increment m_lNumStrongReferences |
+                // 3. Start destroying the object       |   3. Read StrongRefCnt == 1           |
+                // 4. Wait for the lock                 |   4. DO NOT create the object         |
+                //                                      |   5. Decrement m_lNumStrongReferences |
+                //                                      |                                       | 1. Acquire the lock
+                //                                      |                                       | 2. Increment
+                //                                      m_lNumStrongReferences | | 3. Read StrongRefCnt == 1 | | 4. DO
+                //                                      NOT create the object | | 5. Decrement m_lNumStrongReferences
+                // 5. Acquire the lock                  |
+                // 6. DESTROY the object                |
+
+                This->m_WorkerThreadSignal[0].Wait(true, NumThreads);
+                auto* pObject = This->m_pSharedObject;
+
+                donut::WeakPtr<Object> weakPtr(pObject);
+                AutoPtr<Object> strongPtr, strongPtr2;
+                if (ThreadNum < 2) {
+                    strongPtr = pObject;
+                    strongPtr->m_Value++;
+                } else
+                    weakPtr = WeakPtr(pObject);
+                This->WaitSiblingWorkerThreads(0);
+
+                This->m_WorkerThreadSignal[1].Wait(true, NumThreads);
+                if (ThreadNum == 0) {
+                    strongPtr->m_Value--;
+                    strongPtr.Reset();
+                } else {
+                    strongPtr2 = weakPtr.Lock();
+                    if (strongPtr2)
+                        strongPtr2->m_Value++;
+                    weakPtr.Reset();
+                }
+                This->WaitSiblingWorkerThreads(1);
+            }
+
+            {
+                This->m_WorkerThreadSignal[0].Wait(true, NumThreads);
+                auto* pObject = This->m_pSharedObject;
+
+                donut::WeakPtr<Object> weakPtr;
+                AutoPtr<Object> strongPtr;
+                if (ThreadNum % 4 == 0) {
+                    strongPtr = pObject;
+                    strongPtr->m_Value++;
+                } else
+                    weakPtr = WeakPtr(pObject);
+                This->WaitSiblingWorkerThreads(0);
+
+                This->m_WorkerThreadSignal[1].Wait(true, NumThreads);
+                if (ThreadNum % 4 == 0) {
+                    strongPtr->m_Value--;
+                    strongPtr.Reset();
+                } else {
+                    auto Ptr = weakPtr.Lock();
+                    if (Ptr)
+                        Ptr->m_Value++;
+                    Ptr.Reset();
+                }
+                This->WaitSiblingWorkerThreads(1);
+            }
+        }
+    }
+}
+
+void RefCntAutoPtrThreadingTest::StartConcurrencyTest() {
+    auto numCores = std::thread::hardware_concurrency();
+    m_Threads.resize(std::max(numCores, 4u));
+    for (auto& t : m_Threads) t = std::thread(WorkerThreadFunc, this, &t - m_Threads.data());
+}
+
+void RefCntAutoPtrThreadingTest::RunConcurrencyTest() {
+    for (int i = 0; i < NumThreadInterations; ++i) {
+        m_pSharedObject = MakeNewObj<Object>();
+
+        StartWorkerThreadsAndWait(0);
+
+        StartWorkerThreadsAndWait(1);
+
+        m_pSharedObject->Release();
+        m_pSharedObject = MakeNewObj<Object>();
+
+        StartWorkerThreadsAndWait(0);
+
+        StartWorkerThreadsAndWait(1);
+
+        m_pSharedObject->Release();
+
+        {
+            m_pSharedObject = MakeNewObj<Object>();
+
+            StartWorkerThreadsAndWait(0);
+
+            StartWorkerThreadsAndWait(1);
+
+            m_pSharedObject->Release();
+        }
+
+        {
+            m_pSharedObject = MakeNewObj<Object>();
+
+            StartWorkerThreadsAndWait(0);
+
+            StartWorkerThreadsAndWait(1);
+
+            m_pSharedObject->Release();
+        }
+    }
+}
+
+TEST(Common_RefCntAutoPtr, Threading) {
+    RefCntAutoPtrThreadingTest ThreadingTest;
+    ThreadingTest.StartConcurrencyTest();
+    ThreadingTest.RunConcurrencyTest();
+}
+
+}  // namespace Test
