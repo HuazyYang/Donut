@@ -3,8 +3,7 @@
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
-
-#include <donut/core/object/DebugUtilities.h>
+#include <donut/core/object/DebugUtils.h>
 
 namespace donut {
 

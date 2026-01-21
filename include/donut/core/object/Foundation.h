@@ -1,16 +1,18 @@
 #pragma once
-
-/// \file
-/// Implementation of the template base class for reference counting objects
-
-#include <stdlib.h>
+#include <donut/core/object/Threading.h>
+#include <donut/core/object/Types.h>
+#include <donut/core/object/MemoryAllocator.h>
+#include <cstddef>
+#include <cstdint>
 #include <atomic>
 
-#include <donut/core/object/Common.h>
-#include <donut/core/object/MemoryAllocators.h>
-#include <donut/core/object/DebugUtilities.h>
-#include <donut/core/object/Threading.h>
-
+#if defined(_MSC_VER)
+#define donut_likely(x) (x)
+#define donut_unlikely(x) (x)
+#else
+#define donut_likely(x) __builtin_expect(!!(x), 1)
+#define donut_unlikely(x) __builtin_expect(!!(x), 0)
+#endif
 
 // packing reference control block(WeakReferenceImpl) and object memory together
 // so as to optimize memory allocation and cache missing.
@@ -214,10 +216,6 @@ template <typename TInterface>
 struct WeakRefTypeTrait;
 
 }  // namespace details
-
-template <typename BaseItf,
-          int /* SupportWeakRef */ = details::IsWeakReferenceSource<BaseItf>::value>
-class ObjectImpl;
 
 template <class Allocator = IMemoryAllocator>
 class MakeNewRCObj;
@@ -800,7 +798,7 @@ class RefCountedObject : public BaseItf {
     // It needs to be protected (not private!) to allow generation of destructors in derived
     // classes
 
-    void operator delete(void* ptr) { DefaultMemoryAllocator::Get().Free(ptr); }
+    void operator delete(void* ptr) { GetDefaultMemAllocator()->Free(ptr); }
 
     template <typename ObjectAllocatorType>
     void operator delete(void* ptr, ObjectAllocatorType& Allocator,
@@ -813,7 +811,7 @@ class RefCountedObject : public BaseItf {
     // Operator new is private, and can only be called by MakeNewRCObj
 
     void* operator new(size_t Size) {
-        DefaultMemoryAllocator::Get().Allocate(Size, nullptr, nullptr, 0);
+        GetDefaultMemAllocator()->Allocate(Size, nullptr, nullptr, 0);
     }
 
     template <typename ObjectAllocatorType>
@@ -830,9 +828,9 @@ class RefCountedObject : public BaseItf {
 };
 
 template <typename BaseItf>
-class ObjectImpl<BaseItf, 1> : public RefCountedObject<BaseItf> {
+struct WeakObjectImpl : public RefCountedObject<BaseItf> {
  public:
-    ObjectImpl(IWeakReference* pWeakRef) : RefCountedObject<BaseItf>(pWeakRef) {}
+    WeakObjectImpl(IWeakReference* pWeakRef) : RefCountedObject<BaseItf>(pWeakRef) {}
 
     FRESULT QueryInterface(FREFIID riid, void** ppv) override {
         if (riid == IID_IObject) {
@@ -850,7 +848,7 @@ class ObjectImpl<BaseItf, 1> : public RefCountedObject<BaseItf> {
 };
 
 template <typename BaseItf>
-class ObjectImpl<BaseItf, 0> : public BaseItf {
+struct ObjectImpl: public BaseItf {
  public:
     ObjectImpl() {}
 
@@ -897,7 +895,7 @@ class ObjectImpl<BaseItf, 0> : public BaseItf {
     // It needs to be protected (not private!) to allow generation of destructors in derived
     // classes
 
-    void operator delete(void* ptr) { DefaultMemoryAllocator::Get().Free(ptr); }
+    void operator delete(void* ptr) { GetDefaultMemAllocator()->Free(ptr); }
 
     template <typename ObjectAllocatorType>
     void operator delete(void* ptr, ObjectAllocatorType& Allocator,
@@ -919,7 +917,7 @@ class ObjectImpl<BaseItf, 0> : public BaseItf {
     // Operator new is private, and can only be called by MakeNewRCObj
 
     void* operator new(size_t Size) {
-        return DefaultMemoryAllocator::Get().Allocate(Size, nullptr, 0);
+        return GetDefaultMemAllocator()->Allocate(Size, nullptr, 0);
     }
 
     template <typename ObjectAllocatorType>
@@ -970,7 +968,7 @@ class DelegatingObjectImpl : public BaseItf {
     // It needs to be protected (not private!) to allow generation of destructors in derived
     // classes
 
-    void operator delete(void* ptr) { DefaultMemoryAllocator::Get().Free(ptr); }
+    void operator delete(void* ptr) { GetDefaultMemAllocator()->Free(ptr); }
 
     template <typename ObjectAllocatorType>
     void operator delete(void* ptr, ObjectAllocatorType& Allocator,
@@ -994,7 +992,7 @@ class DelegatingObjectImpl : public BaseItf {
     // Operator new is private, and can only be called by MakeNewRCObj
 
     void* operator new(size_t Size) {
-        return DefaultMemoryAllocator::Get().Allocate(Size, nullptr, 0);
+        return GetDefaultMemAllocator()->Allocate(Size, nullptr, 0);
     }
 
     template <typename ObjectAllocatorType>
@@ -1017,7 +1015,7 @@ struct PackedCtrlBlock {
     PackedCtrlBlock() {}
     ~PackedCtrlBlock() {}
 
-    void operator delete(void* ptr) { DefaultMemoryAllocator::Get().Free(ptr); }
+    void operator delete(void* ptr) { GetDefaultMemAllocator()->Free(ptr); }
 
     template <typename ObjectAllocatorType>
     void operator delete(void* ptr, ObjectAllocatorType& Allocator,
@@ -1027,7 +1025,7 @@ struct PackedCtrlBlock {
     }
 
     void* operator new(size_t Size) {
-        return DefaultMemoryAllocator::Get().Allocate(Size, nullptr, 0);
+        return GetDefaultMemAllocator()->Allocate(Size, nullptr, 0);
     }
 
     template <typename ObjectAllocatorType>
@@ -1309,7 +1307,7 @@ class MakeNewRCDelegating {
 
 #define MAKE_RC_OBJ0(Type)                                                  \
     donut::MakeNewRCObj<donut::DefaultMemoryAllocator>(               \
-        donut::DefaultMemoryAllocator::Get(), #Type, __FILE__, __LINE__) \
+        *donut::GetDefaultMemAllocator(), #Type, __FILE__, __LINE__) \
         .RcNew<Type>
 
 #define MAKE_RC_DELEGATING(Allocator, Type, Owner)                        \
@@ -1317,8 +1315,8 @@ class MakeNewRCDelegating {
         Type, typename std::remove_reference<decltype(Allocator)>::type>( \
         Allocator, Owner, #Type, __FILE__, __LINE__)
 
-#define MAKE_RC_DELEGATING0(Type, Owner)                                   \
+#define MAKE_RC_DELEGATING0(Type, Owner)                             \
     donut::MakeNewRCDelegating<Type, donut::DefaultMemoryAllocator>( \
-        donut::DefaultMemoryAllocator::Get(), Owner, #Type, __FILE__, __LINE__)
+        *donut::GetDefaultMemAllocator(), Owner, #Type, __FILE__, __LINE__)
 
 }  // namespace donut

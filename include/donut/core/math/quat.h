@@ -67,12 +67,12 @@ namespace donut::math
 
 		[[nodiscard]] vector<T, 4> toXYZW() const
 		{
-			return vector(x, y, z, w);
+			return vector<T, 4>(x, y, z, w);
 		}
 
 		[[nodiscard]] vector<T, 4> toWXYZ() const
 		{
-			return vector(w, x, y, z);
+			return vector<T, 4>(w, x, y, z);
 		}
 
 		// Conversions to C arrays of fixed size

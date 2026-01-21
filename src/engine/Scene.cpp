@@ -778,7 +778,7 @@ void Scene::UpdateSkinnedMeshes(nvrhi::ICommandList* commandList, uint32_t frame
         constants.outputTexCoord2Offset = uint32_t(skinnedBuffers->getVertexBufferRange(VertexAttribute::TexCoord2).byteOffset);
         commandList->setPushConstants(&constants, sizeof(constants));
 
-        commandList->dispatch(dm::div_ceil(constants.numVertices, 256));
+        commandList->dispatch(dm::div_ceil(constants.numVertices, 256u));
 
         if (!groupName.empty())
             commandList->endMarker();

@@ -1,5 +1,5 @@
-#ifndef DEBUGUTILITIES_HPP
-#define DEBUGUTILITIES_HPP
+#ifndef DEBUGUTILS_H
+#define DEBUGUTILS_H
 
 #include <assert.h>
 #include <type_traits>
@@ -103,4 +103,4 @@ void SafeRelease(T *&p) {
     }
 }
 
-#endif /* DEBUGUTILITIES_HPP */
+#endif /* DEBUGUTILS_H */

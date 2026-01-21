@@ -31,7 +31,11 @@ set(imgui_srcs
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imstb_rectpack.h
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imstb_textedit.h
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imstb_truetype.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui_demo.cpp)
+    ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui_demo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends/imgui_impl_glfw.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends/imgui_impl_glfw.cpp
+    )
 
 add_library(imgui STATIC ${imgui_srcs})
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
+target_link_libraries(imgui PRIVATE glfw)

@@ -72,7 +72,8 @@ using FRESULT = uint32_t;
 }  // namespace donut
 
 #ifdef __clang__
-// Since LLVM based code analysis tools does not recognize CWG727, we have to walk around this.
+// Since LLVM based code analysis tools does not recognize CWG727, we have to walk around
+// this.
 struct UUIDTraits {
     template <typename Interface>
     static constexpr const donut::GUID& uuid_of() {
@@ -84,7 +85,7 @@ struct UUIDTraits {
     static constexpr donut::GUID IID_##Interface = StrIID##_donut_guid;
 
 #define DONUT_DECLARE_UUID_TRAITS(Interface) \
-    friend struct ::UUIDTraits;                 \
+    friend struct ::UUIDTraits;              \
     static constexpr const donut::GUID& this_uuid() { return IID_##Interface; }
 
 template <typename Interface>
@@ -100,9 +101,9 @@ struct UUIDTraits;
 // Note: in order to specialization of UUIDTraits in any namespace scope, Defect report CWG
 // 727 must be used clang version must be greater or equal to 13.7.6.1
 #define DONUT_IID(Interface, StrIID)                                              \
-    static constexpr donut::GUID IID_##Interface = StrIID##_donut_guid;        \
-    template <>                                                                      \
-    struct ::UUIDTraits<struct Interface> {                                          \
+    static constexpr donut::GUID IID_##Interface = StrIID##_donut_guid;           \
+    template <>                                                                   \
+    struct ::UUIDTraits<struct Interface> {                                       \
         static constexpr const donut::GUID& uuid_of() { return IID_##Interface; } \
     };
 
@@ -112,7 +113,7 @@ constexpr const donut::GUID& __uuid_of(const Interface* pv = nullptr) {
 }
 
 // For compatible with old version of gcc and clang
-#define DONUT_DECLARE_UUID_TRAITS(Interface) 
+#define DONUT_DECLARE_UUID_TRAITS(Interface)
 
 #endif
 
@@ -173,6 +174,36 @@ struct IWeakReferenceSource : public IObject {
     DONUT_DECLARE_UUID_TRAITS(IWeakReferenceSource)
     virtual IWeakReference* GetWeakReference() = 0;
 };
+
+// Common Status Code
+constexpr FRESULT FS_OK = 0;
+constexpr FRESULT FE_GENERIC_ERROR = -1;
+constexpr FRESULT FE_NOINTERFACE = -2;
+constexpr FRESULT FE_NOT_IMPLEMENT = -3;
+constexpr FRESULT FE_INVALID_ARGS = -4;
+constexpr FRESULT FE_NOT_ALIVE_OBJECT = -4;
+constexpr FRESULT FE_NOT_FOUND = -5;
+constexpr FRESULT FE_WAIT_TIMEOUT = -6;
+
+/// Binary data blob
+// {F578FF0D-ABD2-4514-9D32-7CB454D4A73B}
+DONUT_IID(IDataBlob, "f578ff0d-abd2-4514-9d32-7cb454d4a73b")
+struct IDataBlob : public IObject {
+    /// Sets the size of the internal data buffer
+    virtual void Resize(size_t NewSize) = 0;
+
+    /// Returns the size of the internal data buffer
+    virtual size_t GetSize() = 0;
+
+    /// Returns the pointer to the internal data buffer
+    virtual void* GetDataPtr() = 0;
+};
+
+FRESULT CreateBlob(size_t Size, IDataBlob** ppBlob);
+
+FRESULT CreateStringBlob(size_t Size, IDataBlob** ppBlob);
+
+FRESULT CreateProxyBlob(size_t Size, const void* pData, IDataBlob** ppBlob);
 
 }  // namespace donut
 

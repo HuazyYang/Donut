@@ -1,4 +1,3 @@
-#include <donut/core/object/UserAllocated.h>
 #include <donut/app/ImGuiRenderPass.h>
 #include <backends/imgui_impl_glfw.h>
 
@@ -11,6 +10,7 @@ struct ImGui_ImplNVRHI_InitInfo {
     nvrhi::IDevice *Device;
     nvrhi::ICommandList *CommandList;
     int NumFramesInFlight;
+    nvrhi::Format RTVFormat;
 };
 
 // 
@@ -18,10 +18,10 @@ struct ImGui_ImplNVRHI_InitInfo {
 // 
 bool ImGui_ImplNVRHI_Init(ImGui_ImplNVRHI_InitInfo *info);
 void ImGui_ImplNVRHI_Shutdown();
-void ImGui_ImplNVRHI_NewFrame(nvrhi::IFramebuffer *fb);
+void ImGui_ImplNVRHI_NewFrame();
 void ImGui_ImplNVRHI_RenderDrawData(ImDrawData *draw_data, nvrhi::IFramebuffer *fb);
 
-bool ImGui_ImplNVRHI_CreateDeviceObjects(nvrhi::IFramebuffer *fb);
+bool ImGui_ImplNVRHI_CreateDeviceObjects();
 void ImGui_ImplNVRHI_InvalidateDeviceObjects();
 void Imgui_ImplNVRHI_UpdateTexture(ImTextureData *tex);
 
@@ -31,6 +31,7 @@ void Imgui_ImplNVRHI_UpdateTexture(ImTextureData *tex);
 
 struct ImGui_ImplNVRHI_Texture {
     nvrhi::TextureHandle Texture;
+    nvrhi::StagingTextureHandle UploadBuffer;
     nvrhi::BindingSetHandle BindingSet;
 };
 
@@ -70,6 +71,7 @@ void ImGui_ImplNVRHI_DestroyTexture(ImTextureData *tex) {
         return;
 
     backend_tex->Texture = nullptr;
+    backend_tex->UploadBuffer = nullptr;
     backend_tex->BindingSet = nullptr;
     IM_DELETE(backend_tex);
 
@@ -78,7 +80,7 @@ void ImGui_ImplNVRHI_DestroyTexture(ImTextureData *tex) {
     tex->BackendUserData = nullptr;
 }
 
-bool ImGui_ImplNVRHI_CreateDeviceObjects(nvrhi::IFramebuffer *fb) {
+bool ImGui_ImplNVRHI_CreateDeviceObjects() {
     auto bd = ImGui_ImplNVRHI_GetBackendData();
 
     if(bd->PSO)
@@ -87,10 +89,10 @@ bool ImGui_ImplNVRHI_CreateDeviceObjects(nvrhi::IFramebuffer *fb) {
     // Create PSO
     {
         auto vs = bd->InitInfo.ShaderFactory->CreateShader(
-            "donut/shaders/imgui_vertex.hlsl", "main", {}, nvrhi::ShaderType::Vertex);
+            "donut/imgui_vertex.hlsl", "main", {}, nvrhi::ShaderType::Vertex);
 
         auto ps = bd->InitInfo.ShaderFactory->CreateShader(
-            "donut/shaders/imgui_pixel", "main", {}, nvrhi::ShaderType::Pixel);
+            "donut/imgui_pixel", "main", {}, nvrhi::ShaderType::Pixel);
 
         if (!vs || !ps) return false;
 
@@ -151,7 +153,10 @@ bool ImGui_ImplNVRHI_CreateDeviceObjects(nvrhi::IFramebuffer *fb) {
             basePSODesc.renderState = renderState;
             basePSODesc.bindingLayouts = {bd->BindingLayout};
 
-            bd->PSO = bd->Device->createGraphicsPipeline(basePSODesc, fb->getFramebufferInfo());
+            nvrhi::FramebufferInfo fbInfo;
+            fbInfo.colorFormats = { bd->InitInfo.RTVFormat };
+
+            bd->PSO = bd->Device->createGraphicsPipeline(basePSODesc, fbInfo);
         }
     }
 
@@ -227,17 +232,38 @@ void Imgui_ImplNVRHI_UpdateTexture(ImTextureData *tex) {
         // FIXME-OPT: Uploading single box even when using ImTextureStatus_WantUpdates. Could use tex->Updates[]
         // - Copy all blocks contiguously in upload buffer.
         // - Barrier before copy, submit all CopyTextureRegion(), barrier after copy.
-        const int upload_x = (tex->Status == ImTextureStatus_WantCreate) ? 0 : tex->UpdateRect.x;
-        const int upload_y = (tex->Status == ImTextureStatus_WantCreate) ? 0 : tex->UpdateRect.y;
-        const int upload_w = (tex->Status == ImTextureStatus_WantCreate) ? tex->Width : tex->UpdateRect.w;
-        const int upload_h = (tex->Status == ImTextureStatus_WantCreate) ? tex->Height : tex->UpdateRect.h;
+        const uint32_t upload_x = (tex->Status == ImTextureStatus_WantCreate) ? 0 : tex->UpdateRect.x;
+        const uint32_t upload_y = (tex->Status == ImTextureStatus_WantCreate) ? 0 : tex->UpdateRect.y;
+        const uint32_t upload_w = (tex->Status == ImTextureStatus_WantCreate) ? tex->Width : tex->UpdateRect.w;
+        const uint32_t upload_h =
+            (tex->Status == ImTextureStatus_WantCreate) ? tex->Height : tex->UpdateRect.h;
 
-        IM_ASSERT(upload_x == 0 && upload_y == 0);
+        bool recreate_upload_buffer = !backend_tex->UploadBuffer;
+        if(!recreate_upload_buffer) {
+            auto &desc = backend_tex->UploadBuffer->getDesc();
+            recreate_upload_buffer = desc.width < upload_w || desc.height < upload_h;
+        }
+        if(recreate_upload_buffer) {
+            nvrhi::TextureDesc desc;
+            desc.width = upload_w;
+            desc.height = upload_h;
+            desc.format = nvrhi::Format::RGBA8_UNORM;
+            backend_tex->UploadBuffer =
+                bd->Device->createStagingTexture(desc, nvrhi::CpuAccessMode::Write);
+        }
 
-        bd->CommandList->writeTexture(backend_tex->Texture, 0, 0,
-                                      tex->GetPixelsAt(upload_x, upload_y),
-                                      tex->Width * tex->BytesPerPixel);
+        size_t row_pitch;
+        auto data = (uint8_t *)bd->Device->mapStagingTexture(
+            backend_tex->UploadBuffer, {}, nvrhi::CpuAccessMode::Write, &row_pitch);
+        for (uint32_t y = 0; y < upload_h; ++y, data += row_pitch)
+            memcpy(data, tex->GetPixelsAt(upload_x, y + upload_y), upload_w * tex->BytesPerPixel);
+        bd->Device->unmapStagingTexture(backend_tex->UploadBuffer);
 
+        bd->CommandList->copyTexture(
+            backend_tex->Texture,
+            nvrhi::TextureSlice{upload_x, upload_y, 0},
+            backend_tex->UploadBuffer,
+            nvrhi::TextureSlice{0, 0, 0, upload_w, upload_h, 1});
 
         tex->SetStatus(ImTextureStatus_OK);
     }
@@ -288,13 +314,13 @@ void ImGui_ImplNVRHI_Shutdown() {
     IM_DELETE(bd);
 }
 
-void ImGui_ImplNVRHI_NewFrame(nvrhi::IFramebuffer *fb) {
+void ImGui_ImplNVRHI_NewFrame() {
     auto bd = ImGui_ImplNVRHI_GetBackendData();
     IM_ASSERT(bd != nullptr &&
               "Context or backend not initialized! Did you call ImGui_ImplDX12_Init()?");
     
     if(!bd->PSO)
-        if(!ImGui_ImplNVRHI_CreateDeviceObjects(fb))
+        if(!ImGui_ImplNVRHI_CreateDeviceObjects())
             IM_ASSERT(0 && "ImGui_ImplNVRHI_CreateDeviceObjects() failed!");
 }
 
@@ -478,6 +504,8 @@ bool ImGuiRenderPass::Init(engine::ShaderFactory *pShaderFactory) {
     initInfo.CommandList = m_commandList;
     initInfo.NumFramesInFlight = GetDeviceManager()->GetBackBufferCount();
     initInfo.ShaderFactory = m_shaderFactory;
+    initInfo.RTVFormat =
+        GetDeviceManager()->GetFramebuffer(0)->getFramebufferInfo().colorFormats[0];
 
     ImGui_ImplNVRHI_Init(&initInfo);
     ImGui_ImplGlfw_InitForOther(GetDeviceManager()->GetWindow(), false);
@@ -528,8 +556,7 @@ bool ImGuiRenderPass::MouseButtonUpdate(int button, int action, int mods) {
 }
 
 void ImGuiRenderPass::Animate(float elapsedTimeSeconds) {
-
-    ImGui_ImplNVRHI_NewFrame(GetDeviceManager()->GetFramebuffer(0));
+    ImGui_ImplNVRHI_NewFrame();
     ImGui_ImplGlfw_NewFrame();
 
     ImGui::NewFrame();

@@ -26,11 +26,19 @@ file(GLOB donut_core_src
     include/donut/core/vfs/TarFile.h
     include/donut/core/vfs/VFS.h
     include/donut/core/*.h
+    include/donut/core/object/AutoPtr.h
+    include/donut/core/object/DebugUtils.h
+    include/donut/core/MemoryAllocator.h
+    include/donut/core/object/Foundation.h
+    include/donut/core/object/Threading.h
+    include/donut/core/object/Types.h
     src/core/chunk/*.cpp
     src/core/math/*.cpp
     src/core/vfs/TarFile.cpp
     src/core/vfs/VFS.cpp
     src/core/*.cpp
+    src/core/object/Foundation.cpp
+    src/core/object/Threading.cpp
 )
 
 add_library(donut_core STATIC EXCLUDE_FROM_ALL ${donut_core_src})

@@ -104,8 +104,9 @@ namespace donut::math
 	
 	// Integer division, with rounding up (assuming positive arguments)
 	inline int div_ceil(int dividend, int divisor) { return (dividend + (divisor - 1)) / divisor; }
+    inline uint div_ceil(uint dividend, uint divisor) { return (dividend + (divisor - 1)) / divisor; }
 
-	// Integer rounding to multiples
+        // Integer rounding to multiples
 	inline int roundDown(int i, int multiple) { return (i / multiple) * multiple; }
 	inline int roundUp(int i, int multiple) { return ((i + (multiple - 1)) / multiple) * multiple; }
 

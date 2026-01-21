@@ -947,7 +947,7 @@ bool GltfImporter::Load(
         if (material.has_pbr_specular_glossiness)
         {
             matinfo->useSpecularGlossModel = true;
-            matinfo->baseOrDiffuseTexture = load_texture(material.pbr_specular_glossiness.diffuse_texture.texture, true);
+            matinfo->baseOrDiffuseTexture = load_texture(material.pbr_specular_glossiness.diffuse_texture.texture, false);
             matinfo->metalRoughOrSpecularTexture = load_texture(material.pbr_specular_glossiness.specular_glossiness_texture.texture, true);
             matinfo->baseOrDiffuseColor = material.pbr_specular_glossiness.diffuse_factor;
             matinfo->specularColor = material.pbr_specular_glossiness.specular_factor;
@@ -957,7 +957,7 @@ bool GltfImporter::Load(
         else if (material.has_pbr_metallic_roughness)
         {
             matinfo->useSpecularGlossModel = false;
-            matinfo->baseOrDiffuseTexture = load_texture(material.pbr_metallic_roughness.base_color_texture.texture, true);
+            matinfo->baseOrDiffuseTexture = load_texture(material.pbr_metallic_roughness.base_color_texture.texture, false);
             matinfo->metalRoughOrSpecularTexture = load_texture(material.pbr_metallic_roughness.metallic_roughness_texture.texture, false);
             matinfo->baseOrDiffuseColor = material.pbr_metallic_roughness.base_color_factor;
             matinfo->metalness = material.pbr_metallic_roughness.metallic_factor;
