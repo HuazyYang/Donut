@@ -21,7 +21,8 @@
 */
 
 #pragma once
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <nvrhi/nvrhi.h>
 #include <unordered_map>
 #include <memory>
@@ -32,33 +33,27 @@ namespace donut::engine
     typedef int DescriptorIndex;
 
     // Stores a descriptor index in a descriptor table. Releases the descriptor when destroyed.
-    class DescriptorHandle
+    class DescriptorHandle: public ObjectImpl<IObject>
     {
     private:
-        std::weak_ptr<DescriptorTableManager> m_Manager;
+        WeakPtr<DescriptorTableManager> m_Manager;
         DescriptorIndex m_DescriptorIndex;
 
     public:
         DescriptorHandle();
-        DescriptorHandle(const std::shared_ptr<DescriptorTableManager>& managerPtr, DescriptorIndex index);
+        DescriptorHandle(DescriptorTableManager* managerPtr, DescriptorIndex index);
         ~DescriptorHandle();
         
-        [[nodiscard]] bool IsValid() const { return m_DescriptorIndex >= 0 && !m_Manager.expired(); }
-        [[nodiscard]] DescriptorIndex Get() const { if (m_DescriptorIndex >= 0) assert(!m_Manager.expired()); return m_DescriptorIndex; }
+        [[nodiscard]] bool IsValid() const { return m_DescriptorIndex >= 0 && m_Manager.IsValid(); }
+        [[nodiscard]] DescriptorIndex Get() const { if (m_DescriptorIndex >= 0) assert(m_Manager.IsValid()); return m_DescriptorIndex; }
         
         // For ResourceDescriptorHeap Index instead of a table relative index
         // This value is volatile if the descriptor table resizes and needs to be refetched
         [[nodiscard]] DescriptorIndex GetIndexInHeap() const;
-        void Reset() { m_DescriptorIndex = -1; m_Manager.reset(); }
-
-        // Movable but non-copyable
-        DescriptorHandle(const DescriptorHandle&) = delete;
-        DescriptorHandle(DescriptorHandle&&) = default;
-        DescriptorHandle& operator=(const DescriptorHandle&) = delete;
-        DescriptorHandle& operator=(DescriptorHandle&&) = default;
+        void Reset() { m_DescriptorIndex = -1; m_Manager = nullptr; }
     };
 
-    class DescriptorTableManager : public std::enable_shared_from_this<DescriptorTableManager>
+    class DescriptorTableManager : public WeakableImpl<IWeakable>
     {
     protected:
         // Custom hasher that doesn't look at the binding slot
@@ -99,13 +94,13 @@ namespace donut::engine
         int m_SearchStart = 0;
         
     public:
-        DescriptorTableManager(nvrhi::IDevice* device, nvrhi::IBindingLayout* layout);
+        DescriptorTableManager(IWeakReference *pReference, nvrhi::IDevice* device, nvrhi::IBindingLayout* layout);
         ~DescriptorTableManager();
         
         nvrhi::IDescriptorTable* GetDescriptorTable() const { return m_DescriptorTable; }
 
         DescriptorIndex CreateDescriptor(nvrhi::BindingSetItem item);
-        DescriptorHandle CreateDescriptorHandle(nvrhi::BindingSetItem item);
+        AutoPtr<DescriptorHandle> CreateDescriptorHandle(nvrhi::BindingSetItem item);
         nvrhi::BindingSetItem GetDescriptor(DescriptorIndex index);
         void ReleaseDescriptor(DescriptorIndex index);
     };

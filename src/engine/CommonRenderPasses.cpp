@@ -50,7 +50,7 @@ using namespace donut::math;
 
 using namespace donut::engine;
 
-CommonRenderPasses::CommonRenderPasses(nvrhi::IDevice* device, std::shared_ptr<ShaderFactory> shaderFactory)
+CommonRenderPasses::CommonRenderPasses(nvrhi::IDevice* device, ShaderFactory *shaderFactory)
     : m_Device(device)
 {
     {

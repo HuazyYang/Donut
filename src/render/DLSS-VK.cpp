@@ -299,10 +299,10 @@ public:
     }
 };
 
-std::unique_ptr<DLSS> DLSS::CreateVK(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
+AutoPtr<DLSS> DLSS::CreateVK(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
     std::string const& directoryWithExecutable, uint32_t applicationID)
 {
-    return std::make_unique<DLSS_VK>(device, shaderFactory, directoryWithExecutable, applicationID);
+    return MAKE_RC_OBJ_PTR(DLSS_VK, device, shaderFactory, directoryWithExecutable, applicationID);
 }
 
 void DLSS::GetRequiredVulkanExtensions(std::vector<std::string>& instanceExtensions, std::vector<std::string>& deviceExtensions)

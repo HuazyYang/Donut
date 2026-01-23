@@ -254,7 +254,7 @@ const IView* IView::GetChildView(ViewType::Enum supportedTypes, uint32_t index) 
     return this;
 }
 
-void CompositeView::AddView(std::shared_ptr<IView> view)
+void CompositeView::AddView(IView* view)
 {
     m_ChildViews.push_back(view);
 }
@@ -268,7 +268,7 @@ uint32_t CompositeView::GetNumChildViews(ViewType::Enum supportedTypes) const
 const IView* CompositeView::GetChildView(ViewType::Enum supportedTypes, uint32_t index) const
 {
     (void)supportedTypes;
-    return m_ChildViews[index].get();
+    return m_ChildViews[index];
 }
 
 static const float3x3 g_CubemapViewMatrices[6] = {

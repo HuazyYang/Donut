@@ -60,8 +60,8 @@ using namespace donut::render;
 
 LightProbeProcessingPass::LightProbeProcessingPass(
     nvrhi::IDevice* device,
-    std::shared_ptr<ShaderFactory> shaderFactory,
-    std::shared_ptr<CommonRenderPasses> commonPasses,
+    ShaderFactory* shaderFactory,
+    CommonRenderPasses* commonPasses,
     uint32_t intermediateTextureSize,
     nvrhi::Format intermediateTextureFormat)
     : m_Device(device)

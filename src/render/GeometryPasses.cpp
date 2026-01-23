@@ -156,8 +156,8 @@ void donut::render::RenderCompositeView(
     nvrhi::ICommandList* commandList, 
     const ICompositeView* compositeView, 
     const ICompositeView* compositeViewPrev, 
-    FramebufferFactory& framebufferFactory,
-    const std::shared_ptr<engine::SceneGraphNode>& rootNode,
+    FramebufferFactory* framebufferFactory,
+    engine::SceneGraphNode* rootNode,
     IDrawStrategy& drawStrategy,
     IGeometryPass& pass,
     GeometryPassContext& passContext,
@@ -184,7 +184,7 @@ void donut::render::RenderCompositeView(
 
         drawStrategy.PrepareForView(rootNode, *view);
 
-        nvrhi::IFramebuffer* framebuffer = framebufferFactory.GetFramebuffer(*view);
+        nvrhi::IFramebuffer* framebuffer = framebufferFactory->GetFramebuffer(*view);
 
         RenderView(commandList, view, viewPrev, framebuffer, drawStrategy, pass, passContext, materialEvents);
     }

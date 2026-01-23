@@ -65,7 +65,7 @@ struct DataChunk
 namespace donut::engine::audio
 {
 
-AudioCache::AudioCache(std::shared_ptr<vfs::IFileSystem> fs) : m_fs(fs) { }
+AudioCache::AudioCache(vfs::IFileSystem* fs) : m_fs(fs) { }
 
 void AudioCache::Reset()
 {
@@ -74,9 +74,9 @@ void AudioCache::Reset()
     m_LoadedAudioData.clear();
 }
 
-std::shared_ptr<AudioData const> AudioCache::importRiff(std::shared_ptr<donut::vfs::IBlob> blob, char const * filepath)
+AutoPtr<AudioData> AudioCache::importRiff(IDataBlob* blob, char const * filepath)
 {
-    uint8_t const * data = (uint8_t const *)blob->data(),
+    uint8_t const * data = (uint8_t const *)blob->GetDataPtr(),
                   * ptr = data;
 
     RiffChunk const * riffchunk = (RiffChunk const *)ptr;
@@ -85,7 +85,7 @@ std::shared_ptr<AudioData const> AudioCache::importRiff(std::shared_ptr<donut::v
         log::warning("Invalid RIFF header `%`", filepath);
         return nullptr;
     }
-    if (riffchunk->chunkSize!=blob->size()-8) {
+    if (riffchunk->chunkSize!=blob->GetSize()-8) {
         log::warning("RIFF invalid chunk size `%`", filepath);
         return nullptr;
     }
@@ -110,7 +110,7 @@ std::shared_ptr<AudioData const> AudioCache::importRiff(std::shared_ptr<donut::v
     ptr += sizeof(WaveChunk);
 
     DataChunk const * datachunk = nullptr;
-    for ( ; ptr < data+(blob->size()-4); ++ptr)
+    for ( ; ptr < data+(blob->GetSize()-4); ++ptr)
         if (memcmp(ptr, "data", 4)==0)
         {
             datachunk = (DataChunk const *)ptr;
@@ -122,14 +122,14 @@ std::shared_ptr<AudioData const> AudioCache::importRiff(std::shared_ptr<donut::v
         log::warning("Cannot find Data chunk `%s`", filepath);
         return nullptr;
     }
-    if (ptr+datachunk->dataChunkSize>=data+blob->size())
+    if (ptr+datachunk->dataChunkSize>=data+blob->GetSize())
     {
         log::warning("Invalid data chunk size `%s`", filepath);
         return nullptr;
     }
     ptr += sizeof(DataChunk);
 
-    std::shared_ptr<AudioData> result = std::make_shared<AudioData>();
+    auto result = MAKE_RC_OBJ_PTR(AudioData);
 
     result->format = AudioData::Format::WAVE_PCM_INTEGER;
     result->nchannels = wavechunk->numChannels;
@@ -155,11 +155,10 @@ static bool strcaseequals(const std::string& a, const std::string& b)
 #endif
 }
 
-std::shared_ptr<AudioData const> AudioCache::loadAudioFile (const std::filesystem::path & path)
+AutoPtr<AudioData> AudioCache::loadAudioFile (const std::filesystem::path & path)
 {
-
-    std::shared_ptr<vfs::IBlob> blob = m_fs->readFile(path);
-    if (!blob)
+    AutoPtr<IDataBlob> blob;
+    if (FFAILED(m_fs->readFile(path, &blob)))
     {
         log::warning("Couldn't read audio file `%s`", path.generic_string().c_str());
         return nullptr;
@@ -176,31 +175,34 @@ std::shared_ptr<AudioData const> AudioCache::loadAudioFile (const std::filesyste
     return nullptr;
 }
 
-bool AudioCache::findInCache(const std::filesystem::path & path, std::shared_ptr<AudioData const> & result)
+bool AudioCache::findInCache(const std::filesystem::path & path, AudioData **ppResult)
 {
-    result.reset();
-
     std::lock_guard<std::mutex> guard(m_LoadedDataMutex);
 
-    result = m_LoadedAudioData[path.generic_string()];
+    auto result = m_LoadedAudioData[path.generic_string()];
     if (result)
         return true;
 
-    result = std::make_shared<AudioData const>();
+    result = MAKE_RC_OBJ_PTR(AudioData);
     m_LoadedAudioData[path.generic_string()] = result;
+    if(ppResult) {
+        *ppResult = result;
+        result->AddRef();
+    }
+
     return false;
 }
 
-void AudioCache::sendAudioLoadedMessage(std::shared_ptr<AudioData const> audio, char const * path)
+void AudioCache::sendAudioLoadedMessage(const AudioData* audio, char const * path)
 {
     log::info("Loaded (%dkHz) : %s", audio->sampleRate/1000, path);
 }
 
-std::shared_ptr<AudioData const> AudioCache::LoadFromFile(const std::filesystem::path & path)
+AutoPtr<AudioData> AudioCache::LoadFromFile(const std::filesystem::path & path)
 {
-    std::shared_ptr<AudioData const> audio;
+    AutoPtr<AudioData> audio;
 
-    if (findInCache(path, audio))
+    if (findInCache(path, &audio))
         return audio;
 
     if ((audio = loadAudioFile (path)))
@@ -210,11 +212,10 @@ std::shared_ptr<AudioData const> AudioCache::LoadFromFile(const std::filesystem:
     return audio;
 }
 
-std::shared_ptr<AudioData const> AudioCache::LoadFromFileAsync(const std::filesystem::path & path, ThreadPool& threadPool)
+AutoPtr<AudioData> AudioCache::LoadFromFileAsync(const std::filesystem::path & path, ThreadPool& threadPool)
 {
-    std::shared_ptr<AudioData const> audio;
-
-    if (findInCache(path, audio))
+    AutoPtr<AudioData> audio;
+    if (findInCache(path, &audio))
         return audio;
 
     threadPool.AddTask([this, &audio, path]()

@@ -200,10 +200,10 @@ public:
     }
 };
 
-std::unique_ptr<DLSS> DLSS::CreateDX11(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
+AutoPtr<DLSS> DLSS::CreateDX11(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
     std::string const& directoryWithExecutable, uint32_t applicationID)
 {
-    return std::make_unique<DLSS_DX11>(device, shaderFactory, directoryWithExecutable, applicationID);
+    return MAKE_RC_OBJ_PTR(DLSS_DX11, device, shaderFactory, directoryWithExecutable, applicationID);
 }
 
 #endif

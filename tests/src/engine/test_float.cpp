@@ -516,11 +516,11 @@ bool test_gpu_float8(nvrhi::IDevice* device, bool e5m2)
     return errorCount == 0;
 }
 
-std::unique_ptr<donut::app::DeviceManager> InitializeGraphicsDevice(nvrhi::GraphicsAPI graphicsApi)
+AutoPtr<donut::app::DeviceManager> InitializeGraphicsDevice(nvrhi::GraphicsAPI graphicsApi)
 {
     using namespace donut::app;
 
-    std::unique_ptr<DeviceManager> deviceManager = std::unique_ptr<DeviceManager>(
+    AutoPtr<DeviceManager> deviceManager = TakeOver(
         DeviceManager::Create(graphicsApi));
 
     if (!deviceManager)
@@ -574,7 +574,7 @@ int main(int argc, char** argv)
     donut::log::SetMinSeverity(donut::log::Severity::Warning);
 
     nvrhi::GraphicsAPI graphicsApi = donut::app::GetGraphicsAPIFromCommandLine(argc, argv);
-    std::unique_ptr<donut::app::DeviceManager> deviceManager = InitializeGraphicsDevice(graphicsApi);
+    AutoPtr<donut::app::DeviceManager> deviceManager = InitializeGraphicsDevice(graphicsApi);
 
     bool f16c = donut::math::IsF16CSupported();
 

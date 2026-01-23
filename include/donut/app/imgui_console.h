@@ -45,13 +45,13 @@ SOFTWARE.
 */
 
 #pragma once
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <donut/core/circular_buffer.h>
 #include <donut/core/log.h>
 
 #include <imgui.h>
 
-#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -82,7 +82,7 @@ namespace donut::app
 			bool show_errors = true;
 		};
 
-		ImGui_Console(std::shared_ptr<donut::engine::console::Interpreter> interpreter, Options const& opts);
+		ImGui_Console(donut::engine::console::Interpreter* interpreter, Options const& opts);
 
 		~ImGui_Console();
 
@@ -129,7 +129,7 @@ namespace donut::app
 
 		Options m_Options;
 
-		std::shared_ptr<donut::engine::console::Interpreter> m_Interpreter;
+		AutoPtr<donut::engine::console::Interpreter> m_Interpreter;
 	};
 
 } // namespace donut::app

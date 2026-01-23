@@ -31,7 +31,7 @@
 #define ftello _ftelli64
 #endif
 
-using namespace donut::vfs;
+namespace donut::vfs {
 
 struct header_posix_ustar
 {
@@ -180,17 +180,17 @@ bool TarFile::fileExists(const std::filesystem::path& name)
     return m_Files.find(normalizedName) != m_Files.end();
 }
 
-std::shared_ptr<IBlob> TarFile::readFile(const std::filesystem::path& name)
+FRESULT TarFile::readFile(const std::filesystem::path& name, IDataBlob **ppBlob)
 {
     std::string normalizedName = name.lexically_normal().relative_path().generic_string();
     
     if (normalizedName.empty())
-        return nullptr;
+        return FE_GENERIC_ERROR;
     
     auto entry = m_Files.find(normalizedName);
 
     if (entry == m_Files.end())
-        return nullptr;
+        return FE_GENERIC_ERROR;
 
     // prevent concurrent file operations from multiple threads from this point on
     std::lock_guard<std::mutex> lockGuard(m_Mutex);
@@ -199,27 +199,32 @@ std::shared_ptr<IBlob> TarFile::readFile(const std::filesystem::path& name)
     {
         log::warning("Error seeking to offset %ull for file '%s' in tar archive '%s'",
             entry->second.offset, normalizedName.c_str(), m_ArchivePath.c_str());
-        return nullptr;
+        return FE_GENERIC_ERROR;
     }
 
-    void* data = malloc(entry->second.size);
+    IDataBlob* pBlob;
+    FRESULT fr;
+    if(FFAILED(fr = CreateBlob(entry->second.size, &pBlob))) {
+        return fr;
+    }
 
-    if (!data)
-        return nullptr;
-
-    size_t sizeRead = fread(data, 1, entry->second.size, m_ArchiveFile);
+    size_t sizeRead = fread(pBlob->GetDataPtr(), 1, entry->second.size, m_ArchiveFile);
 
     if (sizeRead != entry->second.size)
     {
         log::warning("Error reading file '%s' (%ull bytes) from tar archive '%s'", 
             entry->second.size, normalizedName.c_str(), m_ArchivePath.c_str());
-        free(data);
-        return nullptr;
+        pBlob->Release();
+        return FE_GENERIC_ERROR;
     }
 
-    std::shared_ptr<Blob> blob = std::make_shared<Blob>(data, entry->second.size);
+    if(ppBlob) {
+        *ppBlob = pBlob;
+        pBlob->AddRef();
+    }
 
-    return std::static_pointer_cast<IBlob>(blob);
+    pBlob->Release();
+    return FS_OK;
 }
 
 bool TarFile::writeFile(const std::filesystem::path&, const void*, size_t)
@@ -263,3 +268,5 @@ int TarFile::enumerateDirectories(const std::filesystem::path& path, enumerate_c
     
     return numEntries;
 }
+
+}  // namespace donut::vfs

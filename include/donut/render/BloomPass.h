@@ -21,10 +21,10 @@
 */
 
 #pragma once
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <donut/engine/BindingCache.h>
 #include <nvrhi/nvrhi.h>
-#include <memory>
 #include <unordered_map>
 
 
@@ -39,11 +39,11 @@ namespace donut::engine
 
 namespace donut::render
 {
-    class BloomPass
+    class BloomPass: ObjectImpl<IObject>
     {
     private:
-        std::shared_ptr<engine::CommonRenderPasses> m_CommonPasses;
-        std::shared_ptr<engine::FramebufferFactory> m_FramebufferFactory;
+        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
+        AutoPtr<engine::FramebufferFactory> m_FramebufferFactory;
 
         nvrhi::DeviceHandle m_Device;
 
@@ -80,15 +80,15 @@ namespace donut::render
     public:
         BloomPass(
             nvrhi::IDevice* device,
-            const std::shared_ptr<engine::ShaderFactory>& shaderFactory,
-            std::shared_ptr<engine::CommonRenderPasses> commonPasses,
-            std::shared_ptr<engine::FramebufferFactory> framebufferFactory,
-            const engine::ICompositeView& compositeView);
+            engine::ShaderFactory *shaderFactory,
+            engine::CommonRenderPasses *commonPasses,
+            engine::FramebufferFactory *framebufferFactory,
+            const engine::ICompositeView &compositeView);
 
         void Render(
             nvrhi::ICommandList* commandList,
-            const std::shared_ptr<engine::FramebufferFactory>& framebufferFactory,
-            const engine::ICompositeView& compositeView,
+            engine::FramebufferFactory *framebufferFactory,
+            const engine::ICompositeView* compositeView,
             nvrhi::ITexture* sourceDestTexture,
             float sigmaInPixels,
             float blendFactor);

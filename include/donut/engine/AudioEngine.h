@@ -21,10 +21,10 @@
 */
 
 #pragma once
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <functional>
-#include <memory>
 
 namespace donut::engine::audio
 {
@@ -32,10 +32,10 @@ class AudioData;
 
 // Effect : transient interface to manipulate active sound effects
 //
-struct Effect
+struct Effect: WeakableImpl<IWeakable>
 {
     // returns the audio sample associated with this effect
-    virtual std::weak_ptr<AudioData const> getSample() const = 0;    
+    virtual AudioData* getSample() const = 0;    
     
     virtual void setVolume(float volume) = 0;
     virtual void setPitch(float volume) = 0;
@@ -53,14 +53,14 @@ struct Effect
     typedef std::function<void(Effect &)> EffectCallback;
     virtual void setEffectCallback(EffectCallback const & callback) = 0;
 
-    virtual ~Effect() {};
+    using WeakableImpl::WeakableImpl;
 };
 
 // Descriptor used to create effects
 //
 struct EffectDesc
 {
-    std::shared_ptr<AudioData const> sample; // cached audio sample
+    AudioData *sample; // cached audio sample
 
     float volume = 1.f, // default volume / pitch / pan
           pitch = 1.f,
@@ -96,7 +96,7 @@ struct Options
 // independently to a mastering track.
 //
 // Queuing 'play' functions take audio::AudioData samples and return an interface
-// to the active voice that plays the sample in the form of a std::weak_ptr<Effect>
+// to the active voice that plays the sample in the form of a Effect
 //
 // While the sample is playing, the client application can use the Effect 
 // interface to safely control the playback rendering hardware.
@@ -124,10 +124,10 @@ public:
     static uint32_t constexpr infinite_loop = 255; // constant for 'infinite' looping
 
     // plays an audio sample on the effects mixing track
-    std::weak_ptr<Effect> playEffect(EffectDesc const & desc);
+    Effect* playEffect(EffectDesc const & desc);
 
     // plays a song on the music mixing track
-    std::weak_ptr<Effect> playMusic(std::shared_ptr<AudioData const> song, float crossfade = 2.f);
+    Effect* playMusic(AudioData* song, float crossfade = 2.f);
 
     // returns true the engine is transitioning (cross-fading) between 2 songs, false otherwise
     bool crossfadeActive() const;
@@ -152,7 +152,7 @@ public:
 
     // platform-specific engine implementation
     class Implementation;
-    std::unique_ptr<Implementation> m_implementation;
+    MonoPtr<Implementation> m_implementation;
 };
 
 } // namespace donut::engine::audio

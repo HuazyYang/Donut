@@ -61,14 +61,14 @@ void DeferredLightingPass::Inputs::SetGBuffer(const GBufferRenderTargets& target
 
 DeferredLightingPass::DeferredLightingPass(
     nvrhi::IDevice* device,
-    std::shared_ptr<CommonRenderPasses> commonPasses)
+    CommonRenderPasses* commonPasses)
     : m_Device(device)
     , m_BindingSets(device)
-    , m_CommonPasses(std::move(commonPasses))
+    , m_CommonPasses(commonPasses)
 {
 }
 
-void donut::render::DeferredLightingPass::Init(const std::shared_ptr<engine::ShaderFactory>& shaderFactory)
+void donut::render::DeferredLightingPass::Init(engine::ShaderFactory* shaderFactory)
 {
     auto samplerDesc = nvrhi::SamplerDesc()
         .setAllAddressModes(nvrhi::SamplerAddressMode::Border)

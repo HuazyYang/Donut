@@ -25,7 +25,6 @@
 #include <donut/engine/View.h>
 #include <nvrhi/nvrhi.h>
 
-#include <memory>
 #include <vector>
 
 namespace donut::engine
@@ -81,6 +80,6 @@ namespace donut::render
             nvrhi::ICommandList* commandList,
             const engine::IView* view,
             nvrhi::IFramebuffer* framebuffer,
-            std::shared_ptr<engine::SceneGraph const> sceneGraph);
+            engine::SceneGraph const* sceneGraph);
     };
 } // end namespace donut::render

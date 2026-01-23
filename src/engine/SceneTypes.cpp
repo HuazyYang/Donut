@@ -116,13 +116,15 @@ void Light::SetDirection(const dm::double3& direction) const
     node->SetTransform(nullptr, &rotation, &scaling);
 }
 
-std::shared_ptr<SceneGraphLeaf> DirectionalLight::Clone()
+Light::~Light() {}
+
+donut::AutoPtr<SceneGraphLeaf> DirectionalLight::Clone()
 {
-    auto copy = std::make_shared<DirectionalLight>();
+    auto copy = MAKE_RC_OBJ_PTR(DirectionalLight);
     copy->color = color;
     copy->irradiance = irradiance;
     copy->angularSize = angularSize;
-    return std::static_pointer_cast<SceneGraphLeaf>(copy);
+    return copy;
 }
 
 void DirectionalLight::FillLightConstants(LightConstants& lightConstants) const
@@ -170,16 +172,16 @@ bool DirectionalLight::SetProperty(const std::string& name, const dm::float4& va
 
 inline float square(const float x) { return x * x; }
 
-std::shared_ptr<SceneGraphLeaf> SpotLight::Clone()
+donut::AutoPtr<SceneGraphLeaf> SpotLight::Clone()
 {
-    auto copy = std::make_shared<SpotLight>();
+    auto copy = MAKE_RC_OBJ_PTR(SpotLight);
     copy->color = color;
     copy->intensity = intensity;
     copy->radius = radius;
     copy->range = range;
     copy->innerAngle = innerAngle;
     copy->outerAngle = outerAngle;
-    return std::static_pointer_cast<SceneGraphLeaf>(copy);
+    return copy;
 }
 
 void SpotLight::FillLightConstants(LightConstants& lightConstants) const
@@ -253,14 +255,14 @@ bool SpotLight::SetProperty(const std::string& name, const dm::float4& value)
     return Light::SetProperty(name, value);
 }
 
-std::shared_ptr<SceneGraphLeaf> PointLight::Clone()
+donut::AutoPtr<SceneGraphLeaf> PointLight::Clone()
 {
-    auto copy = std::make_shared<PointLight>();
+    auto copy = MAKE_RC_OBJ_PTR(PointLight);
     copy->color = color;
     copy->intensity = intensity;
     copy->radius = radius;
     copy->range = range;
-    return std::static_pointer_cast<SceneGraphLeaf>(copy);
+    return copy;
 }
 
 void PointLight::FillLightConstants(LightConstants& lightConstants) const
@@ -400,4 +402,14 @@ void LightProbe::FillLightProbeConstants(LightProbeConstants& lightProbeConstant
     {
         lightProbeConstants.frustumPlanes[nPlane] = float4(bounds.planes[nPlane].normal, bounds.planes[nPlane].distance);
     }
+}
+
+void donut::engine::MeshGeometry::operator=(MeshGeometry& rhs) noexcept {
+    material = rhs.material;
+    objectSpaceBounds = rhs.objectSpaceBounds;
+    indexOffsetInMesh = rhs.indexOffsetInMesh;
+    vertexOffsetInMesh = rhs.vertexOffsetInMesh;
+    numIndices = rhs.numIndices;
+    numVertices = rhs.numVertices;
+    globalGeometryIndex = rhs.globalGeometryIndex;
 }

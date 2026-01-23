@@ -81,10 +81,10 @@ void InstancedOpaqueDrawStrategy::FillChunk()
 
             if (nodeVisible && nodeContentsRelevant)
             {
-                auto meshInstance = dynamic_cast<MeshInstance*>(m_Walker->GetLeaf().get());
+                auto meshInstance = dynamic_cast<MeshInstance*>(m_Walker->GetLeaf());
                 if (meshInstance)
                 {
-                    const engine::MeshInfo* mesh = meshInstance->GetMesh().get();
+                    const engine::MeshInfo* mesh = meshInstance->GetMesh();
 
                     size_t requiredChunkSize = itemCount + mesh->geometries.size();
                     if (m_InstanceChunk.size() < requiredChunkSize)
@@ -109,9 +109,9 @@ void InstancedOpaqueDrawStrategy::FillChunk()
                         DrawItem& item = *writePtr;
                         item.instance = meshInstance;
                         item.mesh = mesh;
-                        item.geometry = geometry.get();
-                        item.material = geometry->material.get();
-                        item.buffers = item.mesh->buffers.get();
+                        item.geometry = geometry;
+                        item.material = geometry->material;
+                        item.buffers = item.mesh->buffers;
                         item.cullMode = (item.material->doubleSided) ? nvrhi::RasterCullMode::None : nvrhi::RasterCullMode::Back;
                         item.distanceToCamera = 0; // don't care
                         
@@ -141,9 +141,9 @@ void InstancedOpaqueDrawStrategy::FillChunk()
     m_ReadPtr = 0;
 }
 
-void donut::render::InstancedOpaqueDrawStrategy::PrepareForView(const std::shared_ptr<engine::SceneGraphNode>& rootNode, const engine::IView& view)
+void donut::render::InstancedOpaqueDrawStrategy::PrepareForView(engine::SceneGraphNode *rootNode, const engine::IView& view)
 {
-    m_Walker = SceneGraphWalker(rootNode.get());
+    m_Walker = SceneGraphWalker(rootNode);
     m_ViewFrustum = view.GetViewFrustum();
     m_InstanceChunk.clear();
     m_ReadPtr = 0;
@@ -169,7 +169,7 @@ static int CompareDrawItemsTransparent(const DrawItem* a, const DrawItem* b)
     return a->distanceToCamera > b->distanceToCamera;
 }
 
-void TransparentDrawStrategy::PrepareForView(const std::shared_ptr<engine::SceneGraphNode>& rootNode, const IView& view)
+void TransparentDrawStrategy::PrepareForView(engine::SceneGraphNode* rootNode, const IView& view)
 {
     m_ReadPtr = 0;
 
@@ -179,7 +179,7 @@ void TransparentDrawStrategy::PrepareForView(const std::shared_ptr<engine::Scene
     float3 viewOrigin = view.GetViewOrigin();
     auto viewFrustum = view.GetViewFrustum();
 
-    SceneGraphWalker walker(rootNode.get());
+    SceneGraphWalker walker(rootNode);
     while (walker)
     {
         auto relevantContentFlags = SceneContentFlags::BlendedMeshes;
@@ -193,10 +193,10 @@ void TransparentDrawStrategy::PrepareForView(const std::shared_ptr<engine::Scene
 
             if (nodeVisible && nodeContentsRelevant)
             {
-                auto meshInstance = dynamic_cast<MeshInstance*>(walker->GetLeaf().get());
+                auto meshInstance = dynamic_cast<MeshInstance*>(walker->GetLeaf());
                 if (meshInstance)
                 {
-                    const engine::MeshInfo* mesh = meshInstance->GetMesh().get();
+                    const engine::MeshInfo* mesh = meshInstance->GetMesh();
                     for (const auto& geometry : mesh->geometries)
                     {
                         const auto& material = geometry->material;
@@ -204,7 +204,7 @@ void TransparentDrawStrategy::PrepareForView(const std::shared_ptr<engine::Scene
                             continue;
 
                         dm::box3 geometryGlobalBoundingBox;
-                        if (mesh->geometries.size() > 1 && mesh->skinPrototype.use_count() != 0)
+                        if (mesh->geometries.size() > 1 && mesh->skinPrototype)
                         {
                             geometryGlobalBoundingBox = geometry->objectSpaceBounds * walker->GetLocalToWorldTransformFloat();
                             if (!viewFrustum.intersectsWith(geometryGlobalBoundingBox))
@@ -218,9 +218,9 @@ void TransparentDrawStrategy::PrepareForView(const std::shared_ptr<engine::Scene
                         DrawItem item{};
                         item.instance = meshInstance;
                         item.mesh = mesh;
-                        item.geometry = geometry.get();
-                        item.material = geometry->material.get();
-                        item.buffers = mesh->buffers.get();
+                        item.geometry = geometry;
+                        item.material = geometry->material;
+                        item.buffers = mesh->buffers;
                         item.distanceToCamera = length(geometryGlobalBoundingBox.center() - viewOrigin);
                         if (material->doubleSided)
                         {

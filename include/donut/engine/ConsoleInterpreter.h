@@ -21,8 +21,8 @@
 */
 
 #pragma once
-
-#include <memory>
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -66,7 +66,7 @@ namespace donut::engine
 
 		// Command-line interpreter
 
-		class Interpreter
+		class Interpreter: public ObjectImpl<IObject>
 		{
 		public:
 
@@ -83,11 +83,11 @@ namespace donut::engine
 			// parse incomplete command line & return auto-completion suggestions
 			std::vector<std::string> Suggest(std::string_view const cmdline, size_t cursor_pos);
 
-			bool RegisterCommands(std::shared_ptr<TextureCache> textureCache);
+			bool RegisterCommands(TextureCache* textureCache);
 
 		private:
 
-			std::shared_ptr<TextureCache> m_TextureCache;
+			AutoPtr<TextureCache> m_TextureCache;
 		};
 
 	} // end namespace console

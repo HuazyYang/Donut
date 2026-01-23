@@ -222,14 +222,14 @@ void Sampler::Load(Json::Value& node)
 
 std::optional<dm::float4> Sequence::Evaluate(const std::string& name, float time, bool extrapolateLastValues)
 {
-    std::shared_ptr<Sampler> track = GetTrack(name);
+    auto track = GetTrack(name);
     if (!track)
         return std::optional<dm::float4>();
 
     return track->Evaluate(time, extrapolateLastValues);
 }
 
-void Sequence::AddTrack(const std::string& name, const std::shared_ptr<Sampler>& track)
+void Sequence::AddTrack(const std::string& name, Sampler* track)
 {
     m_Tracks[name] = track;
     m_Duration = std::max(m_Duration, track->GetEndTime());
@@ -239,7 +239,7 @@ void Sequence::Load(Json::Value& node)
 {
     for (auto& trackNode : node)
     {
-        auto track = std::make_shared<Sampler>();
+        auto track = MAKE_RC_OBJ_PTR(Sampler);
         track->Load(trackNode);
 
         std::string name = trackNode["name"].asString();

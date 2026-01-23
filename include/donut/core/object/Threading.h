@@ -3,7 +3,7 @@
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
-#include <donut/core/object/DebugUtils.h>
+#include <donut/core/object/MemoryAllocator.h>
 
 namespace donut {
 
@@ -154,6 +154,49 @@ private:
     std::condition_variable m_CondVar;
     std::atomic_int m_SignaledValue{ 0 };
     std::atomic_int m_NumThreadsAwaken{ 0 };
+};
+
+struct LFStackEntry {
+    LFStackEntry *next;
+};
+
+/**
+ * Lock free stack
+ * @ref gcc/+/master/libsanitizer/sanitizer_common/sanitizer_lfstack.h
+ */
+struct LFStack {
+    LFStack();
+    ~LFStack();
+
+    bool Empty() const;
+    LFStackEntry *Top() const;
+    void Push(LFStackEntry *p);
+    void Push(LFStackEntry *slice, LFStackEntry *slice_end);
+    LFStackEntry *Pop();
+    LFStackEntry *Flush();
+
+    std::atomic<uint64_t> head_;
+};
+
+struct SharedSpinLock {
+    SharedSpinLock();
+    ~SharedSpinLock();
+
+    void lock() noexcept;
+    bool try_lock() noexcept;
+    void unlock() noexcept;
+
+    void lock_shared() noexcept;
+    bool try_lock_shared() noexcept;
+    void unlock_shared() noexcept;
+
+ private:
+    bool is_locked() noexcept;
+    bool is_locked_shared() noexcept;
+    void Wait();
+    void WaitShared();
+
+    std::atomic<uint64_t> shared_cnt_;
 };
 
 } // namespace donut

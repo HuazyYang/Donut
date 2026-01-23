@@ -64,7 +64,7 @@ private:
 namespace donut::engine::audio
 {
 
-static uint32_t makeKey(std::shared_ptr<AudioData const> sample)
+static uint32_t makeKey(const AudioData *sample)
 {
     if (!sample || !sample->valid())
         return 0;
@@ -97,8 +97,8 @@ public:
 
     Options const & getOptions() const { return m_options; }
 
-    virtual std::weak_ptr<Effect> playEffect(EffectDesc const & desc) = 0;
-    virtual std::weak_ptr<Effect> playMusic(std::shared_ptr<AudioData const> sample, float crossfade) = 0;
+    virtual Effect* playEffect(EffectDesc const & desc) = 0;
+    virtual Effect* playMusic(AudioData *sample, float crossfade) = 0;
 
     virtual bool crossfadeActive() const = 0;
 
@@ -128,7 +128,7 @@ protected:
 
 // Xaudio2 helpers
 
-inline void getFormatEX(std::shared_ptr<AudioData const> sample, WAVEFORMATEX * wfmtx)
+inline void getFormatEX(const AudioData *sample, WAVEFORMATEX * wfmtx)
 {
     wfmtx->wFormatTag = WAVE_FORMAT_PCM;
     wfmtx->nChannels = sample->nchannels;
@@ -219,9 +219,9 @@ class Xaudio2Implementation;
 
 struct Xaudio2Effect : public Effect
 {
-    ~Xaudio2Effect() { }
+    using Effect::Effect;
 
-    std::weak_ptr<AudioData const> getSample() const override;
+    AudioData *getSample() const override;
 
     void setVolume(float volume) override;
     void setPitch(float pitch) override;
@@ -233,14 +233,14 @@ struct Xaudio2Effect : public Effect
 
     bool setEmitterTransform(donut::math::affine3 const & transform) override;
 
-    std::shared_ptr<AudioData const > sample;
+    AutoPtr<AudioData> sample;
     bool stopped = false;
     uint32_t key = 0;
     IXAudio2SourceVoice * voice = nullptr;
     EffectCallback callback;
 };
 
-std::weak_ptr<AudioData const> Xaudio2Effect::getSample() const { return sample; }
+AudioData* Xaudio2Effect::getSample() const { return sample; }
 
 // note : because client code may be holding a locked effect pointer to a voice that stopped
 // playing, all public interface functors MUST make sure the voice not null.
@@ -268,6 +268,7 @@ float Xaudio2Effect::played()
 
 struct Xaudio2Effect3D : public Xaudio2Effect
 {
+    using Xaudio2Effect::Xaudio2Effect;
     virtual bool setEmitterTransform(donut::math::affine3 const & transform);
 
     void update(std::chrono::system_clock::time_point const & now, bool leftHanded);
@@ -325,14 +326,15 @@ void Xaudio2Effect3D::update(std::chrono::system_clock::time_point const & now, 
 class Xaudio2Implementation : public Engine::Implementation
 {
 public:
+    Xaudio2Implementation(Options const & opts) : Engine::Implementation(opts) { }
 
     virtual ~Xaudio2Implementation();
 
-    static std::unique_ptr<Engine::Implementation> create(Options const & opts);
+    static MonoPtr<Engine::Implementation> create(Options const & opts);
 
-    virtual std::weak_ptr<Effect> playEffect(EffectDesc const & desc);
+    virtual Effect* playEffect(EffectDesc const & desc) override;
 
-    virtual std::weak_ptr<Effect> playMusic(std::shared_ptr<AudioData const> sample, float crossfade);
+    virtual Effect* playMusic(AudioData* sample, float crossfade) override;
 
     virtual bool crossfadeActive() const;
 
@@ -347,14 +349,11 @@ public:
     virtual void setListenerCallback(Engine::ListenerCallback const & callback);
 
 private:
-
-    Xaudio2Implementation(Options const & opts) : Engine::Implementation(opts) { }
-
-    static bool canPlaySample(std::shared_ptr<AudioData const> sample);
+    static bool canPlaySample(const AudioData *sample);
 
     IXAudio2SourceVoice * allocateVoice(uint32_t key, WAVEFORMATEX const & wfx);
 
-    std::weak_ptr<Effect> playSample(IXAudio2SubmixVoice * submix, EffectDesc const & desc);
+    Effect* playSample(IXAudio2SubmixVoice * submix, EffectDesc const & desc);
 
     void update();
 
@@ -381,10 +380,10 @@ private:
 
     std::unordered_multimap<uint32_t, IXAudio2SourceVoice *> m_voicePool; // see makeKey() for hashing details
 
-    std::list<std::shared_ptr<Effect>> m_activeVoices;
+    std::list<AutoPtr<Effect>> m_activeVoices;
 
     // music soundtrack
-    std::weak_ptr<Effect> m_currentSong,
+    WeakPtr<Effect> m_currentSong,
                           m_nextSong;
 
     std::chrono::system_clock::time_point m_crossfadeStart,
@@ -448,7 +447,7 @@ void Xaudio2Implementation::clearVoices()
     m_voicePoolMutex.lock();
     for (auto it : m_activeVoices)
     {
-        auto effect = std::dynamic_pointer_cast<Xaudio2Effect>(it);
+        auto effect = dynamic_cast<Xaudio2Effect*>(it.Get());
         effect->voice->Stop();
         effect->voice->DestroyVoice();
     }
@@ -485,7 +484,7 @@ void Xaudio2Implementation::setMusicVolume(float volume)
         log::warning("AudioEngine : cannot set music volume");
 }
 
-bool Xaudio2Implementation::canPlaySample(std::shared_ptr<AudioData const> sample)
+bool Xaudio2Implementation::canPlaySample(const AudioData *sample)
 {
     if (!sample)
     {
@@ -532,9 +531,9 @@ IXAudio2SourceVoice * Xaudio2Implementation::allocateVoice(uint32_t key, WAVEFOR
     return voice;
 }
 
-std::weak_ptr<Effect> Xaudio2Implementation::playSample(IXAudio2SubmixVoice * submix, EffectDesc const & desc)
+Effect* Xaudio2Implementation::playSample(IXAudio2SubmixVoice * submix, EffectDesc const & desc)
 {
-    std::weak_ptr<Effect> result;
+    Effect* result = nullptr;
 
     if (!canPlaySample(desc.sample))
         return result;
@@ -586,13 +585,13 @@ std::weak_ptr<Effect> Xaudio2Implementation::playSample(IXAudio2SubmixVoice * su
             return result;
         }
 
-        std::shared_ptr<Xaudio2Effect> effect;
+        AutoPtr<Xaudio2Effect> effect;
 
         if (!m_options.use3D || !desc.transform)
-            effect = std::make_shared<Xaudio2Effect>();
+            effect = MAKE_RC_OBJ_PTR(Xaudio2Effect);
         else
         {
-            auto effect3D = std::make_shared<Xaudio2Effect3D>();
+            auto effect3D = MAKE_RC_OBJ_PTR(Xaudio2Effect3D);
             memset(&effect3D->emitter, 0, sizeof(X3DAUDIO_EMITTER));
             effect3D->emitter.pCone = nullptr;
             effect3D->emitter.ChannelCount = desc.sample->nchannels;
@@ -616,14 +615,14 @@ std::weak_ptr<Effect> Xaudio2Implementation::playSample(IXAudio2SubmixVoice * su
     return result;
 }
 
-std::weak_ptr<Effect> Xaudio2Implementation::playEffect(EffectDesc const & desc)
+Effect* Xaudio2Implementation::playEffect(EffectDesc const & desc)
 {
     return playSample(m_effects, desc);
 }
 
-std::weak_ptr<Effect> Xaudio2Implementation::playMusic(std::shared_ptr<AudioData const> sample, float crossfade)
+Effect* Xaudio2Implementation::playMusic(AudioData *sample, float crossfade)
 {
-    std::weak_ptr<Effect> result;
+    Effect *result = nullptr;
 
     if (!canPlaySample(sample))
         return result;
@@ -633,28 +632,28 @@ std::weak_ptr<Effect> Xaudio2Implementation::playMusic(std::shared_ptr<AudioData
     desc.loop = Engine::infinite_loop;
     desc.transform = nullptr;
 
-    if (auto cursong = m_currentSong.lock())
+    if (auto cursong = m_currentSong.Lock())
     {
         using namespace std::chrono;
         m_crossfadeStart = system_clock::now();
         m_crossfadeEnd = m_crossfadeStart + milliseconds(uint32_t(crossfade*1000.f));
 
-        if (auto nextsong = m_nextSong.lock())
+        if (auto nextsong = m_nextSong.Lock())
         {
             // we are already in the middle of a crossfade
             cursong->stop();
             m_currentSong = m_nextSong;
         }
-        result = m_nextSong = playSample(m_music, desc);
+        m_nextSong = result = playSample(m_music, desc);
     }
     else
-        result = m_currentSong = playSample(m_music, desc);
+        m_currentSong = result = playSample(m_music, desc);
     return result;
 }
 
 bool Xaudio2Implementation::crossfadeActive() const
 {
-    return m_currentSong.expired() == false && m_nextSong.expired() == false;
+    return m_currentSong.IsValid() && m_nextSong.IsValid();
 }
 
 void Xaudio2Implementation::update()
@@ -687,7 +686,7 @@ void Xaudio2Implementation::update()
 
         for (auto it = m_activeVoices.begin(); it != m_activeVoices.end(); )
         {
-            std::shared_ptr<Xaudio2Effect> effect = std::dynamic_pointer_cast<Xaudio2Effect>(*it);
+            auto effect = dynamic_cast<Xaudio2Effect *>((*it).Get());
             if (effect)
             {
                 XAUDIO2_VOICE_STATE xstate;
@@ -737,7 +736,7 @@ void Xaudio2Implementation::update()
 
                     // if the voice is still active & is a 3D emitter, compute volume mix
                     if (m_options.use3D)
-                        if (auto effect3D = std::dynamic_pointer_cast<Xaudio2Effect3D>(effect))
+                        if (auto effect3D = dynamic_cast<Xaudio2Effect3D *>(effect))
                         {
                             effect3D->update(now, m_options.leftHanded);
 
@@ -764,7 +763,7 @@ void Xaudio2Implementation::update()
         }
 
         // manage music crossfade between songs if necessary
-        if (auto nextsong = m_nextSong.lock())
+        if (auto nextsong = m_nextSong.Lock())
         {
             duration<float, std::milli> elapsed = now - m_crossfadeStart,
                                         total = m_crossfadeEnd - m_crossfadeStart;
@@ -772,13 +771,13 @@ void Xaudio2Implementation::update()
 
             nextsong->setVolume(fade);
 
-            if (auto cursong = m_currentSong.lock())
+            if (auto cursong = m_currentSong.Lock())
             {
                 if (fade >= 1.f)
                 {
                     cursong->stop();
                     m_currentSong = m_nextSong;
-                    m_nextSong.reset();
+                    m_nextSong.Reset();
                 }
                 else
                     cursong->setVolume(1.f - fade);
@@ -811,7 +810,7 @@ void Xaudio2Implementation::stopUpdateThread()
         m_updateThread.join();
 }
 
-std::unique_ptr<Engine::Implementation> Xaudio2Implementation::create(Options const & opts)
+MonoPtr<Engine::Implementation> Xaudio2Implementation::create(Options const & opts)
 {
     HRESULT hr;
     if (FAILED(hr = CoInitializeEx(NULL, COINIT_MULTITHREADED)))
@@ -820,7 +819,7 @@ std::unique_ptr<Engine::Implementation> Xaudio2Implementation::create(Options co
         return nullptr;
     }
 
-    std::unique_ptr<Xaudio2Implementation> result(std::move(new Xaudio2Implementation(opts)));
+    MonoPtr<Xaudio2Implementation> result = MakeMono<Xaudio2Implementation>(opts);
 
     // interface
     if (FAILED(hr = XAudio2Create(&result->m_xaudio2, 0)))
@@ -890,7 +889,7 @@ std::unique_ptr<Engine::Implementation> Xaudio2Implementation::create(Options co
 
     result->startUpdateThread();
 
-    return result;
+    return MonoPtr<Engine::Implementation>(result);
 }
 
 
@@ -956,20 +955,18 @@ Engine::Engine(Options opts)
 Engine::~Engine()
 { }
 
-std::weak_ptr<Effect> Engine::playEffect(EffectDesc const & desc)
+Effect* Engine::playEffect(EffectDesc const & desc)
 {
-    std::weak_ptr<Effect> effect;
     if (m_implementation)
-        effect = m_implementation->playEffect(desc);
-    return effect;
+        return m_implementation->playEffect(desc);
+    return nullptr;
 }
 
-std::weak_ptr<Effect> Engine::playMusic(std::shared_ptr<AudioData const> song, float crossfade)
+Effect* Engine::playMusic(AudioData *song, float crossfade)
 {
-    std::weak_ptr<Effect> effect;
     if (m_implementation)
-        effect = m_implementation->playMusic(song, crossfade);
-    return effect;
+        return m_implementation->playMusic(song, crossfade);
+    return nullptr;
 }
 
 bool Engine::crossfadeActive() const

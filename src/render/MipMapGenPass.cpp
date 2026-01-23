@@ -72,32 +72,30 @@ static nvrhi::TextureHandle createNullTexture(nvrhi::DeviceHandle device)
     return device->createTexture(desc);
 }
 
-struct MipMapGenPass::NullTextures {
+struct MipMapGenPass::NullTextures: ObjectImpl<IObject> {
 
     nvrhi::TextureHandle lod[NUM_LODS];
 
-    static std::shared_ptr<NullTextures> get(nvrhi::DeviceHandle device)
+    static AutoPtr<NullTextures> get(nvrhi::DeviceHandle device)
     {
         static std::mutex _mutex;
-        static std::weak_ptr<NullTextures> _nullTextures;
+        static AutoPtr<NullTextures> _nullTextures;
 
         std::lock_guard<std::mutex> lock(_mutex);
 
-        std::shared_ptr<NullTextures> result = _nullTextures.lock();
-        if (!result)
+        if (!_nullTextures)
         {
-            result = std::make_shared<NullTextures>();
+            _nullTextures = MAKE_RC_OBJ_PTR(NullTextures);
             for (int i = 0; i < NUM_LODS; ++i)
-                result->lod[i] = createNullTexture(device);
-            _nullTextures = result;
+                _nullTextures->lod[i] = createNullTexture(device);
         }
-        return result;
+        return _nullTextures;
     }
 };
 
 MipMapGenPass::MipMapGenPass(
     nvrhi::IDevice* device,
-    std::shared_ptr<ShaderFactory> shaderFactory,
+    ShaderFactory* shaderFactory,
     nvrhi::TextureHandle input, 
     Mode mode)
     : m_Device(device)
@@ -210,7 +208,7 @@ void MipMapGenPass::Dispatch(nvrhi::ICommandList* commandList, int maxLOD)
 }
 
 
-void MipMapGenPass::Display(std::shared_ptr<donut::engine::CommonRenderPasses> commonPasses, nvrhi::ICommandList* commandList, nvrhi::IFramebuffer* target)
+void MipMapGenPass::Display(donut::engine::CommonRenderPasses* commonPasses, nvrhi::ICommandList* commandList, nvrhi::IFramebuffer* target)
 {
     assert(m_Texture);
     

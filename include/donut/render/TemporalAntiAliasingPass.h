@@ -22,10 +22,10 @@
 
 #pragma once
 
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <nvrhi/nvrhi.h>
-#include <memory>
 
 namespace donut::engine
 {
@@ -59,10 +59,10 @@ namespace donut::render
         bool useHistoryClampRelax = false;
     };
 
-    class TemporalAntiAliasingPass
+    class TemporalAntiAliasingPass: public ObjectImpl<IObject>
     {
     private:
-        std::shared_ptr<engine::CommonRenderPasses> m_CommonPasses;
+        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
 
         nvrhi::ShaderHandle m_MotionVectorPS;
         nvrhi::ShaderHandle m_TemporalAntiAliasingCS;
@@ -72,7 +72,7 @@ namespace donut::render
         nvrhi::BindingLayoutHandle m_MotionVectorsBindingLayout;
         nvrhi::BindingSetHandle m_MotionVectorsBindingSet;
         nvrhi::GraphicsPipelineHandle m_MotionVectorsPso;
-        std::unique_ptr<engine::FramebufferFactory> m_MotionVectorsFramebufferFactory;
+        AutoPtr<engine::FramebufferFactory> m_MotionVectorsFramebufferFactory;
 
         nvrhi::BindingLayoutHandle m_ResolveBindingLayout;
         nvrhi::BindingSetHandle m_ResolveBindingSet;
@@ -105,8 +105,8 @@ namespace donut::render
 
         TemporalAntiAliasingPass(
             nvrhi::IDevice* device,
-            std::shared_ptr<engine::ShaderFactory> shaderFactory,
-            std::shared_ptr<engine::CommonRenderPasses> commonPasses,
+            engine::ShaderFactory* shaderFactory,
+            engine::CommonRenderPasses* commonPasses,
             const engine::ICompositeView& compositeView,
             const CreateParameters& params);
 

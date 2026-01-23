@@ -98,7 +98,7 @@ public:
 		return singleton;
 	}
 
-	void UpdateAllJoysticks(const std::list<IRenderPass*>& passes);
+	void UpdateAllJoysticks(const std::vector<IRenderPass*>& passes);
 	
 	void EraseDisconnectedJoysticks();
 	void EnumerateJoysticks();
@@ -108,7 +108,7 @@ public:
 
 private:
 	JoyStickManager() {}
-	void UpdateJoystick(int j, const std::list<IRenderPass*>& passes);
+	void UpdateJoystick(int j, const std::vector<IRenderPass*>& passes);
 
 	std::list<int> m_JoystickIDs, m_RemovedJoysticks;
 };
@@ -398,8 +398,17 @@ bool DeviceManager::CreateWindowDeviceAndSwapChain(const DeviceCreationParameter
 
 void DeviceManager::AddRenderPassToFront(IRenderPass *pRenderPass)
 {
-    m_vRenderPasses.remove(pRenderPass);
-    m_vRenderPasses.push_front(pRenderPass);
+    if (auto it = std::find(m_vRenderPasses.begin(), m_vRenderPasses.end(), pRenderPass);
+        it != m_vRenderPasses.end()) {
+        (*it)->Release();
+        m_vRenderPasses.erase(it);
+        m_vRenderPasses.insert(m_vRenderPasses.begin(), pRenderPass);
+        pRenderPass->AddRef();
+        return;
+    }
+
+    m_vRenderPasses.insert(m_vRenderPasses.begin(), pRenderPass);
+    pRenderPass->AddRef();
 
     pRenderPass->BackBufferResizing();
     pRenderPass->BackBufferResized(
@@ -410,8 +419,17 @@ void DeviceManager::AddRenderPassToFront(IRenderPass *pRenderPass)
 
 void DeviceManager::AddRenderPassToBack(IRenderPass *pRenderPass)
 {
-    m_vRenderPasses.remove(pRenderPass);
+    if (auto it = std::find(m_vRenderPasses.begin(), m_vRenderPasses.end(), pRenderPass);
+        it != m_vRenderPasses.end()) {
+        (*it)->Release();
+        m_vRenderPasses.erase(it);
+        m_vRenderPasses.push_back(pRenderPass);
+        pRenderPass->AddRef();
+        return;
+    }
+
     m_vRenderPasses.push_back(pRenderPass);
+    pRenderPass->AddRef();
 
     pRenderPass->BackBufferResizing();
     pRenderPass->BackBufferResized(
@@ -422,7 +440,11 @@ void DeviceManager::AddRenderPassToBack(IRenderPass *pRenderPass)
 
 void DeviceManager::RemoveRenderPass(IRenderPass *pRenderPass)
 {
-    m_vRenderPasses.remove(pRenderPass);
+    if (auto it = std::find(m_vRenderPasses.begin(), m_vRenderPasses.end(), pRenderPass);
+        it != m_vRenderPasses.end()) {
+        (*it)->Release();
+        m_vRenderPasses.erase(it);
+    }
 }
 
 void DeviceManager::BackBufferResizing()
@@ -862,7 +884,7 @@ void JoyStickManager::DisconnectJoystick(int id)
 	m_RemovedJoysticks.push_back(id);
 }
 
-void JoyStickManager::UpdateAllJoysticks(const std::list<IRenderPass*>& passes)
+void JoyStickManager::UpdateAllJoysticks(const std::vector<IRenderPass*>& passes)
 {
 	for (auto j = m_JoystickIDs.begin(); j != m_JoystickIDs.end(); ++j)
 		UpdateJoystick(*j, passes);
@@ -873,7 +895,7 @@ static void ApplyDeadZone(dm::float2& v, const float deadZone = 0.1f)
     v *= std::max(dm::length(v) - deadZone, 0.f) / (1.f - deadZone);
 }
 
-void JoyStickManager::UpdateJoystick(int j, const std::list<IRenderPass*>& passes)
+void JoyStickManager::UpdateJoystick(int j, const std::vector<IRenderPass*>& passes)
 {
     GLFWgamepadstate gamepadState;
     glfwGetGamepadState(j, &gamepadState);
@@ -929,6 +951,10 @@ void DeviceManager::Shutdown()
     m_SwapChainFramebuffers.clear();
     m_SwapChainWithDepthFramebuffers.clear();
     m_DepthBuffer = nullptr;
+
+    for(auto pRenderPass : m_vRenderPasses)
+        pRenderPass->Release();
+    m_vRenderPasses.clear();
 
     DestroyDeviceAndSwapChain();
 

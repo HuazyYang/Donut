@@ -57,9 +57,9 @@ using namespace donut::render;
 
 DepthPass::DepthPass(
     nvrhi::IDevice* device,
-    std::shared_ptr<CommonRenderPasses> commonPasses)
+    CommonRenderPasses *commonPasses)
     : m_Device(device)
-    , m_CommonPasses(std::move(commonPasses))
+    , m_CommonPasses(commonPasses)
 {
     m_IsDX11 = m_Device->getGraphicsAPI() == nvrhi::GraphicsAPI::D3D11;
 }
@@ -151,7 +151,7 @@ void DepthPass::CreateViewBindings(nvrhi::BindingLayoutHandle& layout, nvrhi::Bi
     set = m_Device->createBindingSet(bindingSetDesc, layout);
 }
 
-std::shared_ptr<MaterialBindingCache> DepthPass::CreateMaterialBindingCache(CommonRenderPasses& commonPasses)
+donut::AutoPtr<MaterialBindingCache> DepthPass::CreateMaterialBindingCache(CommonRenderPasses& commonPasses)
 {
     std::vector<MaterialResourceBinding> materialBindings = {
         { MaterialResource::DiffuseTexture, DEPTH_BINDING_MATERIAL_DIFFUSE_TEXTURE },
@@ -159,15 +159,14 @@ std::shared_ptr<MaterialBindingCache> DepthPass::CreateMaterialBindingCache(Comm
         { MaterialResource::ConstantBuffer, DEPTH_BINDING_MATERIAL_CONSTANTS }
     };
 
-    return std::make_shared<MaterialBindingCache>(
+    return MAKE_RC_OBJ_PTR(MaterialBindingCache,
         m_Device,
         nvrhi::ShaderType::Pixel,
-        /* registerSpace = */ DEPTH_SPACE_MATERIAL,
+        /* registerSpace = */ (uint32_t)DEPTH_SPACE_MATERIAL,
         /* registerSpaceIsDescriptorSet = */ true,
         materialBindings,
         commonPasses.m_AnisotropicWrapSampler,
-        commonPasses.m_GrayTexture,
-        commonPasses.m_BlackTexture);
+        commonPasses.m_GrayTexture);
 }
 
 nvrhi::GraphicsPipelineHandle DepthPass::CreateGraphicsPipeline(PipelineKey key,

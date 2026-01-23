@@ -26,7 +26,6 @@
 #include <donut/engine/ShadowMap.h>
 #include <donut/engine/View.h>
 #include <nvrhi/nvrhi.h>
-#include <memory>
 
 namespace donut::render
 {
@@ -34,7 +33,7 @@ namespace donut::render
     {
     private:
         nvrhi::TextureHandle m_ShadowMapTexture;
-        std::shared_ptr<engine::PlanarView> m_View;
+        AutoPtr<engine::PlanarView> m_View;
         bool m_IsLitOutOfBounds = false;
         dm::float2 m_FadeRangeTexels = 1.f;
         dm::float2 m_ShadowMapSize;
@@ -72,7 +71,7 @@ namespace donut::render
         void SetLitOutOfBounds(bool litOutOfBounds);
         void SetFalloffDistance(float distance);
 
-        std::shared_ptr<engine::PlanarView> GetPlanarView();
+        engine::PlanarView* GetPlanarView();
 
         virtual dm::float4x4 GetWorldToUvzwMatrix() const override;
         virtual const engine::ICompositeView& GetView() const override;

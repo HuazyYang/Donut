@@ -48,7 +48,7 @@ namespace donut::engine
         uint32_t slot; // type depends on resource
     };
 
-    class MaterialBindingCache
+    class MaterialBindingCache: public ObjectImpl<IObject>
     {
     private:
         nvrhi::DeviceHandle m_Device;
@@ -61,7 +61,7 @@ namespace donut::engine
         bool m_TrackLiveness;
 
         nvrhi::BindingSetHandle CreateMaterialBindingSet(const Material* material);
-        nvrhi::BindingSetItem GetTextureBindingSetItem(uint32_t slot, const std::shared_ptr<LoadedTexture>& texture) const;
+        nvrhi::BindingSetItem GetTextureBindingSetItem(uint32_t slot, const LoadedTexture* texture) const;
 
     public:
         MaterialBindingCache(

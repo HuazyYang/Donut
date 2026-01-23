@@ -445,5 +445,5 @@ bool DeviceManager_DX11::Present()
 
 DeviceManager *DeviceManager::CreateD3D11()
 {
-    return new DeviceManager_DX11();
+    return MAKE_RC_OBJ(DeviceManager_DX11);
 }

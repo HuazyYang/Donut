@@ -59,8 +59,8 @@ using namespace donut::render;
 
 SsaoPass::SsaoPass(
     nvrhi::IDevice* device,
-    std::shared_ptr<ShaderFactory> shaderFactory,
-    std::shared_ptr<CommonRenderPasses> commonPasses,
+    ShaderFactory *shaderFactory,
+    CommonRenderPasses *commonPasses,
     const CreateParameters& params)
     : m_Device(device)
     , m_CommonPasses(commonPasses)
@@ -168,8 +168,8 @@ SsaoPass::SsaoPass(
 // Backwards compatibility constructor
 SsaoPass::SsaoPass(
     nvrhi::IDevice* device,
-    std::shared_ptr<ShaderFactory> shaderFactory,
-    std::shared_ptr<CommonRenderPasses> commonPasses,
+    ShaderFactory *shaderFactory,
+    CommonRenderPasses* commonPasses,
     nvrhi::ITexture* gbufferDepth,
     nvrhi::ITexture* gbufferNormals,
     nvrhi::ITexture* destinationTexture)

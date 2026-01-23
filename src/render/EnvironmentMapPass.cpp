@@ -47,9 +47,9 @@ using namespace donut::render;
 
 EnvironmentMapPass::EnvironmentMapPass(
     nvrhi::IDevice* device,
-    std::shared_ptr<ShaderFactory> shaderFactory,
-    std::shared_ptr<CommonRenderPasses> commonPasses,
-    std::shared_ptr<FramebufferFactory> framebufferFactory,
+    ShaderFactory* shaderFactory,
+    CommonRenderPasses* commonPasses,
+    FramebufferFactory *framebufferFactory,
     const ICompositeView& compositeView,
     nvrhi::ITexture* environmentMap)
     : m_CommonPasses(commonPasses)

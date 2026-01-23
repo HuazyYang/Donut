@@ -47,12 +47,12 @@ using namespace donut::render;
 
 BloomPass::BloomPass(
     nvrhi::IDevice* device,
-    const std::shared_ptr<ShaderFactory>& shaderFactory,
-    std::shared_ptr<CommonRenderPasses> commonPasses,
-    std::shared_ptr<FramebufferFactory> framebufferFactory,
+    ShaderFactory* shaderFactory,
+    CommonRenderPasses* commonPasses,
+    FramebufferFactory* framebufferFactory,
     const ICompositeView& compositeView)
-    : m_CommonPasses(std::move(commonPasses))
-    , m_FramebufferFactory(std::move(framebufferFactory))
+    : m_CommonPasses(commonPasses)
+    , m_FramebufferFactory(framebufferFactory)
     , m_Device(device)
     , m_BindingCache(device)
 {
@@ -160,8 +160,8 @@ BloomPass::BloomPass(
 
 void BloomPass::Render(
 	nvrhi::ICommandList* commandList,
-    const std::shared_ptr<FramebufferFactory>& framebufferFactory,
-    const ICompositeView& compositeView,
+    FramebufferFactory* framebufferFactory,
+    const ICompositeView* compositeView,
 	nvrhi::ITexture* sourceDestTexture,
     float sigmaInPixels,
     float blendFactor)
@@ -174,9 +174,9 @@ void BloomPass::Render(
     fullscreenquadargs.instanceCount = 1;
     fullscreenquadargs.vertexCount = 4;
 
-    for (uint viewIndex = 0; viewIndex < compositeView.GetNumChildViews(ViewType::PLANAR); viewIndex++)
+    for (uint viewIndex = 0; viewIndex < compositeView->GetNumChildViews(ViewType::PLANAR); viewIndex++)
     {
-        const IView* view = compositeView.GetChildView(ViewType::PLANAR, viewIndex);
+        const IView* view = compositeView->GetChildView(ViewType::PLANAR, viewIndex);
         nvrhi::IFramebuffer* framebuffer = framebufferFactory->GetFramebuffer(*view);
         PerViewData& perViewData = m_PerViewData[viewIndex];
 

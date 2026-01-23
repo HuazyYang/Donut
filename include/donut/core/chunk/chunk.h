@@ -25,7 +25,6 @@
 #include <donut/core/math/math.h>
 #include <donut/core/vfs/VFS.h>
 
-#include <memory>
 #include <cstring>
 
 
@@ -93,12 +92,13 @@ struct MeshletInfo : public MeshInfoBase
 
 static_assert(sizeof(MeshletInfo) == 56);
 
-struct MeshSetBase
+struct MeshSetBase: ObjectImpl<IObject>
 {
 
 public:
 
-    MeshSetBase() { memset(this, 0, sizeof(MeshSetBase)); }
+    MeshSetBase() {}
+    ~MeshSetBase() { SafeRelease(blob); }
 
     enum Type {
         UNDEFINED=0,
@@ -106,7 +106,7 @@ public:
         MESHLET
     } type;
 
-    char const * name;
+    char const * name = nullptr;
 
     struct VertexStreams {
         donut::math::float3 const * position;
@@ -117,58 +117,58 @@ public:
 
         donut::math::float2 const * texcoord0,
                                   * texcoord1;
-    } streams;
+    } streams = {};
 
-    uint32_t nverts;
+    uint32_t nverts = {};
 
-    uint32_t nmeshInfos;
+    uint32_t nmeshInfos = {};
 
-    MeshInstance const * instances;
-    uint32_t ninstances;
+    MeshInstance const * instances = {};
+    uint32_t ninstances = {};
 
-    MeshNode const * nodes;
-    uint32_t nnodes,
-             rootId;
+    MeshNode const * nodes = {};
+    uint32_t nnodes = {},
+             rootId = {};
 
-    donut::math::box3 bbox;
+    donut::math::box3 bbox = {};
 
-    std::shared_ptr<donut::vfs::IBlob const> blob;
+    IDataBlob *blob = {};
 };
 
 struct MeshSet : public MeshSetBase
 {
 
-    MeshSet() { memset(this, 0, sizeof(MeshSet)); }
+    MeshSet() {}
 
-    uint32_t const * indices;
-    uint32_t nindices;
+    uint32_t const * indices = {};
+    uint32_t nindices = {};
 
-    MeshInfo const * meshInfos;
+    MeshInfo const * meshInfos = {};
 };
 
 struct MeshletSet : public MeshSetBase
 {
 
-    MeshletSet() { memset(this, 0, sizeof(MeshletSet)); }
+    MeshletSet() {}
 
-    uint32_t maxVerts,
-             maxPrims;
+    uint32_t maxVerts = {},
+             maxPrims = {};
 
-    uint32_t const * indices32;
-    uint32_t nindices32;
+    uint32_t const * indices32 = {};
+    uint32_t nindices32 = {};
 
-    uint8_t const * indices8;
-    uint32_t nindices8;
+    uint8_t const * indices8 = {};
+    uint32_t nindices8 = {};
 
-    uint32_t const * meshlets;
-    uint32_t nmeshlets;
-    uint8_t meshletSize; // size of meshlet header (in uint32_t)
+    uint32_t const * meshlets = {};
+    uint32_t nmeshlets = {};
+    uint8_t meshletSize = {}; // size of meshlet header (in uint32_t)
 
-    MeshletInfo const * meshInfos;
+    MeshletInfo const * meshInfos = {};
 };
 
-std::shared_ptr<donut::vfs::IBlob const> serialize(MeshSetBase const & mset);
+FRESULT serialize(MeshSetBase const & mset, IDataBlob **ppBlob);
 
-std::shared_ptr<MeshSetBase const> deserialize(std::weak_ptr<donut::vfs::IBlob const> blob, char const * assetpath);
+FRESULT deserialize(IDataBlob *pBlob, char const * assetpath, MeshSetBase **ppMesh);
 
 }

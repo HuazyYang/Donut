@@ -21,10 +21,10 @@
 */
 
 #pragma once
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <string>
-#include <memory>
 #include <unordered_map>
 #include <optional>
 #include <vector>
@@ -57,7 +57,7 @@ namespace donut::engine::animation
         const Keyframe& a, const Keyframe& b,
         const Keyframe& c, const Keyframe& d, float t, float dt);
 
-    class Sampler
+    class Sampler: public ObjectImpl<IObject>
     {
     protected:
         std::vector<Keyframe> m_Keyframes;
@@ -84,21 +84,21 @@ namespace donut::engine::animation
     class Sequence
     {
     protected:
-        std::unordered_map<std::string, std::shared_ptr<Sampler>> m_Tracks;
+        std::unordered_map<std::string, AutoPtr<Sampler>> m_Tracks;
         float m_Duration = 0.f;
 
     public:
         Sequence() = default;
         virtual ~Sequence() = default;
 
-        std::shared_ptr<Sampler> GetTrack(const std::string& name)
+        Sampler* GetTrack(const std::string& name)
         {
             return m_Tracks[name];
         }
 
         std::optional<dm::float4> Evaluate(const std::string& name, float time, bool extrapolateLastValues = false);
 
-        void AddTrack(const std::string& name, const std::shared_ptr<Sampler>& track);
+        void AddTrack(const std::string& name, Sampler* track);
 
         [[nodiscard]] float GetDuration() const { return m_Duration; }
 

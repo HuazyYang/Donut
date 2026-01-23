@@ -21,10 +21,10 @@
 */
 
 #pragma once
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <nvrhi/nvrhi.h>
-#include <memory>
 #include <unordered_map>
 #include <donut/engine/BindingCache.h>
 
@@ -57,7 +57,7 @@ namespace donut::render
         nvrhi::BindingLayoutHandle m_BindingLayout;
         engine::BindingCache m_BindingSets;
 
-        std::shared_ptr<engine::CommonRenderPasses> m_CommonPasses;
+        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
 
     protected:
 
@@ -78,8 +78,8 @@ namespace donut::render
             nvrhi::ITexture* ambientOcclusion = nullptr;
             nvrhi::ITexture* output = nullptr;
 
-            const std::vector<std::shared_ptr<engine::Light>>* lights = nullptr;
-            const std::vector<std::shared_ptr<engine::LightProbe>>* lightProbes = nullptr;
+            const std::vector<AutoPtr<engine::Light>>* lights = nullptr;
+            const std::vector<AutoPtr<engine::LightProbe>>* lightProbes = nullptr;
 
             dm::float3 ambientColorTop = 0.f;
             dm::float3 ambientColorBottom = 0.f;
@@ -90,9 +90,9 @@ namespace donut::render
 
         DeferredLightingPass(
             nvrhi::IDevice* device,
-            std::shared_ptr<engine::CommonRenderPasses> commonPasses);
+            engine::CommonRenderPasses *commonPasses);
 
-        virtual void Init(const std::shared_ptr<engine::ShaderFactory>& shaderFactory);
+        virtual void Init(engine::ShaderFactory *shaderFactory);
 
         void Render(
             nvrhi::ICommandList* commandList,

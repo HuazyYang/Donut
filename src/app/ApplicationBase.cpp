@@ -120,7 +120,7 @@ bool ApplicationBase::IsSceneLoaded() const
     return m_SceneLoaded;
 }
 
-void ApplicationBase::BeginLoadingScene(std::shared_ptr<IFileSystem> fs, const std::filesystem::path& sceneFileName)
+void ApplicationBase::BeginLoadingScene(IFileSystem *fs, const std::filesystem::path& sceneFileName)
 {
     if (m_SceneLoaded)
         SceneUnloading();
@@ -138,7 +138,7 @@ void ApplicationBase::BeginLoadingScene(std::shared_ptr<IFileSystem> fs, const s
 
     if (m_IsAsyncLoad)
     {
-        m_SceneLoadingThread = std::make_unique<std::thread>([this, fs, sceneFileName]() {
+        m_SceneLoadingThread = MakeMono<std::thread>([this, fs, sceneFileName]() {
 			m_SceneLoaded = LoadScene(fs, sceneFileName); 
 			});
     }
@@ -149,7 +149,7 @@ void ApplicationBase::BeginLoadingScene(std::shared_ptr<IFileSystem> fs, const s
     }
 }
 
-std::shared_ptr<CommonRenderPasses> ApplicationBase::GetCommonPasses() const
+CommonRenderPasses* ApplicationBase::GetCommonPasses() const
 {
     return m_CommonPasses;
 }

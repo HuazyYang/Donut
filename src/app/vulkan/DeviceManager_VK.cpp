@@ -50,7 +50,6 @@ freely, subject to the following restrictions:
 #include <string>
 #include <queue>
 #include <unordered_set>
-#include <memory>
 #include <sstream>
 
 #include <donut/app/DeviceManager.h>
@@ -1264,5 +1263,5 @@ bool DeviceManager_VK::Present()
 
 DeviceManager *DeviceManager::CreateVK()
 {
-    return new DeviceManager_VK();
+    return MAKE_RC_OBJ(DeviceManager_VK);
 }

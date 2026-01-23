@@ -27,7 +27,6 @@
 #include <cassert>
 #include <cstring>
 #include <map>
-#include <memory>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>

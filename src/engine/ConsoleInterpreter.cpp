@@ -341,7 +341,7 @@ namespace donut::engine::console
 		return buff;
 	}
 
-	bool Interpreter::RegisterCommands(std::shared_ptr<TextureCache> textureCache)
+	bool Interpreter::RegisterCommands(TextureCache* textureCache)
 	{
 		if (!textureCache)
 			return false;

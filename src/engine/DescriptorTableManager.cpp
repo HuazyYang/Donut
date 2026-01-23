@@ -27,7 +27,7 @@ donut::engine::DescriptorHandle::DescriptorHandle()
 {
 }
 
-donut::engine::DescriptorHandle::DescriptorHandle(const std::shared_ptr<DescriptorTableManager>& managerPtr, DescriptorIndex index)
+donut::engine::DescriptorHandle::DescriptorHandle(DescriptorTableManager* managerPtr, DescriptorIndex index)
     : m_Manager(managerPtr)
     , m_DescriptorIndex(index)
 {
@@ -37,7 +37,7 @@ donut::engine::DescriptorHandle::~DescriptorHandle()
 {
     if (m_DescriptorIndex >= 0)
     {
-        auto managerPtr = m_Manager.lock();
+        auto managerPtr = m_Manager.Lock();
         if (managerPtr)
             managerPtr->ReleaseDescriptor(m_DescriptorIndex);
         m_DescriptorIndex = -1;
@@ -48,8 +48,8 @@ donut::engine::DescriptorIndex donut::engine::DescriptorHandle::GetIndexInHeap()
 {
     if (m_DescriptorIndex >= 0)
     {
-        assert(!m_Manager.expired());
-        if (std::shared_ptr<DescriptorTableManager> manager = m_Manager.lock())
+        assert(m_Manager.IsValid());
+        if (auto manager = m_Manager.Lock())
         {
             return manager->GetDescriptorTable()->getFirstDescriptorIndexInHeap() + m_DescriptorIndex;
         }
@@ -57,9 +57,9 @@ donut::engine::DescriptorIndex donut::engine::DescriptorHandle::GetIndexInHeap()
     return -1;
 }
 
-donut::engine::DescriptorTableManager::DescriptorTableManager(nvrhi::IDevice* device, nvrhi::IBindingLayout* layout)
-    : m_Device(device)
-{
+donut::engine::DescriptorTableManager::DescriptorTableManager(
+    IWeakReference* pReference, nvrhi::IDevice* device, nvrhi::IBindingLayout* layout)
+    : WeakableImpl<IWeakable>(pReference), m_Device(device) {
     m_DescriptorTable = m_Device->createDescriptorTable(layout);
 
     size_t capacity = m_DescriptorTable->getCapacity();
@@ -113,10 +113,10 @@ donut::engine::DescriptorIndex donut::engine::DescriptorTableManager::CreateDesc
     return index;
 }
 
-donut::engine::DescriptorHandle donut::engine::DescriptorTableManager::CreateDescriptorHandle(nvrhi::BindingSetItem item)
+donut::AutoPtr<donut::engine::DescriptorHandle> donut::engine::DescriptorTableManager::CreateDescriptorHandle(nvrhi::BindingSetItem item)
 {
     DescriptorIndex index = CreateDescriptor(item);
-    return DescriptorHandle(shared_from_this(), index);
+    return MAKE_RC_OBJ_PTR(DescriptorHandle, this, index);
 }
 
 nvrhi::BindingSetItem donut::engine::DescriptorTableManager::GetDescriptor(DescriptorIndex index)

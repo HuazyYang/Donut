@@ -1,5 +1,4 @@
 #pragma once
-#include <donut/core/object/DebugUtils.h>
 #include <donut/core/object/Types.h>
 #include <donut/core/object/MemoryAllocator.h>
 
@@ -122,6 +121,21 @@ struct CompressedPair<Ty1, Ty2, false> {
     constexpr Ty1& GetFirst() const noexcept { return val1; }
 };
 
+template <class Kty, bool Enabled>
+struct ConditionalEnabledHash {
+    [[nodiscard]] size_t operator()(const Kty& key_val) const {
+        return std::hash<Kty>::do_hash(key_val);
+    }
+};
+template <class Kty>
+struct ConditionalEnabledHash<Kty, false> {
+    ConditionalEnabledHash() = delete;
+    ConditionalEnabledHash(const ConditionalEnabledHash&) = delete;
+    ConditionalEnabledHash(ConditionalEnabledHash&&) = delete;
+    ConditionalEnabledHash& operator=(const ConditionalEnabledHash&) = delete;
+    ConditionalEnabledHash& operator=(ConditionalEnabledHash&&) = delete;
+};
+
 template <bool Test, typename T = void>
 using EnableIf = std::enable_if<Test, T>;
 
@@ -140,7 +154,7 @@ using BoolType = bool;
 
 template <typename T>
 struct WeakRefTypeTrait {
-    // SFINEA overload when implement of IWeakReferenceSource is visible to compiling unit.
+    // SFINEA overload when implement of IWeakable is visible to compiling unit.
     template <typename Tp>
     static typename Tp::WeakRefImplType* GetWeakRef(typename Tp::WeakRefImplType*);
     // SFINEA overload when only IWeakReference is used.
@@ -477,7 +491,7 @@ class WeakPtr {
     const T* UnsafeRawPtr() const noexcept { return m_pObject; }
 
     /// Obtains a strong reference to the object
-    AutoPtr<T> Lock() {
+    AutoPtr<T> Lock() const {
         AutoPtr<T> spObj;
         if (m_pWeakRef) {
             // Try to obtain a pointer to the owner object.
@@ -490,11 +504,12 @@ class WeakPtr {
                 // If owner is alive, we can use our RAW pointer to
                 // create strong reference
                 spObj = m_pObject;
-            } else {
-                // Owner object has been destroyed. There is no reason
-                // to keep this weak reference anymore
-                Reset();
             }
+            // else {
+            //     // Owner object has been destroyed. There is no reason
+            //     // to keep this weak reference anymore
+            //     Reset();
+            // }
         }
         return spObj;
     }
@@ -536,7 +551,7 @@ template <typename T>
 FRESULT AsWeak(T* p, WeakPtr<T>* pWeak) throw() {
     static_assert(!details::IsSame<IWeakReference, T>::value,
                   "Cannot get IWeakReference object to IWeakReference.");
-    AutoPtr<IWeakReferenceSource> refSource;
+    AutoPtr<IWeakable> refSource;
 
     FRESULT hr = p->QueryInterface(FIID_PPV_ARGS(refSource.GetAddressOf()));
     if (FFAILED(hr)) {
@@ -667,8 +682,23 @@ struct DefaultDeleter {
     DefaultDeleter(const DefaultDeleter<Ty2>&) noexcept {}
 
     void operator()(Ty* ptr) const noexcept {
-        ptr->~Ty();
-        GetDefaultMemAllocator()->Free(ptr);
+        static_assert(0 < sizeof(Ty), "can't delete an incomplete type");
+        delete ptr;
+    }
+};
+
+template <typename Ty>
+struct DefaultDeleter<Ty[]> {
+    constexpr DefaultDeleter() noexcept = default;
+    template <class Ty2,
+              typename std::enable_if<std::is_convertible<Ty2, Ty*>::value, int>::type = 0>
+    DefaultDeleter(const DefaultDeleter<Ty2>&) noexcept {}
+
+    template <class Ty2,
+              std::enable_if_t<std::is_convertible_v<Ty2 (*)[], Ty (*)[]>, int> = 0>
+    void operator()(Ty2* ptr) const noexcept {
+        static_assert(0 < sizeof(Ty2), "can't delete an incomplete type");
+        delete[] ptr;
     }
 };
 
@@ -681,7 +711,7 @@ struct GetDeleterPointerType {
 
 template <typename Ty, typename Dx_noref>
 struct GetDeleterPointerType<Ty, Dx_noref, std::void_t<typename Dx_noref::pointer>> {
-    using type = Dx_noref::pointer;
+    using type = typename Dx_noref::pointer;
 };
 
 template <typename Dx2>
@@ -694,7 +724,7 @@ using MonoPtrEnableDefault =
 template <typename Ty, typename Dx = DefaultDeleter<Ty>>
 class MonoPtr {
  public:
-    using pointer = details::GetDeleterPointerType<Ty, std::remove_reference_t<Dx>>::type;
+    using pointer = typename details::GetDeleterPointerType<Ty, std::remove_reference_t<Dx>>::type;
     using element_type = Ty;
     using deleter_type = Dx;
 
@@ -707,7 +737,7 @@ class MonoPtr {
     MonoPtr(details::nullptr_t) noexcept : pair_(details::ZeroThenVariadicArgs{}) {}
 
     template <typename Dx2 = Dx, details::MonoPtrEnableDefault<Dx2> = 0>
-    MonoPtr(pointer ptr) noexcept : pair_(ptr) {}
+    explicit MonoPtr(pointer ptr) noexcept : pair_(details::ZeroThenVariadicArgs{}, ptr) {}
 
     template <typename Dx2 = Dx,
               std::enable_if_t<std::is_convertible_v<Dx2, const Dx2&>, int> = 0>
@@ -813,7 +843,7 @@ class MonoPtr {
     Dx& GetDeleter() noexcept { return pair_.GetFirst(); }
     const Dx& GetDeleter() const noexcept { return pair_.GetFirst(); }
 
-    template <class U>
+    template <class U, class UDx>
     friend class MonoPtr;
     details::CompressedPair<Dx, pointer> pair_;
 };
@@ -928,23 +958,21 @@ class MonoPtr<Ty[], Dx> {
     Dx& GetDeleter() noexcept { return pair_.GetFirst(); }
     const Dx& GetDeleter() const noexcept { return pair_.GetFirst(); }
 
-    template <class U>
+    template <class U, class UDx>
     friend class MonoPtr;
     details::CompressedPair<Dx, pointer> pair_;
 };
 
 template <typename Ty, typename... Types, std::enable_if_t<!std::is_array_v<Ty>, int> = 0>
 MonoPtr<Ty> MakeMono(Types&&... args) noexcept {
-    return MonoPtr<Ty>(DONUT_NEW0(Ty)(std::forward<Types>(args)...));
+    return MonoPtr<Ty>(new Ty(std::forward<Types>(args)...));
 }
 
 template <typename Ty,
           std::enable_if_t<std::is_array_v<Ty> && std::extent_v<Ty> == 0, int> = 0>
 MonoPtr<Ty> MakeMono(const size_t size) {
     using ElemType = std::remove_extent_t<Ty>;
-    return MonoPtr<Ty>(new (DonutNewOverload{}, GetDefaultMemAllocator()->Allocate(
-                                                    sizeof(ElemType) * size, __FILE__,
-                                                    __LINE__)) ElemType[size]());
+    return MonoPtr<Ty>(new ElemType[size]());
 }
 
 template <typename Ty, typename... Types, std::enable_if_t<std::extent_v<Ty> != 0, int> = 0>
@@ -991,4 +1019,32 @@ bool operator<(const MonoPtr<Ty1, Dx1>& a, const MonoPtr<Ty2, Dx2>& b) throw() {
 template <typename T>
 void** IID_PPV_ARGS_Helper(donut::details::AutoPtrRef<T> pp) throw() {
     return pp;
+}
+
+// std namespace adapters
+namespace std {
+
+template <typename Ty>
+struct hash<donut::AutoPtr<Ty>> {
+
+    [[nodiscard]] size_t operator()(const donut::AutoPtr<Ty> &key_val) const noexcept {
+        return hash<typename donut::AutoPtr<Ty>::InterfaceType*>()(key_val.Get());
+    }
+};
+
+template<typename Ty>
+struct hash<donut::WeakPtr<Ty>> {
+    [[nodiscard]] size_t operator()(const donut::WeakPtr<Ty> &key_val) const noexcept {
+        return hash<typename donut::WeakPtr<Ty>::WeakRefType*>(key_val.UnsafeRawPtr());
+    }
+};
+
+template <typename Ty, typename Dx>
+struct hash<donut::MonoPtr<Ty, Dx>>: public donut::details::ConditionalEnabledHash<donut::MonoPtr<Ty, Dx>,
+    std::is_default_constructible_v<hash<typename donut::MonoPtr<Ty, Dx>::pointer>>> {
+    static size_t do_hash(const donut::MonoPtr<Ty, Dx> &key_val) noexcept {
+        return hash<typename donut::MonoPtr<Ty, Dx>::pointer>{}(key_val.Get());
+    }
+};
+
 }

@@ -44,7 +44,7 @@ using namespace donut::render;
 
 PixelReadbackPass::PixelReadbackPass(
     nvrhi::IDevice* device, 
-    std::shared_ptr<ShaderFactory> shaderFactory, 
+    ShaderFactory* shaderFactory, 
     nvrhi::ITexture* inputTexture, 
     nvrhi::Format format,
     uint32_t arraySlice,

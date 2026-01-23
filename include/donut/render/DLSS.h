@@ -24,7 +24,7 @@
 
 #if DONUT_WITH_DLSS
 
-#include <memory>
+#include <donut/core/object/Foundation.h>
 #include <nvrhi/nvrhi.h>
 
 class RenderTargets;
@@ -41,7 +41,7 @@ struct NVSDK_NGX_Parameter;
 namespace donut::render
 {
 
-    class DLSS
+    class DLSS: public ObjectImpl<IObject>
     {
     public:
         struct InitParameters
@@ -92,7 +92,7 @@ namespace donut::render
 
         virtual ~DLSS() = default;
 
-        static std::unique_ptr<DLSS> Create(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
+        static AutoPtr<DLSS> Create(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
             std::string const& directoryWithExecutable, uint32_t applicationID = DefaultApplicationID);
 
         static void GetRequiredVulkanExtensions(std::vector<std::string>& instanceExtensions, std::vector<std::string>& deviceExtensions);
@@ -123,15 +123,15 @@ namespace donut::render
         void ComputeExposure(nvrhi::ICommandList* commandList, nvrhi::IBuffer* toneMapperExposureBuffer, float exposureScale);
         
     #if DONUT_WITH_DX11
-        static std::unique_ptr<DLSS> CreateDX11(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
+        static AutoPtr<DLSS> CreateDX11(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
             std::string const& directoryWithExecutable, uint32_t applicationID);
     #endif
     #if DONUT_WITH_DX12
-        static std::unique_ptr<DLSS> CreateDX12(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
+        static AutoPtr<DLSS> CreateDX12(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
             std::string const& directoryWithExecutable, uint32_t applicationID);
     #endif
     #if DONUT_WITH_VULKAN
-        static std::unique_ptr<DLSS> CreateVK(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
+        static AutoPtr<DLSS> CreateVK(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
             std::string const& directoryWithExecutable, uint32_t applicationID);
     #endif
     };

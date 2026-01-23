@@ -22,11 +22,10 @@
 
 
 #pragma once
-
+#include <donut/core/object/AutoPtr.h>
 #include <donut/engine/BindingCache.h>
 #include <donut/core/math/math.h>
 #include <nvrhi/nvrhi.h>
-#include <memory>
 #include <vector>
 
 namespace donut::engine
@@ -54,7 +53,7 @@ namespace donut::render
         // note : 'texture' must have been allocated with some mip levels
         MipMapGenPass(
             nvrhi::IDevice* device,
-            std::shared_ptr<engine::ShaderFactory> shaderFactory,
+            engine::ShaderFactory* shaderFactory,
             nvrhi::TextureHandle texture,
             Mode mode = Mode::MODE_MAX);
 
@@ -65,7 +64,7 @@ namespace donut::render
         // debug : blits mip-map levels in spiral pattern to 'target'
         // (assumes 'target' texture resolution is high enough...)
         void Display(
-            std::shared_ptr<engine::CommonRenderPasses> commonPasses,
+            engine::CommonRenderPasses* commonPasses,
             nvrhi::ICommandList* commandList, 
             nvrhi::IFramebuffer* target);
 
@@ -81,7 +80,7 @@ namespace donut::render
 
         // Set of unique dummy textures - see details in class implementation
         struct NullTextures;
-        std::shared_ptr<NullTextures> m_NullTextures;
+        AutoPtr<NullTextures> m_NullTextures;
 
         engine::BindingCache m_BindingCache;
 

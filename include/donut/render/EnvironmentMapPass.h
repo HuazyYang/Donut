@@ -22,9 +22,8 @@
 
 #pragma once
 
-
+#include <donut/core/object/AutoPtr.h>
 #include <nvrhi/nvrhi.h>
-#include <memory>
 
 namespace donut::engine
 {
@@ -46,15 +45,15 @@ namespace donut::render
         nvrhi::BindingSetHandle m_RenderBindingSet;
         nvrhi::GraphicsPipelineHandle m_RenderPso;
 
-        std::shared_ptr<engine::CommonRenderPasses> m_CommonPasses;
-        std::shared_ptr<engine::FramebufferFactory> m_FramebufferFactory;
+        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
+        AutoPtr<engine::FramebufferFactory> m_FramebufferFactory;
 
     public:
         EnvironmentMapPass(
             nvrhi::IDevice* device,
-            std::shared_ptr<engine::ShaderFactory> shaderFactory,
-            std::shared_ptr<engine::CommonRenderPasses> commonPasses,
-            std::shared_ptr<engine::FramebufferFactory> framebufferFactory,
+            engine::ShaderFactory *shaderFactory,
+            engine::CommonRenderPasses *commonPasses,
+            engine::FramebufferFactory *framebufferFactory,
             const engine::ICompositeView& compositeView,
             nvrhi::ITexture* environmentMap);
 

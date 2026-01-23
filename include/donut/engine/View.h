@@ -21,11 +21,11 @@
 */
 
 #pragma once
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <nvrhi/nvrhi.h>
 #include <vector>
-#include <memory>
 
 struct PlanarViewConstants;
 
@@ -43,7 +43,7 @@ namespace donut::engine
         };
     };
 
-    class ICompositeView
+    class ICompositeView: public ObjectImpl<IObject>
     {
     public:
         [[nodiscard]] virtual uint32_t GetNumChildViews(ViewType::Enum supportedTypes) const = 0;
@@ -150,10 +150,10 @@ namespace donut::engine
     class CompositeView : public ICompositeView
     {
     protected:
-        std::vector<std::shared_ptr<IView>> m_ChildViews;
+        std::vector<AutoPtr<IView>> m_ChildViews;
 
     public:
-        void AddView(std::shared_ptr<IView> view);
+        void AddView(IView* view);
 
         [[nodiscard]] uint32_t GetNumChildViews(ViewType::Enum supportedTypes) const override;
         [[nodiscard]] const IView* GetChildView(ViewType::Enum supportedTypes, uint32_t index) const override;

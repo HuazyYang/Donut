@@ -81,7 +81,7 @@ using namespace donut::math;
 using namespace donut::vfs;
 using namespace donut::engine;
 
-class StbImageBlob : public IBlob
+class StbImageBlob : public donut::ObjectImpl<donut::IDataBlob>
 {
 private:
     unsigned char* m_data = nullptr;
@@ -91,7 +91,7 @@ public:
     {
     }
 
-    virtual ~StbImageBlob()
+    ~StbImageBlob()
     {
         if (m_data)
         {
@@ -100,25 +100,24 @@ public:
         }
     }
 
-    virtual const void* data() const override
-    {
-        return m_data;
-    }
+    virtual void Resize(size_t) override { DONUT_VERIFY(false, "Operation forbidden"); }
 
-    virtual size_t size() const override
-    {
-        return 0; // nobody cares
+    void* GetDataPtr() override { return m_data; }
+
+    size_t GetSize() override {
+        DONUT_VERIFY(false, "Operation forbidden");
+        return 0;
     }
 };
 
 
 TextureCache::TextureCache(
     nvrhi::IDevice* device,
-    std::shared_ptr<IFileSystem> fs,
-    std::shared_ptr<DescriptorTableManager> descriptorTable)
+    IFileSystem *fs,
+    DescriptorTableManager *descriptorTable)
     : m_Device(device)
-    , m_DescriptorTable(std::move(descriptorTable))
-    , m_fs(std::move(fs))
+    , m_DescriptorTable(descriptorTable)
+    , m_fs(fs)
 {
 }
 
@@ -142,15 +141,18 @@ void TextureCache::SetGenerateMipmaps(bool generateMipmaps)
     m_GenerateMipmaps = generateMipmaps;
 }
 
-bool TextureCache::FindTextureInCache(const std::filesystem::path& path, std::shared_ptr<TextureData>& texture)
+bool TextureCache::FindTextureInCache(const std::filesystem::path& path, TextureData** ppTexture)
 {
     std::lock_guard<std::shared_mutex> guard(m_LoadedTexturesMutex);
 
     // First see if this texture is already loaded (or being loaded).
+    AutoPtr<TextureData> texture;
 
     texture = m_LoadedTextures[path.generic_string()];
     if (texture)
     {
+        *ppTexture = texture;
+        texture->AddRef();
         return true;
     }
 
@@ -160,30 +162,31 @@ bool TextureCache::FindTextureInCache(const std::filesystem::path& path, std::sh
 
     texture = CreateTextureData();
     m_LoadedTextures[path.generic_string()] = texture;
+    *ppTexture = texture;
+    texture->AddRef();
 
     ++m_TexturesRequested;
 
     return false;
 }
 
-std::shared_ptr<IBlob> TextureCache::ReadTextureFile(const std::filesystem::path& path) const
+donut::AutoPtr<donut::IDataBlob> TextureCache::ReadTextureFile(const std::filesystem::path& path) const
 {
-    auto fileData = m_fs->readFile(path);
-
-    if (!fileData)
+    AutoPtr<IDataBlob> fileData;
+    if (FFAILED(m_fs->readFile(path, &fileData)))
         log::message(m_ErrorLogSeverity, "Couldn't read texture file '%s'", path.generic_string().c_str());
 
     return fileData;
 }
 
-std::shared_ptr<TextureData> TextureCache::CreateTextureData()
+donut::AutoPtr<TextureData> TextureCache::CreateTextureData()
 {
-    return std::make_shared<TextureData>();
+    return MAKE_RC_OBJ_PTR(TextureData);
 }
 
 bool TextureCache::FillTextureData(
-    const std::shared_ptr<vfs::IBlob>& fileData,
-    const std::shared_ptr<TextureData>& texture,
+    IDataBlob *fileData,
+    TextureData* texture,
     const std::string& extension,
     const std::string& mimeType) const
 {
@@ -206,12 +209,16 @@ bool TextureCache::FillTextureData(
 
         // This reads only 1 or 4 channel images and duplicates channels
         // Should rewrite w/ lower level EXR functions
-        if (LoadEXRFromMemory(&data, &width, &height, (uint8_t*)fileData->data(), fileData->size(), &err) == TINYEXR_SUCCESS)
+        if (LoadEXRFromMemory(&data, &width, &height, (uint8_t*)fileData->GetDataPtr(), fileData->GetSize(), &err) == TINYEXR_SUCCESS)
         {
             uint32_t channels = 4;
             uint32_t bytesPerPixel = channels * 4;
 
-            texture->data = std::make_shared<Blob>(data, bytesPerPixel * width * height);
+            if(FFAILED(CreateBlob(bytesPerPixel * width * height, &texture->data))) {
+                assert(0);
+            }
+            memcpy(texture->data->GetDataPtr(), data, texture->data->GetSize());
+            free(data);
             texture->width = static_cast<uint32_t>(width);
             texture->height = static_cast<uint32_t>(height);
             texture->format = nvrhi::Format::RGBA32_FLOAT;
@@ -241,8 +248,8 @@ bool TextureCache::FillTextureData(
         int width = 0, height = 0, originalChannels = 0, channels = 0;
 
         if (!stbi_info_from_memory(
-            static_cast<const stbi_uc*>(fileData->data()), 
-            static_cast<int>(fileData->size()), 
+            static_cast<const stbi_uc*>(fileData->GetDataPtr()), 
+            static_cast<int>(fileData->GetSize()), 
             &width, &height, &originalChannels))
         {
             log::message(m_ErrorLogSeverity, "Couldn't process image header for texture '%s'", texture->path.c_str());
@@ -250,8 +257,8 @@ bool TextureCache::FillTextureData(
         }
 
         bool is_hdr = stbi_is_hdr_from_memory(
-            static_cast<const stbi_uc*>(fileData->data()),
-            static_cast<int>(fileData->size()));
+            static_cast<const stbi_uc*>(fileData->GetDataPtr()),
+            static_cast<int>(fileData->GetSize()));
 
         if (originalChannels == 3)
         {
@@ -267,8 +274,8 @@ bool TextureCache::FillTextureData(
         if (is_hdr)
         {
             float* floatmap = stbi_loadf_from_memory(
-                static_cast<const stbi_uc*>(fileData->data()),
-                static_cast<int>(fileData->size()),
+                static_cast<const stbi_uc*>(fileData->GetDataPtr()),
+                static_cast<int>(fileData->GetSize()),
                 &width, &height, &originalChannels, channels);
 
             bitmap = reinterpret_cast<unsigned char*>(floatmap);
@@ -276,8 +283,8 @@ bool TextureCache::FillTextureData(
         else
         {
             bitmap = stbi_load_from_memory(
-                static_cast<const stbi_uc*>(fileData->data()),
-                static_cast<int>(fileData->size()),
+                static_cast<const stbi_uc*>(fileData->GetDataPtr()),
+                static_cast<int>(fileData->GetSize()),
                 &width, &height, &originalChannels, channels);
         }
 
@@ -300,7 +307,7 @@ bool TextureCache::FillTextureData(
         texture->dataLayout[0][0].rowPitch = static_cast<size_t>(width * bytesPerPixel);
         texture->dataLayout[0][0].dataSize = static_cast<size_t>(width * height * bytesPerPixel);
 
-        texture->data = std::make_shared<StbImageBlob>(bitmap);
+        texture->data = MAKE_RC_OBJ_PTR(StbImageBlob, bitmap);
         bitmap = nullptr; // ownership transferred to the blob
 
         switch (channels)
@@ -316,7 +323,7 @@ bool TextureCache::FillTextureData(
                 (texture->forceSRGB ? nvrhi::Format::SRGBA8_UNORM : nvrhi::Format::RGBA8_UNORM);
             break;
         default:
-            texture->data.reset(); // release the bitmap data
+            texture->data.Reset(); // release the bitmap data
 
             log::message(m_ErrorLogSeverity, "Unsupported number of components (%d) for texture '%s'", channels, texture->path.c_str());
             return false;
@@ -335,7 +342,7 @@ uint GetMipLevelsNum(uint width, uint height)
 }
 
 void TextureCache::FinalizeTexture(
-    std::shared_ptr<TextureData> texture,
+    TextureData* texture,
     CommonRenderPasses* passes,
     nvrhi::ICommandList* commandList)
 {
@@ -385,7 +392,7 @@ void TextureCache::FinalizeTexture(
         }
     }
 
-    const char* dataPointer = static_cast<const char*>(texture->data->data());
+    const char* dataPointer = static_cast<const char*>(texture->data->GetDataPtr());
 
     nvrhi::TextureDesc textureDesc;
     textureDesc.format = texture->format;
@@ -448,7 +455,7 @@ void TextureCache::FinalizeTexture(
         }
     }
 
-    texture->data.reset();
+    texture->data.Reset();
 
     for (uint mipLevel = texture->mipLevels; mipLevel < textureDesc.mipLevels; mipLevel++)
     {
@@ -471,7 +478,7 @@ void TextureCache::FinalizeTexture(
     ++m_TexturesFinalized;
 }
 
-void TextureCache::TextureLoaded(std::shared_ptr<TextureData> texture)
+void TextureCache::TextureLoaded(TextureData* texture)
 {
     std::lock_guard<std::mutex> guard(m_TexturesToFinalizeMutex);
 
@@ -483,15 +490,15 @@ void TextureCache::TextureLoaded(std::shared_ptr<TextureData> texture)
         texture->originalBitsPerPixel, texture->path.c_str(), texture->mimeType.c_str());
 }
 
-std::shared_ptr<LoadedTexture> TextureCache::LoadTextureFromFile(
+donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFile(
     const std::filesystem::path& path,
     bool sRGB,
     CommonRenderPasses* passes,
     nvrhi::ICommandList* commandList)
 {
-    std::shared_ptr<TextureData> texture;
+    AutoPtr<TextureData> texture;
 
-    if (FindTextureInCache(path, texture))
+    if (FindTextureInCache(path, &texture))
         return texture;
 
     texture->forceSRGB = sRGB;
@@ -513,13 +520,13 @@ std::shared_ptr<LoadedTexture> TextureCache::LoadTextureFromFile(
     return texture;
 }
 
-std::shared_ptr<LoadedTexture> TextureCache::LoadTextureFromFileDeferred(
+donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFileDeferred(
     const std::filesystem::path& path,
     bool sRGB)
 {
-    std::shared_ptr<TextureData> texture;
+    AutoPtr<TextureData> texture;
 
-    if (FindTextureInCache(path, texture))
+    if (FindTextureInCache(path, &texture))
         return texture;
 
     texture->forceSRGB = sRGB;
@@ -543,14 +550,14 @@ std::shared_ptr<LoadedTexture> TextureCache::LoadTextureFromFileDeferred(
     return texture;
 }
 
-std::shared_ptr<LoadedTexture> TextureCache::LoadTextureFromFileAsync(
+donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFileAsync(
     const std::filesystem::path& path,
     bool sRGB,
     ThreadPool& threadPool)
 {
-    std::shared_ptr<TextureData> texture;
+    AutoPtr<TextureData> texture;
 
-    if (FindTextureInCache(path, texture))
+    if (FindTextureInCache(path, &texture))
         return texture;
 
     texture->forceSRGB = sRGB;
@@ -577,14 +584,14 @@ std::shared_ptr<LoadedTexture> TextureCache::LoadTextureFromFileAsync(
     return texture;
 }
 
-std::shared_ptr<LoadedTexture> TextureCache::LoadTextureFromMemoryAsync(
-    const std::shared_ptr<vfs::IBlob>& data,
+donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemoryAsync(
+    IDataBlob *data,
     const std::string& name,
     const std::string& mimeType,
     bool sRGB,
     ThreadPool& threadPool)
 {
-    std::shared_ptr<TextureData> texture = CreateTextureData();
+    AutoPtr<TextureData> texture = CreateTextureData();
     
     texture->forceSRGB = sRGB;
     texture->path = name;
@@ -607,15 +614,15 @@ std::shared_ptr<LoadedTexture> TextureCache::LoadTextureFromMemoryAsync(
     return texture;
 }
 
-std::shared_ptr<LoadedTexture> TextureCache::LoadTextureFromMemory(
-    const std::shared_ptr<vfs::IBlob>& data,
+donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemory(
+    IDataBlob *data,
     const std::string& name,
     const std::string& mimeType,
     bool sRGB,
     CommonRenderPasses* passes,
     nvrhi::ICommandList* commandList)
 {
-    std::shared_ptr<TextureData> texture = CreateTextureData();
+    AutoPtr<TextureData> texture = CreateTextureData();
     
     texture->forceSRGB = sRGB;
     texture->path = name;
@@ -633,13 +640,13 @@ std::shared_ptr<LoadedTexture> TextureCache::LoadTextureFromMemory(
     return texture;
 }
 
-std::shared_ptr<LoadedTexture> TextureCache::LoadTextureFromMemoryDeferred(
-    const std::shared_ptr<vfs::IBlob>& data,
+donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemoryDeferred(
+    IDataBlob *data,
     const std::string& name,
     const std::string& mimeType,
     bool sRGB)
 {
-    std::shared_ptr<TextureData> texture = CreateTextureData();
+    AutoPtr<TextureData> texture = CreateTextureData();
     
     texture->forceSRGB = sRGB;
     texture->path = name;
@@ -660,7 +667,7 @@ std::shared_ptr<LoadedTexture> TextureCache::LoadTextureFromMemoryDeferred(
 }
 
 
-std::shared_ptr<TextureData> TextureCache::GetLoadedTexture(std::filesystem::path const& path)
+donut::AutoPtr<TextureData> TextureCache::GetLoadedTexture(std::filesystem::path const& path)
 {
 	std::lock_guard<std::shared_mutex> guard(m_LoadedTexturesMutex);
 	return m_LoadedTextures[path.generic_string()];
@@ -675,7 +682,7 @@ bool TextureCache::ProcessRenderingThreadCommands(CommonRenderPasses& passes, fl
     uint commandsExecuted = 0;
     while (true)
     {
-        std::shared_ptr<TextureData> pTexture;
+        TextureData* pTexture;
 
         if (timeLimitMilliseconds > 0 && commandsExecuted > 0)
         {
@@ -883,19 +890,19 @@ namespace donut::engine
         return writeSuccess;
     }
 
-    bool TextureCache::IsTextureLoaded(const std::shared_ptr<LoadedTexture>& _texture)
+    bool TextureCache::IsTextureLoaded(LoadedTexture* _texture)
     {
-        TextureData* texture = static_cast<TextureData*>(_texture.get());
+        TextureData* texture = static_cast<TextureData*>(_texture);
 
         return texture && texture->data;
     }
 
-    bool TextureCache::IsTextureFinalized(const std::shared_ptr<LoadedTexture>& texture)
+    bool TextureCache::IsTextureFinalized(LoadedTexture *texture)
     {
         return texture->texture != nullptr;
     }
 
-    bool TextureCache::UnloadTexture(const std::shared_ptr<LoadedTexture>& texture)
+    bool TextureCache::UnloadTexture(LoadedTexture *texture)
     {
         const auto& it = m_LoadedTextures.find(texture->path);
 

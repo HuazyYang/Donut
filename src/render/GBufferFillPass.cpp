@@ -62,7 +62,7 @@ using namespace donut::math;
 using namespace donut::engine;
 using namespace donut::render;
 
-GBufferFillPass::GBufferFillPass(nvrhi::IDevice* device, std::shared_ptr<CommonRenderPasses> commonPasses)
+GBufferFillPass::GBufferFillPass(nvrhi::IDevice* device, CommonRenderPasses *commonPasses)
     : m_Device(device)
     , m_CommonPasses(std::move(commonPasses))
 {
@@ -258,7 +258,7 @@ nvrhi::GraphicsPipelineHandle GBufferFillPass::CreateGraphicsPipeline(PipelineKe
     return m_Device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
 }
 
-std::shared_ptr<MaterialBindingCache> GBufferFillPass::CreateMaterialBindingCache(CommonRenderPasses& commonPasses)
+donut::AutoPtr<MaterialBindingCache> GBufferFillPass::CreateMaterialBindingCache(CommonRenderPasses& commonPasses)
 {
     std::vector<MaterialResourceBinding> materialBindings = {
         { MaterialResource::ConstantBuffer,         GBUFFER_BINDING_MATERIAL_CONSTANTS },
@@ -271,15 +271,14 @@ std::shared_ptr<MaterialBindingCache> GBufferFillPass::CreateMaterialBindingCach
         { MaterialResource::OpacityTexture,         GBUFFER_BINDING_MATERIAL_OPACITY_TEXTURE }
     };
 
-    return std::make_shared<MaterialBindingCache>(
+    return MAKE_RC_OBJ_PTR(MaterialBindingCache,
         m_Device,
         nvrhi::ShaderType::Pixel,
-        /* registerSpace = */ GBUFFER_SPACE_MATERIAL,
+        /* registerSpace = */ (uint32_t)GBUFFER_SPACE_MATERIAL,
         /* registerSpaceIsDescriptorSet = */ true,
         materialBindings,
         commonPasses.m_AnisotropicWrapSampler,
-        commonPasses.m_GrayTexture,
-        commonPasses.m_BlackTexture);
+        commonPasses.m_GrayTexture);
 }
 
 ViewType::Enum GBufferFillPass::GetSupportedViewTypes() const

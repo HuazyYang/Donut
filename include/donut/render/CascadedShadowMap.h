@@ -26,7 +26,6 @@
 #include <donut/engine/ShadowMap.h>
 #include <donut/engine/View.h>
 #include <nvrhi/nvrhi.h>
-#include <memory>
 
 namespace donut::render
 {
@@ -36,8 +35,8 @@ namespace donut::render
     {
     private:
         nvrhi::TextureHandle m_ShadowMapTexture;
-        std::vector<std::shared_ptr<PlanarShadowMap>> m_Cascades;
-        std::vector<std::shared_ptr<PlanarShadowMap>> m_PerObjectShadows;
+        std::vector<AutoPtr<PlanarShadowMap>> m_Cascades;
+        std::vector<AutoPtr<PlanarShadowMap>> m_PerObjectShadows;
         engine::CompositeView m_CompositeView;
         int m_NumberOfCascades;
 
@@ -95,8 +94,8 @@ namespace donut::render
         void SetFalloffDistance(float distance);
 		void SetNumberOfCascadesUnsafe(int cascades);
 
-        std::shared_ptr<engine::PlanarView> GetCascadeView(uint32_t cascade);
-        std::shared_ptr<engine::PlanarView> GetPerObjectView(uint32_t object);
+        engine::PlanarView* GetCascadeView(uint32_t cascade);
+        engine::PlanarView* GetPerObjectView(uint32_t object);
 
         virtual dm::float4x4 GetWorldToUvzwMatrix() const override;
         virtual const engine::ICompositeView& GetView() const override;

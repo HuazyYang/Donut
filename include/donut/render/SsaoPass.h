@@ -21,10 +21,10 @@
 */
 
 #pragma once
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <nvrhi/nvrhi.h>
-#include <memory>
 
 namespace donut::engine
 {
@@ -49,7 +49,7 @@ namespace donut::render
         float blurSharpness = 16.f;
     };
 
-    class SsaoPass
+    class SsaoPass: ObjectImpl<IObject>
     {
     private:
         struct SubPass
@@ -71,7 +71,7 @@ namespace donut::render
         nvrhi::TextureHandle m_DeinterleavedOcclusion;
         dm::float2 m_QuantizedGbufferTextureSize;
                 
-        std::shared_ptr<engine::CommonRenderPasses> m_CommonPasses;
+        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
 
     public:
         struct CreateParameters
@@ -85,14 +85,14 @@ namespace donut::render
 
         SsaoPass(
             nvrhi::IDevice* device,
-            std::shared_ptr<engine::ShaderFactory> shaderFactory,
-            std::shared_ptr<engine::CommonRenderPasses> commonPasses,
+            engine::ShaderFactory* shaderFactory,
+            engine::CommonRenderPasses* commonPasses,
             const CreateParameters& params);
 
         SsaoPass(
             nvrhi::IDevice* device,
-            std::shared_ptr<engine::ShaderFactory> shaderFactory,
-            std::shared_ptr<engine::CommonRenderPasses> commonPasses,
+            engine::ShaderFactory* shaderFactory,
+            engine::CommonRenderPasses* commonPasses,
             nvrhi::ITexture* gbufferDepth,
             nvrhi::ITexture* gbufferNormals,
             nvrhi::ITexture* destinationTexture);

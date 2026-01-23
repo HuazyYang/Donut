@@ -30,13 +30,13 @@ namespace donut::engine
     void Material::FillConstantBuffer(MaterialConstants& constants, bool useResourceDescriptorHeapBindless) const
     {
         // Create lambda to handle bindless texture index retrieval
-        auto GetBindlessTextureIndex = [useResourceDescriptorHeapBindless](const std::shared_ptr<LoadedTexture>& texture) -> int {
+        auto GetBindlessTextureIndex = [useResourceDescriptorHeapBindless](const LoadedTexture* texture) -> int {
             if (!texture)
                 return -1;
             
             return useResourceDescriptorHeapBindless 
-                ? texture->bindlessDescriptor.GetIndexInHeap()
-                : texture->bindlessDescriptor.Get();
+                ? texture->bindlessDescriptor->GetIndexInHeap()
+                : texture->bindlessDescriptor->Get();
         };
 
         // flags

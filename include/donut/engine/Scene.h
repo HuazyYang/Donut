@@ -21,11 +21,11 @@
 */
 
 #pragma once
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <donut/engine/SceneGraph.h>
 #include <nvrhi/nvrhi.h>
 #include <vector>
-#include <memory>
 #include <mutex>
 #include <filesystem>
 
@@ -50,15 +50,15 @@ namespace donut::engine
     class DescriptorTableManager;
     class GltfImporter;
     
-    class Scene
+    class Scene: public ObjectImpl<IObject>
     {
     protected:
-        std::shared_ptr<vfs::IFileSystem> m_fs;
-        std::shared_ptr<SceneTypeFactory> m_SceneTypeFactory;
-        std::shared_ptr<TextureCache> m_TextureCache;
-        std::shared_ptr<DescriptorTableManager> m_DescriptorTable;
-        std::shared_ptr<SceneGraph> m_SceneGraph;
-        std::shared_ptr<GltfImporter> m_GltfImporter;
+        AutoPtr<vfs::IFileSystem> m_fs;
+        AutoPtr<SceneTypeFactory> m_SceneTypeFactory;
+        AutoPtr<TextureCache> m_TextureCache;
+        AutoPtr<DescriptorTableManager> m_DescriptorTable;
+        AutoPtr<SceneGraph> m_SceneGraph;
+        AutoPtr<GltfImporter> m_GltfImporter;
         std::vector<SceneImportResult> m_Models;
         bool m_EnableBindlessResources = false;
         bool m_UseResourceDescriptorHeapBindless = false;
@@ -77,7 +77,7 @@ namespace donut::engine
         bool m_SceneStructureChanged = false;
 
         struct Resources; // Hide the implementation to avoid including <material_cb.h> and <bindless.h> here
-        std::shared_ptr<Resources> m_Resources;
+        MonoPtr<Resources> m_Resources;
 
         void LoadModelAsync(
             uint32_t index,
@@ -89,12 +89,12 @@ namespace donut::engine
             const std::filesystem::path& scenePath, 
             ThreadPool* threadPool);
 
-        void LoadSceneGraph(const Json::Value& nodeList, const std::shared_ptr<SceneGraphNode>& parent);
+        void LoadSceneGraph(const Json::Value& nodeList, SceneGraphNode* parent);
         void LoadAnimations(const Json::Value& nodeList);
         
-        void UpdateMaterial(const std::shared_ptr<Material>& material);
-        void UpdateGeometry(const std::shared_ptr<MeshInfo>& mesh);
-        void UpdateInstance(const std::shared_ptr<MeshInstance>& instance);
+        void UpdateMaterial(const Material* material);
+        void UpdateGeometry(const MeshInfo* mesh);
+        void UpdateInstance(const MeshInstance* instance);
 
         void UpdateSkinnedMeshes(nvrhi::ICommandList* commandList, uint32_t frameIndex);
 
@@ -110,15 +110,15 @@ namespace donut::engine
 
         virtual bool LoadCustomData(Json::Value& rootNode, ThreadPool* threadPool);
     public:
-        virtual ~Scene() = default;
+        ~Scene();
 
         Scene(
             nvrhi::IDevice* device,
-            ShaderFactory& shaderFactory,
-            std::shared_ptr<vfs::IFileSystem> fs,
-            std::shared_ptr<TextureCache> textureCache,
-            std::shared_ptr<DescriptorTableManager> descriptorTable,
-            std::shared_ptr<SceneTypeFactory> sceneTypeFactory);
+            ShaderFactory *shaderFactory,
+            vfs::IFileSystem *fs,
+            TextureCache *textureCache,
+            DescriptorTableManager *descriptorTable,
+            SceneTypeFactory *sceneTypeFactory = nullptr);
         
         void FinishedLoading(uint32_t frameIndex);
 
@@ -137,7 +137,7 @@ namespace donut::engine
 
         static const SceneLoadingStats& GetLoadingStats();
 
-        [[nodiscard]] std::shared_ptr<SceneGraph> GetSceneGraph() const { return m_SceneGraph; }
+        [[nodiscard]] SceneGraph* GetSceneGraph() const { return m_SceneGraph; }
         [[nodiscard]] nvrhi::IDescriptorTable* GetDescriptorTable() const { return m_DescriptorTable ? m_DescriptorTable->GetDescriptorTable() : nullptr; }
         [[nodiscard]] nvrhi::IBuffer* GetMaterialBuffer() const { return m_MaterialBuffer; }
         [[nodiscard]] nvrhi::IBuffer* GetGeometryBuffer() const { return m_GeometryBuffer; }

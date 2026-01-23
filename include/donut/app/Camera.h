@@ -21,11 +21,10 @@
 */
 
 #pragma once
-
+#include <donut/core/object/AutoPtr.h>
 #include <unordered_map>
 #include <array>
 #include <optional>
-#include <memory>
 
 #include <donut/core/math/math.h>
 
@@ -249,6 +248,7 @@ namespace donut::app
     class SwitchableCamera
     {
     public:
+        ~SwitchableCamera();
         // Returns the active user-controllable camera (first-person or third-person),
         // or nullptr if a scene camera is active.
         BaseCamera* GetActiveUserCamera();
@@ -267,7 +267,7 @@ namespace donut::app
         ThirdPersonCamera& GetThirdPersonCamera() { return m_ThirdPerson; }
 
         // Returns the active scene camera object, or nullptr if a user camera is active.
-        std::shared_ptr<engine::SceneCamera>& GetSceneCamera() { return m_SceneCamera; }
+        engine::SceneCamera* GetSceneCamera() { return m_SceneCamera; }
 
         // Returns the view matrix for the currently active camera.
         dm::affine3 GetWorldToViewMatrix() const;
@@ -289,7 +289,7 @@ namespace donut::app
 
         // Switches to the provided scene graph camera that must not be a nullptr.
         // The user-controllable cameras are not affected by this call.
-        void SwitchToSceneCamera(std::shared_ptr<engine::SceneCamera> const& sceneCamera);
+        void SwitchToSceneCamera(engine::SceneCamera* sceneCamera);
 
         // The following methods direct user input events to the active user camera
         // and return 'true' if such camera is active.
@@ -308,7 +308,7 @@ namespace donut::app
     private:
         FirstPersonCamera m_FirstPerson;
         ThirdPersonCamera m_ThirdPerson;
-        std::shared_ptr<engine::SceneCamera> m_SceneCamera;
+        AutoPtr<engine::SceneCamera> m_SceneCamera;
         bool m_UseFirstPerson = false;
     };
 }

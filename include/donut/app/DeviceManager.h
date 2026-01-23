@@ -82,9 +82,10 @@ freely, subject to the following restrictions:
 #include <nvrhi/nvrhi.h>
 #include <donut/core/log.h>
 
-#include <list>
 #include <functional>
 #include <optional>
+
+#include <donut/core/object/Foundation.h>
 
 namespace donut::app
 {
@@ -237,7 +238,7 @@ namespace donut::app
 #endif
     };
 
-    class DeviceManager
+    class DeviceManager: public ObjectImpl<IObject>
     {
     public:
         static DeviceManager* Create(nvrhi::GraphicsAPI api);
@@ -282,7 +283,7 @@ namespace donut::app
         bool m_EnableRenderDuringWindowMovement = false;
         // set to true if running on NV GPU
         bool m_IsNvidia = false;
-        std::list<IRenderPass *> m_vRenderPasses;
+        std::vector<IRenderPass *> m_vRenderPasses;
         // timestamp in seconds for the previous frame
         double m_PreviousFrameTimestamp = 0.0;
         // current DPI scale info (updated when window moves)
@@ -414,7 +415,7 @@ namespace donut::app
 #endif
     };
 
-    class IRenderPass
+    class IRenderPass: public ObjectImpl<IObject>
     {
     private:
         DeviceManager* m_DeviceManager;

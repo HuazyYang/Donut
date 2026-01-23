@@ -69,18 +69,24 @@ struct ChunkFile::ChunkTableEntry
 // Implementation
 //
 
-ChunkId ChunkFile::addChunk(uint32_t type, uint32_t version, void const * data, size_t size)
-{
-     ChunkId chunkId = (uint32_t)_chunks.size()+1;
+ChunkFile::~ChunkFile() {
+    SafeRelease(_data);
+    for(auto chunk : _chunks) {
+        if (chunk->deleteUserData) delete[] (uint8_t *)chunk->data;
+        delete chunk;
+    }
+}
 
-     std::unique_ptr<Chunk> chunk =
-         std::make_unique<Chunk>(Chunk({chunkId, type, version, 0u, size, data}));
+ChunkId ChunkFile::addChunk(uint32_t type, uint32_t version, void const *data,
+                            size_t size) {
+    ChunkId chunkId = (uint32_t)_chunks.size() + 1;
 
-    _chunks.push_back(std::move(chunk));
+    auto chunk = new Chunk({chunkId, type, version, 0u, size, data, true});
+
+    _chunks.push_back(chunk);
 
     return chunkId;
 }
-
 
 Chunk const * ChunkFile::getChunk(ChunkId const chunkId) const
 {
@@ -91,7 +97,7 @@ Chunk const * ChunkFile::getChunk(ChunkId const chunkId) const
     // XXXX manuelk augment this w/ map for faster search
     for (auto const & chunk : _chunks) {
         if (chunk && chunk->chunkId == chunkId) {
-            return chunk.get();
+            return chunk;
         }
     }
     return nullptr;
@@ -102,31 +108,34 @@ void ChunkFile::getChunks(uint32_t chunkType, std::vector<Chunk const *> & resul
     result.clear();
     for (auto const & chunk : _chunks)
         if (chunk && chunk->chunkType == chunkType)
-            result.push_back(chunk.get());
+            result.push_back(chunk);
 }
 
 void ChunkFile::reset()
 {
     _filepath.clear();
     _chunks.clear();
-    _data.reset();
+    SafeRelease(_data);
+    for(auto chunk : _chunks) {
+        if (chunk->deleteUserData) delete[] (uint8_t *)chunk->data;
+        delete chunk;
+    }
+    _chunks.clear();
 }
 
-typedef typename vfs::IBlob IBlob;
-
-std::shared_ptr<ChunkFile const> ChunkFile::deserialize(
-    std::weak_ptr<IBlob const> blobPtr, char const * filepath)
+FRESULT ChunkFile::deserialize(
+    IDataBlob *blobPtr, char const * filepath, ChunkFile **ppChunkFile)
 {
 
-    if (auto const blob = blobPtr.lock())
+    if (auto const blob = blobPtr)
     {
-        if (!blob->data() || blob->size() < sizeof(Header))
+        if (!blob->GetDataPtr() || blob->GetSize() < sizeof(Header))
         {
             log::error("ChunkFile '%s' : invalid header", filepath);
-            return nullptr;
+            return FE_GENERIC_ERROR;
         }
 
-        uint8_t const * data = reinterpret_cast<uint8_t const *>(blob->data());
+        uint8_t const * data = reinterpret_cast<uint8_t const *>(blob->GetDataPtr());
 
         Header const & header = *(Header const *)(data);
 
@@ -139,19 +148,19 @@ std::shared_ptr<ChunkFile const> ChunkFile::deserialize(
         if (nchunks == 0 || nchunks > 1000000)
         {
             log::error("ChunkFile '%s' : invalid number of chunks in file", filepath);
-            return nullptr;
+            return FE_GENERIC_ERROR;
         }
 
-        if (blob->size() < header.chunkTableOffset + nchunks * sizeof(ChunkTableEntry))
+        if (blob->GetSize() < header.chunkTableOffset + nchunks * sizeof(ChunkTableEntry))
         {
             log::error("ChunkFile '%s' : invalid chunks table", filepath);
-            return nullptr;
+            return FE_GENERIC_ERROR;
         }
 
         ChunkTableEntry const * chunktable =
             (ChunkTableEntry const *)(data + header.chunkTableOffset);
 
-        auto result = std::make_shared<ChunkFile>();
+        auto result = MAKE_RC_OBJ(ChunkFile);
 
         result->_chunks.reserve(nchunks);
 
@@ -160,29 +169,36 @@ std::shared_ptr<ChunkFile const> ChunkFile::deserialize(
 
             ChunkTableEntry const & e = chunktable[index];
 
-            if (blob->size() < e.offset + e.size) {
+            if (blob->GetSize() < e.offset + e.size) {
                 log::error("ChunkFile '%s' : chunk %d invalid size/offset", filepath, e.chunkId);
-                return nullptr;
+                return FE_GENERIC_ERROR;
             }
 
-            std::unique_ptr<Chunk> chunk = std::make_unique<Chunk>(
-                Chunk({e.chunkId, e.chunkType, e.chunkVersion, e.offset, e.size, data+e.offset}));
+            auto chunk = new Chunk
+                ({e.chunkId, e.chunkType, e.chunkVersion, e.offset, e.size, data+e.offset, false});
 
-            result->_chunks.push_back(std::move(chunk));
+            result->_chunks.push_back(chunk);
         }
 
         result->_filepath = filepath;
         result->_data = blob;
-        return result;
+
+        if(ppChunkFile) {
+            *ppChunkFile = result;
+            result->AddRef();
+        }
+        result->Release();
+
+        return FS_OK;
     }
     else
     {
         log::error("ChunkFile '%s' : no data", filepath);
     }
-    return nullptr;
+    return FE_GENERIC_ERROR;
 }
 
-std::shared_ptr<IBlob const> ChunkFile::serialize() const {
+FRESULT ChunkFile::serialize(IDataBlob **ppBlob) const {
 
     uint32_t nchunks = (uint32_t)_chunks.size();
 
@@ -194,9 +210,13 @@ std::shared_ptr<IBlob const> ChunkFile::serialize() const {
     for (auto const & chunk : _chunks)
         blobSize += chunk->size;
 
-    if (uint8_t * data = (uint8_t *)malloc(blobSize))
+    FRESULT fr;
+    IDataBlob *pBlob;
+
+    if (FSUCCEEDED(fr = CreateBlob(blobSize, &pBlob)))
     {
         size_t offset = 0;
+        auto data = (uint8_t *)pBlob->GetDataPtr();
 
         // write header
         {
@@ -214,7 +234,7 @@ std::shared_ptr<IBlob const> ChunkFile::serialize() const {
 
             for (size_t i=0, chunkOffset=offset+chunkTableSize; i<nchunks; ++i)
             {
-                Chunk * chunk = const_cast<Chunk *>(_chunks[i].get());
+                Chunk * chunk = const_cast<Chunk *>(_chunks[i]);
 
                 chunkTable[i] = {
                     chunk->chunkId,
@@ -237,14 +257,19 @@ std::shared_ptr<IBlob const> ChunkFile::serialize() const {
 //            offset += chunk->size;
         }
 
-        return std::make_shared<donut::vfs::Blob const>(data, blobSize);
+        if(ppBlob) {
+            *ppBlob = pBlob;
+            pBlob->AddRef();
+        }
+        pBlob->Release();
+        return FS_OK;
     }
     else
     {
         log::error("Chunkfile '%s' : blob allocation failed", _filepath.c_str());
     }
 
-    return nullptr;
+    return FE_GENERIC_ERROR;
 }
 
 };

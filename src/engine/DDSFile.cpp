@@ -566,18 +566,18 @@ namespace donut::engine
 
     bool LoadDDSTextureFromMemory(TextureData& textureInfo)
     {
-        if (textureInfo.data->size() < sizeof(uint32_t) + sizeof(DDS_HEADER))
+        if (textureInfo.data->GetSize() < sizeof(uint32_t) + sizeof(DDS_HEADER))
         {
             return false;
         }
 
-        auto dwMagicNumber = *reinterpret_cast<const uint32_t*>(textureInfo.data->data());
+        auto dwMagicNumber = *reinterpret_cast<const uint32_t*>(textureInfo.data->GetDataPtr());
         if (dwMagicNumber != DDS_MAGIC)
         {
             return false;
         }
 
-        auto header = reinterpret_cast<const DDS_HEADER*>(static_cast<const char*>(textureInfo.data->data()) + sizeof(uint32_t));
+        auto header = reinterpret_cast<const DDS_HEADER*>(static_cast<const char*>(textureInfo.data->GetDataPtr()) + sizeof(uint32_t));
 
         // Verify header to validate DDS file
         if (header->size != sizeof(DDS_HEADER) ||
@@ -592,7 +592,7 @@ namespace donut::engine
             (MAKEFOURCC('D', 'X', '1', '0') == header->ddspf.fourCC))
         {
             // Must be long enough for both headers and magic value
-            if (textureInfo.data->size() < (sizeof(DDS_HEADER) + sizeof(uint32_t) + sizeof(DDS_HEADER_DXT10)))
+            if (textureInfo.data->GetSize() < (sizeof(DDS_HEADER) + sizeof(uint32_t) + sizeof(DDS_HEADER_DXT10)))
             {
                 return false;
             }
@@ -746,7 +746,7 @@ namespace donut::engine
             }
         }
 
-        if (FillTextureInfoOffsets(textureInfo, textureInfo.data->size(), dataOffset) == 0)
+        if (FillTextureInfoOffsets(textureInfo, textureInfo.data->GetSize(), dataOffset) == 0)
             return false;
 
         return true;
@@ -780,7 +780,7 @@ namespace donut::engine
             {
                 const TextureSubresourceData& layout = info.dataLayout[arraySlice][mipLevel];
 
-                commandList->writeTexture(texture, arraySlice, mipLevel, static_cast<const char*>(info.data->data()) + layout.dataOffset, layout.rowPitch);
+                commandList->writeTexture(texture, arraySlice, mipLevel, static_cast<const char*>(info.data->GetDataPtr()) + layout.dataOffset, layout.rowPitch);
             }
         }
 
@@ -790,7 +790,7 @@ namespace donut::engine
         return texture;
     }
 
-    nvrhi::TextureHandle CreateDDSTextureFromMemory(nvrhi::IDevice* device, nvrhi::ICommandList* commandList, std::shared_ptr<IBlob> data, const char* debugName /*= nullptr*/, bool forceSRGB /*= false*/)
+    nvrhi::TextureHandle CreateDDSTextureFromMemory(nvrhi::IDevice* device, nvrhi::ICommandList* commandList, IDataBlob *data, const char* debugName /*= nullptr*/, bool forceSRGB /*= false*/)
     {
         if (!data)
             return nullptr;
@@ -802,7 +802,7 @@ namespace donut::engine
         return CreateDDSTextureInternal(device, commandList, info, debugName);
     }
 
-    std::shared_ptr<IBlob> SaveStagingTextureAsDDS(nvrhi::IDevice* device, nvrhi::IStagingTexture* stagingTexture)
+    AutoPtr<IDataBlob> SaveStagingTextureAsDDS(nvrhi::IDevice* device, nvrhi::IStagingTexture* stagingTexture)
     {
         DDS_HEADER header = {};
         DDS_HEADER_DXT10 dx10header = {};
@@ -883,7 +883,13 @@ namespace donut::engine
 
         size_t dataSize = FillTextureInfoOffsets(textureInfo, 0, dataOffset);
 
-        char* data = reinterpret_cast<char*>(malloc(dataSize));
+        AutoPtr<IDataBlob> blob;
+        if(FFAILED(CreateBlob(dataSize, &blob))) {
+            log::error("Failed to create DDS texture storage blob");
+            return nullptr;
+        }
+
+        char* data = reinterpret_cast<char*>(blob->GetDataPtr());
         *reinterpret_cast<uint32_t*>(data) = DDS_MAGIC;
         *reinterpret_cast<DDS_HEADER*>(data + sizeof(uint32_t)) = header;
         *reinterpret_cast<DDS_HEADER_DXT10*>(data + sizeof(uint32_t) + sizeof(DDS_HEADER)) = dx10header;
@@ -925,6 +931,6 @@ namespace donut::engine
             }
         }
 
-        return std::make_shared<Blob>(data, dataSize);
+        return blob;
     }
 }

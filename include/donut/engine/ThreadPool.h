@@ -21,11 +21,11 @@
 */
 
 #pragma once
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <atomic>
 #include <condition_variable>
 #include <functional>
-#include <memory>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -36,7 +36,7 @@ using namespace std::chrono;
 namespace donut::engine
 {
 
-class ThreadPoolTask
+class ThreadPoolTask: public ObjectImpl<IObject>
 {
 public:
     // Execute the task.
@@ -51,7 +51,7 @@ public:
 
     // Enqueues a task for execution in the thread pool.
     // If any thread is available, the task immediately starts executing.
-    void AddTask(std::shared_ptr<ThreadPoolTask> const& task);
+    void AddTask(ThreadPoolTask *task);
 
     // Enqueues a function for execution in the thread pool.
     // If any thread is available, the function immediately starts executing.
@@ -65,7 +65,7 @@ private:
     void ThreadProc();
 
     std::vector<std::thread> m_threads;
-    std::queue<std::shared_ptr<ThreadPoolTask>> m_tasks;
+    std::queue<AutoPtr<ThreadPoolTask>> m_tasks;
     std::mutex m_mutex;
     std::condition_variable m_forward;
     std::atomic<bool> m_terminate = false;

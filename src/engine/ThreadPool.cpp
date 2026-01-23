@@ -67,7 +67,7 @@ ThreadPool::~ThreadPool()
         thread.join();
 }
 
-void ThreadPool::AddTask(std::shared_ptr<ThreadPoolTask> const& task)
+void ThreadPool::AddTask(ThreadPoolTask* task)
 {
     std::unique_lock<std::mutex> lock(m_mutex);
     
@@ -79,7 +79,7 @@ void ThreadPool::AddTask(std::shared_ptr<ThreadPoolTask> const& task)
 
 void ThreadPool::AddTask(std::function<void()> func)
 {
-    std::shared_ptr<ThreadPoolFunctionTask> task = std::make_shared<ThreadPoolFunctionTask>(std::move(func));
+    auto task = MAKE_RC_OBJ_PTR(ThreadPoolFunctionTask, std::move(func));
     AddTask(task);
 }
 
@@ -98,7 +98,7 @@ void ThreadPool::ThreadProc()
 {
     while(!m_terminate.load())
     {
-        std::shared_ptr<ThreadPoolTask> task;
+        AutoPtr<ThreadPoolTask> task;
         
         // Wait until a task is available or termination is requested
         {

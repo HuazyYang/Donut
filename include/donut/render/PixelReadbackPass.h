@@ -23,7 +23,6 @@
 #pragma once
 
 #include <donut/core/math/math.h>
-#include <memory>
 #include <map>
 #include <nvrhi/nvrhi.h>
 
@@ -53,7 +52,7 @@ namespace donut::render
     public:
         PixelReadbackPass(
             nvrhi::IDevice* device,
-            std::shared_ptr<engine::ShaderFactory> shaderFactory,
+            engine::ShaderFactory* shaderFactory,
             nvrhi::ITexture* inputTexture,
             nvrhi::Format format,
             uint32_t arraySlice = 0,

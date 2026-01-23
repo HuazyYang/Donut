@@ -127,7 +127,7 @@ namespace donut::render
             {
                 const SkinnedMeshJoint& joint = skinnedInstance->joints[i];
 
-                auto jointNode = joint.node.lock();
+                auto jointNode = joint.node.Lock();
 
                 dm::float4x4 jointMatrix = dm::affineToHomogeneous(dm::affine3(jointNode->GetLocalToWorldTransform() * worldToRoot));
 
@@ -157,7 +157,7 @@ namespace donut::render
         nvrhi::ICommandList* commandList, 
         const engine::IView* view,
         nvrhi::IFramebuffer* framebuffer,
-        std::shared_ptr<engine::SceneGraph const> sceneGraph)
+        const engine::SceneGraph* sceneGraph)
     {
       
         const auto& skinnedInstances = sceneGraph->GetSkinnedMeshInstances();

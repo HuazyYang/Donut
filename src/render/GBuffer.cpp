@@ -98,7 +98,7 @@ void GBufferRenderTargets::Init(
     }
     MotionVectors = device->createTexture(desc);
 
-    GBufferFramebuffer = std::make_shared<FramebufferFactory>(device);
+    GBufferFramebuffer = MAKE_RC_OBJ_PTR(FramebufferFactory, device);
     GBufferFramebuffer->RenderTargets = {
         GBufferDiffuse,
         GBufferSpecular,

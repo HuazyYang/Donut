@@ -122,7 +122,7 @@ void DLSS::ComputeExposure(nvrhi::ICommandList* commandList, nvrhi::IBuffer* ton
     commandList->dispatch(1);
 }
 
- std::unique_ptr<DLSS> DLSS::Create(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
+AutoPtr<DLSS> DLSS::Create(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
     std::string const& directoryWithExecutable, uint32_t applicationID)
 {
     switch(device->getGraphicsAPI())

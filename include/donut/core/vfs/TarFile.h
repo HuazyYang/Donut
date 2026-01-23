@@ -59,7 +59,7 @@ namespace donut::vfs
         
         bool folderExists(const std::filesystem::path& name) override;
         bool fileExists(const std::filesystem::path& name) override;
-        std::shared_ptr<IBlob> readFile(const std::filesystem::path& name) override;
+        FRESULT readFile(const std::filesystem::path& name, IDataBlob **ppBlob) override;
         bool writeFile(const std::filesystem::path& name, const void* data, size_t size) override;
         int enumerateFiles(const std::filesystem::path& path, const std::vector<std::string>& extensions, enumerate_callback_t callback, bool allowDuplicates = false) override;
         int enumerateDirectories(const std::filesystem::path& path, enumerate_callback_t callback, bool allowDuplicates = false) override;

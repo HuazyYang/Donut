@@ -32,14 +32,14 @@ using namespace donut::vfs;
 using namespace donut::app;
 
 MediaFileSystem::MediaFileSystem(
-	std::shared_ptr<IFileSystem> parent, 
+	IFileSystem* parent, 
 	const std::filesystem::path& mediaFolder)
 {
 	// always seach media folder vfs first
-	auto mediafs = std::make_shared<RelativeFileSystem>(parent, mediaFolder);
+	auto mediafs = MAKE_RC_OBJ_PTR(RelativeFileSystem, parent, mediaFolder);
 
 	// open package files & add a vfs for each
-	NativeFileSystem* nativeFS = dynamic_cast<NativeFileSystem*>(parent.get());
+	NativeFileSystem* nativeFS = dynamic_cast<NativeFileSystem*>(parent);
 	if (nativeFS)
 	{
 		std::vector<std::string> packs;
@@ -57,9 +57,9 @@ MediaFileSystem::MediaFileSystem(
 				bool mounted = false;
 				if (string_utils::ends_with(fileName, ".tar"))
 				{
-					if (auto packfs = std::make_shared<TarFile>(filePath); packfs->isOpen())
+					if (auto packfs = MAKE_RC_OBJ_PTR(TarFile, filePath); packfs->isOpen())
 					{
-						m_FileSystems.push_back(packfs);
+						m_FileSystems.push_back(std::move(packfs));
 						mounted = true;
 					}
 				}
@@ -110,12 +110,13 @@ bool MediaFileSystem::fileExists(const std::filesystem::path & path)
 	return false;
 }
 
-std::shared_ptr<IBlob> MediaFileSystem::readFile(const std::filesystem::path & name)
+donut::FRESULT MediaFileSystem::readFile(const std::filesystem::path & name, IDataBlob **ppBlob)
 {
-	for (const auto& fs : m_FileSystems)
-		if (std::shared_ptr<vfs::IBlob> blob = fs->readFile(name))
-			return blob;
-	return nullptr;
+    FRESULT fr = FE_NOT_FOUND;
+    for (const auto& fs : m_FileSystems)
+        if (FSUCCEEDED(fr = fs->readFile(name, ppBlob)))
+			return FS_OK;
+    return fr;
 }
 
 bool MediaFileSystem::writeFile(const std::filesystem::path & name, const void* data, size_t size)

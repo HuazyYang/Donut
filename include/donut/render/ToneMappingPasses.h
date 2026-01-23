@@ -21,9 +21,9 @@
 */
 
 #pragma once
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <nvrhi/nvrhi.h>
-#include <memory>
 #include <unordered_map>
 
 namespace donut::engine
@@ -49,7 +49,7 @@ namespace donut::render
         bool enableColorLUT = true;
     };
 
-    class ToneMappingPass
+    class ToneMappingPass: ObjectImpl<IObject>
     {
     private:
 
@@ -77,8 +77,8 @@ namespace donut::render
         nvrhi::BindingLayoutHandle m_RenderBindingLayout;
         nvrhi::GraphicsPipelineHandle m_RenderPso;
 
-        std::shared_ptr<engine::CommonRenderPasses> m_CommonPasses;
-        std::shared_ptr<engine::FramebufferFactory> m_FramebufferFactory;
+        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
+        AutoPtr<engine::FramebufferFactory> m_FramebufferFactory;
 
         std::unordered_map<nvrhi::ITexture*, nvrhi::BindingSetHandle> m_HistogramBindingSets;
         std::unordered_map<nvrhi::ITexture*, nvrhi::BindingSetHandle> m_RenderBindingSets;
@@ -95,9 +95,9 @@ namespace donut::render
 
         ToneMappingPass(
             nvrhi::IDevice* device,
-            std::shared_ptr<engine::ShaderFactory> shaderFactory,
-            std::shared_ptr<engine::CommonRenderPasses> commonPasses,
-            std::shared_ptr<engine::FramebufferFactory> framebufferFactory,
+            engine::ShaderFactory *shaderFactory,
+            engine::CommonRenderPasses *commonPasses,
+            engine::FramebufferFactory *framebufferFactory,
             const engine::ICompositeView& compositeView,
             const CreateParameters& params);
 

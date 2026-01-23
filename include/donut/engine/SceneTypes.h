@@ -26,7 +26,6 @@
 #include <donut/engine/DescriptorTableManager.h>
 #include <donut/shaders/light_types.h>
 #include <nvrhi/nvrhi.h>
-#include <memory>
 
 struct MaterialConstants;
 struct LightConstants;
@@ -55,9 +54,9 @@ namespace donut::engine
 
     // Contains data for a buffer or an image provided inside a glTF container.
     // It can be from a Data URI (decoded) or from a buffer view.
-    struct GltfInlineData
+    struct GltfInlineData: ObjectImpl<IObject>
     {
-        std::shared_ptr<vfs::IBlob> buffer;
+        AutoPtr<IDataBlob> buffer;
 
         // Object name from glTF, if specified.
         // Otherwise, generated as "AssetName.gltf[index]"
@@ -74,7 +73,7 @@ namespace donut::engine
         std::string path;
 
         // Data for the image provided in the glTF container
-        std::shared_ptr<GltfInlineData> data;
+        AutoPtr<GltfInlineData> data;
 
         // Implicit conversion to bool, returns true if there is either a path or a data buffer
         operator bool() const
@@ -118,12 +117,12 @@ namespace donut::engine
         }
     };
 
-    struct LoadedTexture
+    struct LoadedTexture: ObjectImpl<IObject>
     {
         nvrhi::TextureHandle texture;
         TextureAlphaMode alphaMode = TextureAlphaMode::UNKNOWN;
         uint32_t originalBitsPerPixel = 0;
-        DescriptorHandle bindlessDescriptor;
+        AutoPtr<DescriptorHandle> bindlessDescriptor;
         std::string path;
         std::string mimeType;
 
@@ -182,19 +181,19 @@ namespace donut::engine
 
     const char* MaterialDomainToString(MaterialDomain domain);
 
-    struct Material
+    struct Material: WeakableImpl<IWeakable>
     {
         std::string name;
         std::string modelFileName;      // where this material originated from, e.g. GLTF file name
         int materialIndexInModel = -1;  // index of the material in the model file
         MaterialDomain domain = MaterialDomain::Opaque;
-        std::shared_ptr<LoadedTexture> baseOrDiffuseTexture; // metal-rough: base color; spec-gloss: diffuse color; .a = opacity (both modes)
-        std::shared_ptr<LoadedTexture> metalRoughOrSpecularTexture; // metal-rough: ORM map; spec-gloss: specular color, .a = glossiness
-        std::shared_ptr<LoadedTexture> normalTexture;
-        std::shared_ptr<LoadedTexture> emissiveTexture;
-        std::shared_ptr<LoadedTexture> occlusionTexture;
-        std::shared_ptr<LoadedTexture> transmissionTexture; // see KHR_materials_transmission; undefined on specular-gloss materials
-        std::shared_ptr<LoadedTexture> opacityTexture; // for renderers that store opacity or alpha mask separately, overrides baseOrDiffuse.a
+        AutoPtr<LoadedTexture> baseOrDiffuseTexture; // metal-rough: base color; spec-gloss: diffuse color; .a = opacity (both modes)
+        AutoPtr<LoadedTexture> metalRoughOrSpecularTexture; // metal-rough: ORM map; spec-gloss: specular color, .a = glossiness
+        AutoPtr<LoadedTexture> normalTexture;
+        AutoPtr<LoadedTexture> emissiveTexture;
+        AutoPtr<LoadedTexture> occlusionTexture;
+        AutoPtr<LoadedTexture> transmissionTexture; // see KHR_materials_transmission; undefined on specular-gloss materials
+        AutoPtr<LoadedTexture> opacityTexture; // for renderers that store opacity or alpha mask separately, overrides baseOrDiffuse.a
         nvrhi::BufferHandle materialConstants;
         dm::float3 baseOrDiffuseColor = 1.f; // metal-rough: base color, spec-gloss: diffuse color (if no texture present)
         dm::float3 specularColor = 0.f; // spec-gloss: specular color
@@ -255,6 +254,7 @@ namespace donut::engine
         int materialID = 0;
         bool dirty = true; // set this to true to make Scene update the material data
 
+        using WeakableImpl::WeakableImpl;
         virtual ~Material() = default;
         void FillConstantBuffer(struct MaterialConstants& constants, bool useResourceDescriptorHeapBindless = false) const;
         bool SetProperty(const std::string& name, const dm::float4& value);
@@ -267,14 +267,14 @@ namespace donut::engine
         uint32_t numVertexBuffers;
     };
 
-    struct BufferGroup
+    struct BufferGroup: ObjectImpl<IObject>
     {
         nvrhi::BufferHandle indexBuffer;
         nvrhi::BufferHandle vertexBuffer;
         nvrhi::BufferHandle instanceBuffer;
-        std::shared_ptr<DescriptorHandle> indexBufferDescriptor;
-        std::shared_ptr<DescriptorHandle> vertexBufferDescriptor;
-        std::shared_ptr<DescriptorHandle> instnaceBufferDescriptor;
+        AutoPtr<DescriptorHandle> indexBufferDescriptor;
+        AutoPtr<DescriptorHandle> vertexBufferDescriptor;
+        AutoPtr<DescriptorHandle> instnaceBufferDescriptor;
         std::array<nvrhi::BufferRange, size_t(VertexAttribute::Count)> vertexBufferRanges;
         std::vector<nvrhi::BufferRange> morphTargetBufferRange;
         std::vector<uint32_t> indexData;
@@ -302,9 +302,9 @@ namespace donut::engine
         Count
     };
 
-    struct MeshGeometry
+    struct MeshGeometry: ObjectImpl<IObject>
     {
-        std::shared_ptr<Material> material;
+        AutoPtr<Material> material;
         dm::box3 objectSpaceBounds;
         uint32_t indexOffsetInMesh = 0;
         uint32_t vertexOffsetInMesh = 0;
@@ -314,7 +314,7 @@ namespace donut::engine
 
         MeshGeometryPrimitiveType type = MeshGeometryPrimitiveType::Triangles;
 
-        virtual ~MeshGeometry() = default;
+        void operator=(MeshGeometry& rhs) noexcept;
     };
 
     enum class MeshType : uint8_t
@@ -327,13 +327,13 @@ namespace donut::engine
         Count
     };
 
-    struct MeshInfo
+    struct MeshInfo: ObjectImpl<IObject>
     {
         std::string name;
         MeshType type = MeshType::Triangles;
-        std::shared_ptr<BufferGroup> buffers;
-        std::shared_ptr<MeshInfo> skinPrototype;
-        std::vector<std::shared_ptr<MeshGeometry>> geometries;
+        AutoPtr<BufferGroup> buffers;
+        AutoPtr<MeshInfo> skinPrototype;
+        std::vector<AutoPtr<MeshGeometry>> geometries;
         dm::box3 objectSpaceBounds;
         uint32_t indexOffset = 0;
         uint32_t vertexOffset = 0;

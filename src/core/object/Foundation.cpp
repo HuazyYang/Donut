@@ -11,11 +11,6 @@
 #define DONUT_MEMORY_LEAKS_CHECK
 #endif
 
-#if defined(_DEBUG) && defined(_MSC_VER)
-#include <crtdbg.h>
-#define USE_CRT_MALLOC_DBG 1
-#endif
-
 #if PLATFORM_ANDROID && __ANDROID_API__ < 28
 #define USE_ALIGNED_MALLOC_FALLBACK 1
 #endif
@@ -73,14 +68,9 @@ void FreeAlignedFallback(void *Ptr) {
 
 DefaultMemoryAllocator::DefaultMemoryAllocator() {}
 
-void *DefaultMemoryAllocator::Allocate(size_t Size, const char *dbgFileName,
-                                       const int32_t dbgLineNumber) {
+void *DefaultMemoryAllocator::Allocate(size_t Size) {
     DONUT_VERIFY(Size > 0);
-#ifdef USE_CRT_MALLOC_DBG
-    return _malloc_dbg(Size, _NORMAL_BLOCK, dbgFileName, dbgLineNumber);
-#else
     return malloc(Size);
-#endif
 }
 
 void DefaultMemoryAllocator::Free(void *Ptr) { free(Ptr); }
@@ -92,30 +82,24 @@ void DefaultMemoryAllocator::Free(void *Ptr) { free(Ptr); }
 #undef ALIGNED_FREE
 #endif
 
-#ifdef USE_CRT_MALLOC_DBG
-#define ALIGNED_MALLOC(Size, Alignment, dbgFileName, dbgLineNumber) \
-    _aligned_malloc_dbg(Size, Alignment, dbgFileName, dbgLineNumber)
-#define ALIGNED_FREE(Ptr) _aligned_free_dbg(Ptr)
-#elif defined(_MSC_VER) || defined(__MINGW64__) || defined(__MINGW32__)
-#define ALIGNED_MALLOC(Size, Alignment, dbgFileName, dbgLineNumber) \
+#if defined(_MSC_VER) || defined(__MINGW64__) || defined(__MINGW32__)
+#define ALIGNED_MALLOC(Size, Alignment) \
     _aligned_malloc(Size, Alignment)
 #define ALIGNED_FREE(Ptr) _aligned_free(Ptr)
 #elif defined(USE_ALIGNED_MALLOC_FALLBACK)
-#define ALIGNED_MALLOC(Size, Alignment, dbgFileName, dbgLineNumber) \
+#define ALIGNED_MALLOC(Size, Alignment) \
     AllocateAlignedFallback(Size, Alignment)
 #define ALIGNED_FREE(Ptr) FreeAlignedFallback(Ptr)
 #else
-#define ALIGNED_MALLOC(Size, Alignment, dbgFileName, dbgLineNumber) \
+#define ALIGNED_MALLOC(Size, Alignment) \
     aligned_alloc(Alignment, Size)
 #define ALIGNED_FREE(Ptr) free(Ptr)
 #endif
 
-void *DefaultMemoryAllocator::AllocateAligned(size_t Size, size_t Alignment,
-                                              const char *dbgFileName,
-                                              const int32_t dbgLineNumber) {
+void *DefaultMemoryAllocator::AllocateAligned(size_t Size, size_t Alignment) {
     DONUT_VERIFY(Size > 0 && Alignment > 0);
     Size = details::AlignUp(Size, Alignment);
-    return ALIGNED_MALLOC(Size, Alignment, dbgFileName, dbgLineNumber);
+    return ALIGNED_MALLOC(Size, Alignment);
 }
 
 void DefaultMemoryAllocator::FreeAligned(void *Ptr) { ALIGNED_FREE(Ptr); }
@@ -123,13 +107,6 @@ void DefaultMemoryAllocator::FreeAligned(void *Ptr) { ALIGNED_FREE(Ptr); }
 DefaultMemoryAllocator *GetDefaultMemAllocator() noexcept {
     static DefaultMemoryAllocator Allocator;
     return &Allocator;
-}
-
-void EnableCrtDumpHeapLeaks() {
-#ifdef DONUT_MEMORY_LEAKS_CHECK
-    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-    _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG);
-#endif
 }
 
 namespace details {
@@ -310,8 +287,41 @@ public:
     const size_t m_Size;
 };
 
+DONUT_CLSID(ProxyRefDataBlobImpl, "26307b63-679b-4182-b086-37c7c6078e16")
+class ProxyRefDataBlobImpl : public ObjectImpl<IDataBlob> {
+public:
+    DONUT_DECLARE_UUID_TRAITS(ProxyRefDataBlobImpl)
+
+    DONUT_BEGIN_INTERFACE_TABLE_INLINE(ProxyRefDataBlobImpl)
+    DONUT_IMPLEMENTS_INTERFACE(ProxyRefDataBlobImpl)
+    DONUT_IMPLEMENTS_INTERFACE(IDataBlob)
+    DONUT_END_INTERFACE_TABLE()
+
+    void Resize(size_t NewSize) override {
+        DONUT_VERIFY(false, "Operation forbidden");
+    }
+
+    size_t GetSize() override { return m_Size; }
+
+    void *GetDataPtr() override { return  m_pSource ? (uint8_t *)m_pSource->GetDataPtr() + m_Offset : 0; }
+
+    ProxyRefDataBlobImpl(IDataBlob *pSource, size_t Offset, size_t Size)
+        : m_pSource(pSource), m_Offset(Offset), m_Size(Size) {
+        SafeAddRef(m_pSource);
+        if(!m_pSource)
+            m_Size = m_Offset = 0;
+    }
+
+    ~ProxyRefDataBlobImpl() { SafeRelease(m_pSource); }
+
+ private:
+    IDataBlob *m_pSource;
+    size_t m_Offset;
+    size_t m_Size;
+};
+
 FRESULT CreateBlob(size_t Size, IDataBlob **ppBlob) {
-    auto blob = MAKE_RC_OBJ0(DataBlobImpl)(Size);
+    auto blob = MAKE_RC_OBJ(DataBlobImpl, Size);
     if (ppBlob) {
         *ppBlob = blob;
         blob->AddRef();
@@ -321,7 +331,7 @@ FRESULT CreateBlob(size_t Size, IDataBlob **ppBlob) {
 }
 
 FRESULT CreateStringBlob(size_t Size, IDataBlob **ppBlob) {
-    auto blob = MAKE_RC_OBJ0(StringDataBlobImpl)(Size);
+    auto blob = MAKE_RC_OBJ(StringDataBlobImpl, Size);
     if (ppBlob) {
         *ppBlob = blob;
         blob->AddRef();
@@ -331,8 +341,19 @@ FRESULT CreateStringBlob(size_t Size, IDataBlob **ppBlob) {
 }
 
 FRESULT CreateProxyBlob(size_t Size, const void *pData, IDataBlob **ppBlob) {
-    auto blob = MAKE_RC_OBJ0(ProxyDataBlobImpl)(Size, pData);
+    auto blob = MAKE_RC_OBJ(ProxyDataBlobImpl, Size, pData);
     if (ppBlob) {
+        *ppBlob = blob;
+        blob->AddRef();
+    }
+    blob->Release();
+    return FS_OK;
+}
+
+FRESULT CreateProxyBlobFromSource(IDataBlob *pSource, size_t Offset, size_t Size,
+                                  IDataBlob **ppBlob) {
+    auto blob = MAKE_RC_OBJ(ProxyRefDataBlobImpl, pSource, Offset, Size);
+    if(ppBlob) {
         *ppBlob = blob;
         blob->AddRef();
     }

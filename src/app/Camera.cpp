@@ -489,8 +489,9 @@ void ThirdPersonCamera::LookTo(dm::float3 cameraPos, dm::float3 cameraDir,
     SetRotation(azimuth, elevation);
 }
 
-BaseCamera* SwitchableCamera::GetActiveUserCamera()
-{
+SwitchableCamera::~SwitchableCamera() {}
+
+BaseCamera* SwitchableCamera::GetActiveUserCamera() {
     if (IsFirstPersonActive())
         return &m_FirstPerson;
 
@@ -521,7 +522,7 @@ dm::affine3 SwitchableCamera::GetWorldToViewMatrix() const
 
 bool SwitchableCamera::GetSceneCameraProjectionParams(float& verticalFov, float& zNear) const
 {
-    auto perspectiveCamera = std::dynamic_pointer_cast<engine::PerspectiveCamera>(m_SceneCamera);
+    auto perspectiveCamera = dynamic_cast<engine::PerspectiveCamera *>(m_SceneCamera.Get());
     if (perspectiveCamera)
     {
         zNear = perspectiveCamera->zNear;
@@ -575,7 +576,7 @@ void SwitchableCamera::SwitchToThirdPerson(bool copyView, std::optional<float> t
     m_SceneCamera = nullptr;
 }
 
-void SwitchableCamera::SwitchToSceneCamera(std::shared_ptr<engine::SceneCamera> const& sceneCamera)
+void SwitchableCamera::SwitchToSceneCamera(engine::SceneCamera* sceneCamera)
 {
     assert(!!sceneCamera);
     

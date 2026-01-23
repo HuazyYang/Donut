@@ -61,7 +61,7 @@ CascadedShadowMap::CascadedShadowMap(
 
     for (int cascade = 0; cascade < numCascades; cascade++)
     {
-        std::shared_ptr<PlanarShadowMap> planarShadowMap = std::make_shared<PlanarShadowMap>(device, m_ShadowMapTexture, cascade, cascadeViewport);
+        auto planarShadowMap = MAKE_RC_OBJ_PTR(PlanarShadowMap, device, m_ShadowMapTexture, (uint32_t)cascade, cascadeViewport);
         m_Cascades.push_back(planarShadowMap);
 
         m_CompositeView.AddView(planarShadowMap->GetPlanarView());
@@ -71,7 +71,7 @@ CascadedShadowMap::CascadedShadowMap(
 
     for (int object = 0; object < numPerObjectShadows; object++)
     {
-        std::shared_ptr<PlanarShadowMap> planarShadowMap = std::make_shared<PlanarShadowMap>(device, m_ShadowMapTexture, numCascades + object, cascadeViewport);
+        auto planarShadowMap = MAKE_RC_OBJ_PTR(PlanarShadowMap, device, m_ShadowMapTexture, (uint32_t)(numCascades + object), cascadeViewport);
         planarShadowMap->SetFalloffDistance(0.f); // disable falloff on per-object shadows: their bboxes are short by design
 
         m_PerObjectShadows.push_back(planarShadowMap);
@@ -337,7 +337,7 @@ uint32_t CascadedShadowMap::GetNumberOfCascades() const
 const IShadowMap* CascadedShadowMap::GetCascade(uint32_t index) const
 {
     if (static_cast<int>(index) < m_NumberOfCascades)
-        return m_Cascades[index].get();
+        return m_Cascades[index];
 
     return nullptr;
 }
@@ -350,7 +350,7 @@ uint32_t CascadedShadowMap::GetNumberOfPerObjectShadows() const
 const IShadowMap* CascadedShadowMap::GetPerObjectShadow(uint32_t index) const
 {
     if (static_cast<size_t>(index) < m_PerObjectShadows.size())
-        return m_PerObjectShadows[index].get();
+        return m_PerObjectShadows[index];
 
     return nullptr;
 }
@@ -382,7 +382,7 @@ void CascadedShadowMap::FillShadowConstants(struct ShadowConstants& constants) c
     assert(false);
 }
 
-std::shared_ptr<donut::engine::PlanarView> donut::render::CascadedShadowMap::GetCascadeView(uint32_t cascade)
+donut::engine::PlanarView* donut::render::CascadedShadowMap::GetCascadeView(uint32_t cascade)
 {
     if (static_cast<int>(cascade) < m_NumberOfCascades)
         return m_Cascades[cascade]->GetPlanarView();
@@ -390,7 +390,7 @@ std::shared_ptr<donut::engine::PlanarView> donut::render::CascadedShadowMap::Get
     return nullptr;
 }
 
-std::shared_ptr<donut::engine::PlanarView> donut::render::CascadedShadowMap::GetPerObjectView(uint32_t object)
+donut::engine::PlanarView* donut::render::CascadedShadowMap::GetPerObjectView(uint32_t object)
 {
     if (object < m_PerObjectShadows.size())
         return m_PerObjectShadows[object]->GetPlanarView();

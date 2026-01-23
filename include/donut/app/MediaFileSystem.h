@@ -23,9 +23,8 @@
 #pragma once
 
 #include <donut/core/vfs/VFS.h>
-
+#include <donut/core/object/AutoPtr.h>
 #include <filesystem>
-#include <memory>
 #include <vector>
 
 namespace donut::app
@@ -57,7 +56,7 @@ namespace donut::app
 	{
 	public:
 
-		MediaFileSystem(std::shared_ptr<IFileSystem> parent, const std::filesystem::path& path);
+		MediaFileSystem(vfs::IFileSystem *parent, const std::filesystem::path& path);
 
 		// searches media directories & packages for scene files & returns a set of unique paths
 		std::vector<std::string> GetAvailableScenes() const;
@@ -68,12 +67,12 @@ namespace donut::app
 
 		bool folderExists(const std::filesystem::path& name) override;
 		bool fileExists(const std::filesystem::path& name) override;
-		std::shared_ptr<vfs::IBlob> readFile(const std::filesystem::path& name) override;
+		FRESULT readFile(const std::filesystem::path& name, IDataBlob **ppBlob) override;
 		bool writeFile(const std::filesystem::path& name, const void* data, size_t size) override;
 		int enumerateFiles(const std::filesystem::path& path, const std::vector<std::string>& extensions, vfs::enumerate_callback_t callback, bool allowDuplicates = false) override;
 		int enumerateDirectories(const std::filesystem::path& path, vfs::enumerate_callback_t callback, bool allowDuplicates = false) override;
 
 	private:
-		std::vector<std::shared_ptr<vfs::IFileSystem>> m_FileSystems;
+		std::vector<AutoPtr<vfs::IFileSystem>> m_FileSystems;
 	};
 } // end namespace donut::app

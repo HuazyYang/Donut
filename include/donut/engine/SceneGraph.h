@@ -21,11 +21,11 @@
 */
 
 #pragma once
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <donut/engine/SceneTypes.h>
 #include <donut/engine/KeyframeAnimation.h>
 #include <donut/core/math/math.h>
-#include <memory>
 #include <unordered_map>
 #include <utility>
 #include <functional>
@@ -49,22 +49,21 @@ namespace donut::engine
         Animations = 0x20
     };
 
-    class SceneGraphLeaf
+    class SceneGraphLeaf: public WeakableImpl<IWeakable>
     {
     private:
         friend class SceneGraphNode;
-        std::weak_ptr<SceneGraphNode> m_Node;
+        WeakPtr<SceneGraphNode> m_Node;
 
     protected:
-        SceneGraphLeaf() = default;
 
     public:
+        using WeakableImpl::WeakableImpl;
         virtual ~SceneGraphLeaf() = default;
 
-        [[nodiscard]] SceneGraphNode* GetNode() const { return m_Node.lock().get(); }
-        [[nodiscard]] std::shared_ptr<SceneGraphNode> GetNodeSharedPtr() const { return m_Node.lock(); }
+        [[nodiscard]] SceneGraphNode* GetNode() const { return m_Node.Lock(); }
         [[nodiscard]] virtual dm::box3 GetLocalBoundingBox() { return dm::box3::empty(); }
-        [[nodiscard]] virtual std::shared_ptr<SceneGraphLeaf> Clone() = 0;
+        [[nodiscard]] virtual AutoPtr<SceneGraphLeaf> Clone() = 0;
         [[nodiscard]] virtual SceneContentFlags GetContentFlags() const { return SceneContentFlags::None; }
         [[nodiscard]] const std::string& GetName() const;
         void SetName(const std::string& name) const;
@@ -86,25 +85,25 @@ namespace donut::engine
         int m_GeometryInstanceIndex = -1;
 
     protected:
-        std::shared_ptr<MeshInfo> m_Mesh;
+        AutoPtr<MeshInfo> m_Mesh;
 
     public:
-        explicit MeshInstance(std::shared_ptr<MeshInfo> mesh)
-            : m_Mesh(std::move(mesh))
+        explicit MeshInstance(IWeakReference *pWeakRef, MeshInfo* mesh)
+            : SceneGraphLeaf(pWeakRef), m_Mesh(mesh)
         { }
 
-        [[nodiscard]] const std::shared_ptr<MeshInfo>& GetMesh() const { return m_Mesh; }
+        [[nodiscard]] MeshInfo* GetMesh() const { return m_Mesh; }
         [[nodiscard]] int GetInstanceIndex() const { return m_InstanceIndex; }
         [[nodiscard]] int GetGeometryInstanceIndex() const { return m_GeometryInstanceIndex; }
         [[nodiscard]] dm::box3 GetLocalBoundingBox() override { return m_Mesh->objectSpaceBounds; }
-        [[nodiscard]] std::shared_ptr<SceneGraphLeaf> Clone() override;
+        [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
         [[nodiscard]] SceneContentFlags GetContentFlags() const override;
         bool SetProperty(const std::string& name, const dm::float4& value) override;
     };
 
     struct SkinnedMeshJoint
     {
-        std::weak_ptr<SceneGraphNode> node;
+        WeakPtr<SceneGraphNode> node;
         dm::float4x4 inverseBindMatrix;
     };
 
@@ -112,9 +111,9 @@ namespace donut::engine
     {
     protected:
         friend class SceneGraph;
-        std::shared_ptr<MeshInfo> m_PrototypeMesh;
+        AutoPtr<MeshInfo> m_PrototypeMesh;
         uint32_t m_LastUpdateFrameIndex = 0;
-        std::shared_ptr<SceneTypeFactory> m_SceneTypeFactory;
+        AutoPtr<SceneTypeFactory> m_SceneTypeFactory;
 
     public:
         std::vector<SkinnedMeshJoint> joints;
@@ -122,11 +121,11 @@ namespace donut::engine
         nvrhi::BindingSetHandle skinningBindingSet;
         bool skinningInitialized = false;
 
-        explicit SkinnedMeshInstance(std::shared_ptr<SceneTypeFactory> sceneTypeFactory, std::shared_ptr<MeshInfo> prototypeMesh);
+        explicit SkinnedMeshInstance(IWeakReference *pWeakRef, SceneTypeFactory* sceneTypeFactory, MeshInfo* prototypeMesh);
 
-        [[nodiscard]] const std::shared_ptr<MeshInfo>& GetPrototypeMesh() const { return m_PrototypeMesh; }
+        [[nodiscard]] const MeshInfo* GetPrototypeMesh() const { return m_PrototypeMesh; }
         [[nodiscard]] uint32_t GetLastUpdateFrameIndex() const { return m_LastUpdateFrameIndex; }
-        [[nodiscard]] std::shared_ptr<SceneGraphLeaf> Clone() override;
+        [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
     };
 
     // This leaf is attached to the joint nodes for a skeleton, and it makes them point at the mesh.
@@ -136,10 +135,12 @@ namespace donut::engine
     {
     private:
         friend class SceneGraph;
-        std::weak_ptr<SkinnedMeshInstance> m_Instance;
+        WeakPtr<SkinnedMeshInstance> m_Instance;
     public:
-        explicit SkinnedMeshReference(std::shared_ptr<SkinnedMeshInstance> instance) : m_Instance(instance) { }
-        [[nodiscard]] std::shared_ptr<SceneGraphLeaf> Clone() override;
+       explicit SkinnedMeshReference(IWeakReference* pWeakRef,
+                                     SkinnedMeshInstance* instance)
+           : SceneGraphLeaf(pWeakRef), m_Instance(instance) {}
+       [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
     };
 
     class SceneCamera : public SceneGraphLeaf
@@ -149,6 +150,9 @@ namespace donut::engine
 
         [[nodiscard]] dm::affine3 GetViewToWorldMatrix() const;
         [[nodiscard]] dm::affine3 GetWorldToViewMatrix() const;
+
+    protected:
+       using SceneGraphLeaf::SceneGraphLeaf;
     };
 
     class PerspectiveCamera : public SceneCamera
@@ -159,7 +163,8 @@ namespace donut::engine
         std::optional<float> zFar; // use reverse infinite projection if not specified
         std::optional<float> aspectRatio;
 
-        [[nodiscard]] std::shared_ptr<SceneGraphLeaf> Clone() override;
+        using SceneCamera::SceneCamera;
+        [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
         void Load(const Json::Value& node) override;
         bool SetProperty(const std::string& name, const dm::float4& value) override;
     };
@@ -172,7 +177,8 @@ namespace donut::engine
         float xMag = 1.f;
         float yMag = 1.f;
 
-        [[nodiscard]] std::shared_ptr<SceneGraphLeaf> Clone() override;
+        using SceneCamera::SceneCamera;
+        [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
         void Load(const Json::Value& node) override;
         bool SetProperty(const std::string& name, const dm::float4& value) override;
     };
@@ -182,7 +188,7 @@ namespace donut::engine
     class Light : public SceneGraphLeaf
     {
     public:
-        std::shared_ptr<IShadowMap> shadowMap;
+        AutoPtr<IShadowMap> shadowMap;
         int shadowChannel = -1;
         dm::float3 color = dm::colors::white;
 
@@ -198,6 +204,9 @@ namespace donut::engine
 
         void SetPosition(const dm::double3& position) const;
         void SetDirection(const dm::double3& direction) const;
+    protected:
+       using SceneGraphLeaf::SceneGraphLeaf;
+       ~Light();
     };
 
     class DirectionalLight : public Light
@@ -205,9 +214,10 @@ namespace donut::engine
     public:
         float irradiance = 1.f; // Target illuminance (lm/m2) of surfaces lit by this light; multiplied by `color`.
         float angularSize = 0.f; // Angular size of the light source, in degrees.
-        std::vector<std::shared_ptr<IShadowMap>> perObjectShadows;
+        std::vector<AutoPtr<IShadowMap>> perObjectShadows;
 
-        [[nodiscard]] std::shared_ptr<SceneGraphLeaf> Clone() override;
+        using Light::Light;
+        [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
         [[nodiscard]] int GetLightType() const override { return LightType_Directional; }
         void FillLightConstants(LightConstants& lightConstants) const override;
         void Load(const Json::Value& node) override;
@@ -224,7 +234,8 @@ namespace donut::engine
         float innerAngle = 180.f;    // Apex angle of the full-bright cone, in degrees; constant intensity inside the inner cone, smooth falloff between inside and outside.
         float outerAngle = 180.f;    // Apex angle of the light cone, in degrees - everything outside of that cone is dark.
 
-        [[nodiscard]] std::shared_ptr<SceneGraphLeaf> Clone() override;
+        using Light::Light;
+        [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
         [[nodiscard]] int GetLightType() const override { return LightType_Spot; }
         void FillLightConstants(LightConstants& lightConstants) const override;
         void Load(const Json::Value& node) override;
@@ -239,7 +250,8 @@ namespace donut::engine
         float radius = 0.f;    // Radius of the light sphere, in world units.
         float range = 0.f;     // Range of influence for the light. 0 means infinite range.
 
-        [[nodiscard]] std::shared_ptr<SceneGraphLeaf> Clone() override;
+        using Light::Light;
+        [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
         [[nodiscard]] int GetLightType() const override { return LightType_Point; }
         void FillLightConstants(LightConstants& lightConstants) const override;
         void Load(const Json::Value& node) override;
@@ -247,7 +259,7 @@ namespace donut::engine
         bool SetProperty(const std::string& name, const dm::float4& value) override;
     };
     
-    class SceneGraphNode final : public std::enable_shared_from_this<SceneGraphNode>
+    class SceneGraphNode final : public WeakableImpl<IWeakable>
     {
     public:
         enum struct DirtyFlags : uint32_t
@@ -265,10 +277,10 @@ namespace donut::engine
 
     private:
         friend class SceneGraph;
-        std::weak_ptr<SceneGraph> m_Graph;
+        WeakPtr<SceneGraph> m_Graph;
         SceneGraphNode* m_Parent = nullptr;
-        std::vector<std::shared_ptr<SceneGraphNode>> m_Children;
-        std::shared_ptr<SceneGraphLeaf> m_Leaf;
+        std::vector<AutoPtr<SceneGraphNode>> m_Children;
+        AutoPtr<SceneGraphLeaf> m_Leaf;
 
         std::string m_Name;
         dm::daffine3 m_LocalTransform = dm::daffine3::identity();
@@ -290,14 +302,17 @@ namespace donut::engine
         void PropagateDirtyFlags(SceneGraphNode::DirtyFlags flags);
 
     public:
-        SceneGraphNode() = default;
-        /* non-virtual */ ~SceneGraphNode() = default;
+       SceneGraphNode(IWeakReference* pWeakRef)
+           : WeakableImpl<IWeakable>(pWeakRef) {}
+       /* non-virtual */ ~SceneGraphNode() = default;
 
-        [[nodiscard]] const dm::dquat& GetRotation() const { return m_Rotation; }
-        [[nodiscard]] const dm::double3& GetScaling() const { return m_Scaling; }
-        [[nodiscard]] const dm::double3& GetTranslation() const { return m_Translation; }
+       [[nodiscard]] const dm::dquat& GetRotation() const { return m_Rotation; }
+       [[nodiscard]] const dm::double3& GetScaling() const { return m_Scaling; }
+       [[nodiscard]] const dm::double3& GetTranslation() const { return m_Translation; }
 
-        [[nodiscard]] const dm::daffine3& GetLocalToParentTransform() const { return m_LocalTransform; }
+       [[nodiscard]] const dm::daffine3& GetLocalToParentTransform() const {
+           return m_LocalTransform;
+       }
         [[nodiscard]] const dm::daffine3& GetLocalToWorldTransform() const { return m_GlobalTransform; }
         [[nodiscard]] const dm::affine3& GetLocalToWorldTransformFloat() const { return m_GlobalTransformFloat; }
         [[nodiscard]] const dm::daffine3& GetPrevLocalToParentTransform() const { return m_PrevLocalTransform; }
@@ -309,12 +324,12 @@ namespace donut::engine
         [[nodiscard]] SceneContentFlags GetSubgraphContentFlags() const { return m_SubgraphContent; }
 
         [[nodiscard]] SceneGraphNode* GetParent() const { return m_Parent; }
-        [[nodiscard]] SceneGraphNode* GetChild(size_t index) const { return (index < m_Children.size()) ? m_Children[index].get() : nullptr; }
+        [[nodiscard]] SceneGraphNode* GetChild(size_t index) const { return (index < m_Children.size()) ? m_Children[index] : nullptr; }
         [[nodiscard]] size_t GetNumChildren() const { return m_Children.size(); }
-        [[nodiscard]] const std::shared_ptr<SceneGraphLeaf>& GetLeaf() const { return m_Leaf; }
+        [[nodiscard]] SceneGraphLeaf* GetLeaf() const { return m_Leaf; }
 
         [[nodiscard]] const std::string& GetName() const { return m_Name; }
-        [[nodiscard]] std::shared_ptr<SceneGraph> GetGraph() const { return m_Graph.lock(); }
+        [[nodiscard]] SceneGraph* GetGraph() const { return m_Graph.Lock(); }
 
         [[nodiscard]] std::filesystem::path GetPath() const;
 
@@ -324,7 +339,7 @@ namespace donut::engine
         void SetScaling(const dm::double3& scaling);
         void SetRotation(const dm::dquat& rotation);
         void SetTranslation(const dm::double3& translation);
-        void SetLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf);
+        void SetLeaf(SceneGraphLeaf* leaf);
         void SetName(const std::string& name);
 
         // Non-copyable and non-movable
@@ -399,33 +414,33 @@ namespace donut::engine
         LeafProperty
     };
 
-    class SceneGraphAnimationChannel
+    class SceneGraphAnimationChannel: public ObjectImpl<IObject>
     {
     private:
-        std::shared_ptr<animation::Sampler> m_Sampler;
-        std::weak_ptr<SceneGraphNode> m_TargetNode;
-        std::weak_ptr<Material> m_TargetMaterial;
+        AutoPtr<animation::Sampler> m_Sampler;
+        WeakPtr<SceneGraphNode> m_TargetNode;
+        WeakPtr<Material> m_TargetMaterial;
         AnimationAttribute m_Attribute;
         std::string m_LeafPropertyName;
 
     public:
-        SceneGraphAnimationChannel(std::shared_ptr<animation::Sampler> sampler, const std::shared_ptr<SceneGraphNode>& targetNode, AnimationAttribute attribute)
-            : m_Sampler(std::move(sampler))
+        SceneGraphAnimationChannel(animation::Sampler* sampler, SceneGraphNode* targetNode, AnimationAttribute attribute)
+            : m_Sampler(sampler)
             , m_TargetNode(targetNode)
             , m_Attribute(attribute)
         { }
-        SceneGraphAnimationChannel(std::shared_ptr<animation::Sampler> sampler, const std::shared_ptr<Material>& targetMaterial)
-            : m_Sampler(std::move(sampler))
+        SceneGraphAnimationChannel(animation::Sampler* sampler, Material* targetMaterial)
+            : m_Sampler(sampler)
             , m_TargetMaterial(targetMaterial)
             , m_Attribute(AnimationAttribute::LeafProperty)
         { }
 
         [[nodiscard]] bool IsValid() const;
-        [[nodiscard]] const std::shared_ptr<animation::Sampler>& GetSampler() const { return m_Sampler; }
+        [[nodiscard]] animation::Sampler* GetSampler() const { return m_Sampler; }
         [[nodiscard]] AnimationAttribute GetAttribute() const { return m_Attribute; }
-        [[nodiscard]] std::shared_ptr<SceneGraphNode> GetTargetNode() const { return m_TargetNode.lock(); }
+        [[nodiscard]] SceneGraphNode* GetTargetNode() const { return m_TargetNode.Lock(); }
         [[nodiscard]] const std::string& GetLeafPropertyName() const { return m_LeafPropertyName; }
-        void SetTargetNode(const std::shared_ptr<SceneGraphNode>& node) { m_TargetNode = node; }
+        void SetTargetNode(SceneGraphNode* node) { m_TargetNode = node; }
         void SetLeafProperyName(const std::string& name) { m_LeafPropertyName = name; }
         bool Apply(float time) const;  // NOLINT(modernize-use-nodiscard)
     };
@@ -433,19 +448,21 @@ namespace donut::engine
     class SceneGraphAnimation : public SceneGraphLeaf
     {
     private:
-        std::vector<std::shared_ptr<SceneGraphAnimationChannel>> m_Channels;
+        std::vector<AutoPtr<SceneGraphAnimationChannel>> m_Channels;
         float m_Duration = 0.f;
 
     public:
-        SceneGraphAnimation() = default;
+       using SceneGraphLeaf::SceneGraphLeaf;
 
-        [[nodiscard]] std::shared_ptr<SceneGraphLeaf> Clone() override;
-        [[nodiscard]] SceneContentFlags GetContentFlags() const override { return SceneContentFlags::Animations; }
-        [[nodiscard]] const std::vector<std::shared_ptr<SceneGraphAnimationChannel>>& GetChannels() const { return m_Channels; }
+       [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
+       [[nodiscard]] SceneContentFlags GetContentFlags() const override {
+           return SceneContentFlags::Animations;
+       }
+        [[nodiscard]] const std::vector<AutoPtr<SceneGraphAnimationChannel>>& GetChannels() const { return m_Channels; }
         [[nodiscard]] float GetDuration() const { return m_Duration; }
         [[nodiscard]] bool IsVald() const;
         bool Apply(float time) const;  // NOLINT(modernize-use-nodiscard)
-        void AddChannel(const std::shared_ptr<SceneGraphAnimationChannel>& channel);
+        void AddChannel(SceneGraphAnimationChannel* channel);
     };
 
     // A container that tracks unique resources of the same type used by some entity, for example unique meshes used in a scene graph.
@@ -455,8 +472,8 @@ namespace donut::engine
     class ResourceTracker
     {
     private:
-        std::unordered_map<std::shared_ptr<T>, uint32_t> m_Map;
-        using UnderlyingConstIterator = typename std::unordered_map<std::shared_ptr<T>, uint32_t>::const_iterator;
+        std::unordered_map<AutoPtr<T>, uint32_t> m_Map;
+        using UnderlyingConstIterator = typename std::unordered_map<AutoPtr<T>, uint32_t>::const_iterator;
 
     public:
         class ConstIterator
@@ -469,24 +486,24 @@ namespace donut::engine
             ConstIterator operator++(int) { ConstIterator res = *this; ++m_Iter; return res; }
             bool operator==(ConstIterator other) const { return m_Iter == other.m_Iter; }
             bool operator!=(ConstIterator other) const { return !(*this == other); }
-            const std::shared_ptr<T>& operator*() { return m_Iter->first; }
+            T* operator*() { return m_Iter->first; }
         };
 
         // Adds a reference to the specified resource.
         // Returns true if this is the first reference, i.e. if the resource has just been added to the tracker.
-        bool AddRef(const std::shared_ptr<T>& resource)
+        bool AddRef(const T *resource)
         {
             if (!resource) return false;
-            uint32_t refCount = ++m_Map[resource];
+            uint32_t refCount = ++m_Map[const_cast<T *>(resource)];
             return (refCount == 1);
         }
 
         // Removes a reference from the specified resource.
         // Returns true if this was the last reference, i.e. if the resource has just been removed from the tracker.
-        bool Release(const std::shared_ptr<T>& resource)
+        bool Release(const T* resource)
         {
             if (!resource) return false;
-            auto it = m_Map.find(resource);
+            auto it = m_Map.find(const_cast<T *>(resource));
             if (it == m_Map.end())
             {
                 assert(false); // trying to release an object not owned by this tracker
@@ -513,91 +530,93 @@ namespace donut::engine
     };
 
     template<typename T>
-    using SceneResourceCallback = std::function<void(const std::shared_ptr<T>&)>;
+    using SceneResourceCallback = std::function<void(const T*)>;
     
-    class SceneGraph : public std::enable_shared_from_this<SceneGraph>
+    class SceneGraph : public WeakableImpl<IWeakable>
     {
     private:
         friend class SceneGraphNode;
-        std::shared_ptr<SceneGraphNode> m_Root;
+        AutoPtr<SceneGraphNode> m_Root;
         ResourceTracker<Material> m_Materials;
         ResourceTracker<MeshInfo> m_Meshes;
         size_t m_GeometryCount = 0;
         size_t m_MaxGeometryCountPerMesh = 0;
         size_t m_GeometryInstancesCount = 0;
-        std::vector<std::shared_ptr<MeshInstance>> m_MeshInstances;
-        std::vector<std::shared_ptr<SkinnedMeshInstance>> m_SkinnedMeshInstances;
-        std::vector<std::shared_ptr<SceneGraphAnimation>> m_Animations;
-        std::vector<std::shared_ptr<SceneCamera>> m_Cameras;
-        std::vector<std::shared_ptr<Light>> m_Lights;
+        std::vector<AutoPtr<MeshInstance>> m_MeshInstances;
+        std::vector<AutoPtr<SkinnedMeshInstance>> m_SkinnedMeshInstances;
+        std::vector<AutoPtr<SceneGraphAnimation>> m_Animations;
+        std::vector<AutoPtr<SceneCamera>> m_Cameras;
+        std::vector<AutoPtr<Light>> m_Lights;
         
     protected:
-        virtual void RegisterLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf);
-        virtual void UnregisterLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf);
+        virtual void RegisterLeaf(SceneGraphLeaf *leaf);
+        virtual void UnregisterLeaf(SceneGraphLeaf *leaf);
 
     public:
-        SceneGraph() = default;
-        virtual ~SceneGraph() = default;
+       SceneGraph(IWeakReference* pWeakRef)
+           : WeakableImpl<IWeakable>(pWeakRef) {}
 
-        SceneResourceCallback<MeshInfo> OnMeshAdded;
-        SceneResourceCallback<MeshInfo> OnMeshRemoved;
-        SceneResourceCallback<Material> OnMaterialAdded;
-        SceneResourceCallback<Material> OnMaterialRemoved;
+       SceneResourceCallback<MeshInfo> OnMeshAdded;
+       SceneResourceCallback<MeshInfo> OnMeshRemoved;
+       SceneResourceCallback<Material> OnMaterialAdded;
+       SceneResourceCallback<Material> OnMaterialRemoved;
 
-        [[nodiscard]] const std::shared_ptr<SceneGraphNode>& GetRootNode() const { return m_Root; }
-        [[nodiscard]] const ResourceTracker<Material>& GetMaterials() const { return m_Materials; }
+       [[nodiscard]] SceneGraphNode* GetRootNode() { return m_Root; }
+       [[nodiscard]] const ResourceTracker<Material>& GetMaterials() const {
+           return m_Materials;
+       }
         [[nodiscard]] const ResourceTracker<MeshInfo>& GetMeshes() const { return m_Meshes; }
         [[nodiscard]] const size_t GetGeometryCount() const { return m_GeometryCount; }
         [[nodiscard]] const size_t GetMaxGeometryCountPerMesh() const { return m_MaxGeometryCountPerMesh; }
         [[nodiscard]] const size_t GetGeometryInstancesCount() const { return m_GeometryInstancesCount; }
-        [[nodiscard]] const std::vector<std::shared_ptr<MeshInstance>>& GetMeshInstances() const { return m_MeshInstances; }
-        [[nodiscard]] const std::vector<std::shared_ptr<SkinnedMeshInstance>>& GetSkinnedMeshInstances() const { return m_SkinnedMeshInstances; }
-        [[nodiscard]] const std::vector<std::shared_ptr<SceneGraphAnimation>>& GetAnimations() const { return m_Animations; }
-        [[nodiscard]] const std::vector<std::shared_ptr<SceneCamera>>& GetCameras() const { return m_Cameras; }
-        [[nodiscard]] const std::vector<std::shared_ptr<Light>>& GetLights() const { return m_Lights; }
+        [[nodiscard]] const std::vector<AutoPtr<MeshInstance>>& GetMeshInstances() const { return m_MeshInstances; }
+        [[nodiscard]] const std::vector<AutoPtr<SkinnedMeshInstance>>& GetSkinnedMeshInstances() const { return m_SkinnedMeshInstances; }
+        [[nodiscard]] const std::vector<AutoPtr<SceneGraphAnimation>>& GetAnimations() const { return m_Animations; }
+        [[nodiscard]] const std::vector<AutoPtr<SceneCamera>>& GetCameras() const { return m_Cameras; }
+        [[nodiscard]] const std::vector<AutoPtr<Light>>& GetLights() const { return m_Lights; }
         [[nodiscard]] bool HasPendingStructureChanges() const { return m_Root && (m_Root->m_Dirty & SceneGraphNode::DirtyFlags::SubgraphStructure) != 0; }
         [[nodiscard]] bool HasPendingTransformChanges() const { return m_Root && (m_Root->m_Dirty & (SceneGraphNode::DirtyFlags::SubgraphTransforms | SceneGraphNode::DirtyFlags::SubgraphPrevTransforms)) != 0; }
 
         // Replaces the current root node of the graph with the new one.
-        std::shared_ptr<SceneGraphNode> SetRootNode(const std::shared_ptr<SceneGraphNode>& root);
+        AutoPtr<SceneGraphNode> SetRootNode(SceneGraphNode *root);
         
         // Attaches a node and its subgraph to the parent.
         // If the node is already attached to this or other graph, a deep copy of the subgraph is made first.
-        std::shared_ptr<SceneGraphNode> Attach(const std::shared_ptr<SceneGraphNode>& parent, const std::shared_ptr<SceneGraphNode>& child);
+        AutoPtr<SceneGraphNode> Attach(SceneGraphNode *parent, SceneGraphNode* child);
         
         // Creates a node holding the provided leaf and attaches it to the parent.
-        std::shared_ptr<SceneGraphNode> AttachLeafNode(const std::shared_ptr<SceneGraphNode>& parent, const std::shared_ptr<SceneGraphLeaf>& leaf);
+        AutoPtr<SceneGraphNode> AttachLeafNode(SceneGraphNode* parent,SceneGraphLeaf* leaf);
         
         // Removes the node and its subgraph from the graph.
         // When preserveOrder is 'false', the order of node's siblings may be changed during this operation to improve performance.
-        std::shared_ptr<SceneGraphNode> Detach(const std::shared_ptr<SceneGraphNode>& node, bool preserveOrder = false);
+        AutoPtr<SceneGraphNode> Detach(SceneGraphNode* node, bool preserveOrder = false);
 
         // Finds a node whose path (sequence of nested node names) matches the provided path,
         // relative to the 'context' node or the root if 'context' is NULL.
         // If the path starts with / the search starts at the root, and the 'context' parameter is ignored.
         // Parent references with .. are supported.
         // If multiple nodes within one parent have the same name matching that component of the path, only the first node will be considered.
-        [[nodiscard]] std::shared_ptr<SceneGraphNode> FindNode(const std::filesystem::path& path, SceneGraphNode* context = nullptr) const;
+        [[nodiscard]] SceneGraphNode* FindNode(const std::filesystem::path& path, SceneGraphNode* context = nullptr) const;
         
         void Refresh(uint32_t frameIndex);
     };
 
     struct SceneImportResult
     {
-        std::shared_ptr<SceneGraphNode> rootNode;
+        AutoPtr<SceneGraphNode> rootNode;
     };
 
-    class SceneTypeFactory
+    class SceneTypeFactory: public ObjectImpl<IObject>
     {
     public:
         virtual ~SceneTypeFactory() = default;
-        virtual std::shared_ptr<SceneGraphLeaf> CreateLeaf(const std::string& type);
-        virtual std::shared_ptr<Material> CreateMaterial();
-        virtual std::shared_ptr<MeshInfo> CreateMesh();
-        virtual std::shared_ptr<MeshGeometry> CreateMeshGeometry();
-        virtual std::shared_ptr<MeshInstance> CreateMeshInstance(const std::shared_ptr<MeshInfo>& mesh);
-        virtual std::shared_ptr<SkinnedMeshInstance> CreateSkinnedMeshInstance(const std::shared_ptr<SceneTypeFactory> & sceneTypeFactory, const std::shared_ptr<MeshInfo> & prototypeMesh);
+        virtual AutoPtr<SceneGraphLeaf> CreateLeaf(const std::string& type);
+        virtual AutoPtr<Material> CreateMaterial();
+        virtual AutoPtr<MeshInfo> CreateMesh();
+        virtual AutoPtr<MeshGeometry> CreateMeshGeometry();
+        virtual AutoPtr<MeshInstance> CreateMeshInstance(MeshInfo* mesh);
+        virtual AutoPtr<SkinnedMeshInstance> CreateSkinnedMeshInstance(SceneTypeFactory *sceneTypeFactory, MeshInfo *prototypeMesh);
     };
 
-    void PrintSceneGraph(const std::shared_ptr<SceneGraphNode>& root);
+    void PrintSceneGraph(const SceneGraphNode* root);
 }

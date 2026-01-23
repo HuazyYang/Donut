@@ -67,11 +67,11 @@ void test_native_filesystem()
 
 	// readFile
 	{		
-		std::shared_ptr<vfs::IBlob> blob = fs.readFile(rpath / "src/core/test_vfs.cpp");
-		CHECK(blob.use_count()>0);
-		CHECK(blob->size() > 0);
+		donut::AutoPtr<donut::IDataBlob> blob;
+        CHECK(FSUCCEEDED(fs.readFile(rpath / "src/core/test_vfs.cpp", &blob)));
+		CHECK(blob->GetSize() > 0);
 
-		std::string data = (char const*)blob->data();
+		std::string data = (char const*)blob->GetDataPtr();
 		CHECK(data.find("***HELLO WORLD***")!=std::string::npos);
 	}
 }
@@ -79,7 +79,7 @@ void test_native_filesystem()
 void test_relative_filesystem()
 {
 
-	std::shared_ptr<vfs::NativeFileSystem> fs = std::make_shared<vfs::NativeFileSystem>();
+	auto fs = MAKE_RC_OBJ_PTR(vfs::NativeFileSystem);
 	vfs::RelativeFileSystem relativeFS(fs, rpath);
 
 	// folderExists
@@ -114,8 +114,8 @@ void test_relative_filesystem()
 	}
 	// readFile
 	{
-		std::shared_ptr<vfs::IBlob> blob = relativeFS.readFile("src/core/test_vfs.cpp");
-		CHECK(blob.use_count() > 0);
+		donut::AutoPtr<donut::IDataBlob> blob;
+		CHECK(FSUCCEEDED(relativeFS.readFile("src/core/test_vfs.cpp", &blob)));
 		CHECK(blob->size() > 0);
 
 		std::string data = (char const*)blob->data();
@@ -163,7 +163,8 @@ void test_root_filesystem()
 	}
 	// readFile
 	{
-		std::shared_ptr<vfs::IBlob> blob = rootFS.readFile("/tests/src/core/test_vfs.cpp");
+		donut::AutoPtr<donut::IDataBlob> blob;
+		CHECK(FSUCCEEDED(rootFS.readFile("/tests/src/core/test_vfs.cpp", &blob)));
 		CHECK(blob.use_count() > 0);
 		CHECK(blob->size() > 0);
 

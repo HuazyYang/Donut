@@ -62,9 +62,9 @@ using namespace donut::render;
 
 ForwardShadingPass::ForwardShadingPass(
     nvrhi::IDevice* device,
-    std::shared_ptr<CommonRenderPasses> commonPasses)
+    CommonRenderPasses *commonPasses)
     : m_Device(device)
-    , m_CommonPasses(std::move(commonPasses))
+    , m_CommonPasses(commonPasses)
 {
     m_IsDX11 = m_Device->getGraphicsAPI() == nvrhi::GraphicsAPI::D3D11;
 }
@@ -303,7 +303,7 @@ nvrhi::GraphicsPipelineHandle ForwardShadingPass::CreateGraphicsPipeline(Forward
     return m_Device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
 }
 
-std::shared_ptr<MaterialBindingCache> ForwardShadingPass::CreateMaterialBindingCache(CommonRenderPasses& commonPasses)
+donut::AutoPtr<MaterialBindingCache> ForwardShadingPass::CreateMaterialBindingCache(CommonRenderPasses& commonPasses)
 {
     std::vector<MaterialResourceBinding> materialBindings = {
         { MaterialResource::ConstantBuffer,         FORWARD_BINDING_MATERIAL_CONSTANTS },
@@ -316,15 +316,14 @@ std::shared_ptr<MaterialBindingCache> ForwardShadingPass::CreateMaterialBindingC
         { MaterialResource::OpacityTexture,         FORWARD_BINDING_MATERIAL_OPACITY_TEXTURE }
     };
 
-    return std::make_shared<MaterialBindingCache>(
+    return MAKE_RC_OBJ_PTR(MaterialBindingCache,
         m_Device,
         nvrhi::ShaderType::Pixel,
-        /* registerSpace = */ FORWARD_SPACE_MATERIAL,
+        /* registerSpace = */ (uint32_t)FORWARD_SPACE_MATERIAL,
         /* registerSpaceIsDescriptorSet = */ true,
         materialBindings,
         commonPasses.m_AnisotropicWrapSampler,
-        commonPasses.m_GrayTexture,
-        commonPasses.m_BlackTexture);
+        commonPasses.m_GrayTexture);
 }
 
 void ForwardShadingPass::SetupView(
@@ -347,10 +346,10 @@ void ForwardShadingPass::SetupView(
 void ForwardShadingPass::PrepareLights(
     Context& context,
     nvrhi::ICommandList* commandList,
-    const std::vector<std::shared_ptr<Light>>& lights,
+    const std::vector<donut::AutoPtr<Light>>& lights,
     dm::float3 ambientColorTop,
     dm::float3 ambientColorBottom,
-    const std::vector<std::shared_ptr<LightProbe>>& lightProbes)
+    const std::vector<donut::AutoPtr<LightProbe>>& lightProbes)
 {
     nvrhi::ITexture* shadowMapTexture = nullptr;
     int2 shadowMapTextureSize = 0;

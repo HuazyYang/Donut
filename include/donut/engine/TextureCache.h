@@ -29,13 +29,11 @@
 #include <atomic>
 #include <filesystem>
 #include <unordered_map>
-#include <memory>
 #include <shared_mutex>
 #include <queue>
 
 namespace donut::vfs
 {
-    class IBlob;
     class IFileSystem;
 }
 
@@ -54,7 +52,7 @@ namespace donut::engine
 
     struct TextureData : public LoadedTexture
     {
-        std::shared_ptr<vfs::IBlob> data;
+        AutoPtr<IDataBlob> data;
 
         nvrhi::Format format = nvrhi::Format::UNKNOWN;
         uint32_t width = 1;
@@ -70,19 +68,19 @@ namespace donut::engine
         std::vector<std::vector<TextureSubresourceData>> dataLayout;
     };
 
-    class TextureCache
+    class TextureCache: public ObjectImpl<IObject>
     {
     protected:
         nvrhi::DeviceHandle m_Device;
         nvrhi::CommandListHandle m_CommandList;
-        std::unordered_map<std::string, std::shared_ptr<TextureData>> m_LoadedTextures;
+        std::unordered_map<std::string, AutoPtr<TextureData>> m_LoadedTextures;
         mutable std::shared_mutex m_LoadedTexturesMutex;
 
-        std::queue<std::shared_ptr<TextureData>> m_TexturesToFinalize;
-        std::shared_ptr<DescriptorTableManager> m_DescriptorTable;
+        std::queue<AutoPtr<TextureData>> m_TexturesToFinalize;
+        AutoPtr<DescriptorTableManager> m_DescriptorTable;
         std::mutex m_TexturesToFinalizeMutex;
 
-        std::shared_ptr<vfs::IFileSystem> m_fs;
+        AutoPtr<vfs::IFileSystem> m_fs;
 
         uint32_t m_MaxTextureSize = 0;
 
@@ -95,28 +93,28 @@ namespace donut::engine
         std::atomic<uint32_t> m_TexturesLoaded = 0;
         uint32_t m_TexturesFinalized = 0;
 
-        bool FindTextureInCache(const std::filesystem::path& path, std::shared_ptr<TextureData>& texture);
-        std::shared_ptr<vfs::IBlob> ReadTextureFile(const std::filesystem::path& path) const;
+        bool FindTextureInCache(const std::filesystem::path& path, TextureData **texture);
+        AutoPtr<IDataBlob> ReadTextureFile(const std::filesystem::path& path) const;
 
         bool FillTextureData(
-            const std::shared_ptr<vfs::IBlob>& fileData,
-            const std::shared_ptr<TextureData>& texture,
+            IDataBlob* fileData,
+            TextureData *texture,
             const std::string& extension,
             const std::string& mimeType) const;
 
         void FinalizeTexture(
-            std::shared_ptr<TextureData> texture,
+            TextureData *texture,
             CommonRenderPasses* passes,
             nvrhi::ICommandList* commandList);
 
-        virtual void TextureLoaded(std::shared_ptr<TextureData> texture);
-        virtual std::shared_ptr<TextureData> CreateTextureData();
+        virtual void TextureLoaded(TextureData *texture);
+        virtual AutoPtr<TextureData> CreateTextureData();
 
     public:
         TextureCache(
             nvrhi::IDevice* device,
-            std::shared_ptr<vfs::IFileSystem> fs,
-            std::shared_ptr<DescriptorTableManager> descriptorTable);
+            vfs::IFileSystem* fs,
+            DescriptorTableManager* descriptorTable);
         virtual ~TextureCache();
 
         // Release all cached textures
@@ -124,34 +122,34 @@ namespace donut::engine
 
         // Synchronous read and decode, synchronous upload and mip generation on a given command list (must be open).
         // The `passes` argument is optional, and mip generation is disabled if it's NULL.
-        virtual std::shared_ptr<LoadedTexture> LoadTextureFromFile(
+        virtual AutoPtr<LoadedTexture> LoadTextureFromFile(
             const std::filesystem::path& path,
             bool sRGB,
             CommonRenderPasses* passes,
             nvrhi::ICommandList* commandList);
 
         // Synchronous read and decode, deferred upload and mip generation (in the ProcessRenderingThreadCommands queue).
-        virtual std::shared_ptr<LoadedTexture> LoadTextureFromFileDeferred(
+        virtual AutoPtr<LoadedTexture> LoadTextureFromFileDeferred(
             const std::filesystem::path& path,
             bool sRGB);
 
         // Asynchronous read and decode, deferred upload and mip generation (in the ProcessRenderingThreadCommands queue).
-        virtual std::shared_ptr<LoadedTexture> LoadTextureFromFileAsync(
+        virtual AutoPtr<LoadedTexture> LoadTextureFromFileAsync(
             const std::filesystem::path& path,
             bool sRGB,
             ThreadPool& threadPool);
 
         // Same as LoadTextureFromFileAsync, but using a memory blob and MIME type instead of file name, and uncached.
-        virtual std::shared_ptr<LoadedTexture> LoadTextureFromMemoryAsync(
-            const std::shared_ptr<vfs::IBlob>& data,
+        virtual AutoPtr<LoadedTexture> LoadTextureFromMemoryAsync(
+            IDataBlob *data,
             const std::string& name,
             const std::string& mimeType,
             bool sRGB,
             ThreadPool& threadPool);
 
         // Same as LoadTextureFromFile, but using a memory blob and MIME type instead of file name, and uncached.
-        virtual std::shared_ptr<LoadedTexture> LoadTextureFromMemory(
-            const std::shared_ptr<vfs::IBlob>& data,
+        virtual AutoPtr<LoadedTexture> LoadTextureFromMemory(
+            IDataBlob *data,
             const std::string& name,
             const std::string& mimeType,
             bool sRGB,
@@ -159,8 +157,8 @@ namespace donut::engine
             nvrhi::ICommandList* commandList);
 
         // Same as LoadTextureFromFileDeferred, but using a memory blob and MIME type instead of file name, and uncached.
-        virtual std::shared_ptr<LoadedTexture> LoadTextureFromMemoryDeferred(
-            const std::shared_ptr<vfs::IBlob>& data,
+        virtual AutoPtr<LoadedTexture> LoadTextureFromMemoryDeferred(
+            IDataBlob *data,
             const std::string& name,
             const std::string& mimeType,
             bool sRGB);
@@ -168,16 +166,16 @@ namespace donut::engine
         // Tells if the texture has been loaded from file successfully and its data is available in the texture object.
         // After the texture is finalized and uploaded to the GPU, the data is no longer available on the CPU,
         // and this function returns false.
-        bool IsTextureLoaded(const std::shared_ptr<LoadedTexture>& texture);
+        bool IsTextureLoaded(LoadedTexture *texture);
 
         // Tells if the texture has been uploaded to the GPU
-        bool IsTextureFinalized(const std::shared_ptr<LoadedTexture>& texture);
+        bool IsTextureFinalized(LoadedTexture *texture);
 
         // Removes the texture from cache. The texture must *not* be in the deferred finalization queue when it's unloaded.
         // Returns true if the texture has been found and removed from the cache, false otherwise.
         // Note: Any existing handles for the texture remain valid after the texture is unloaded.
         //       Texture lifetimes are tracked by NVRHI and the texture object is only destroyed when no references exist.
-        bool UnloadTexture(const std::shared_ptr<LoadedTexture>& texture);
+        bool UnloadTexture(LoadedTexture *texture);
 
         // Process a portion of the upload queue, taking up to `timeLimitMilliseconds` CPU time.
         // If `timeLimitMilliseconds` is 0, processes the entire queue.
@@ -204,14 +202,14 @@ namespace donut::engine
         uint32_t GetNumberOfRequestedTextures() { return m_TexturesRequested.load(); }
         uint32_t GetNumberOfFinalizedTextures() { return m_TexturesFinalized; }
 
-		std::shared_ptr<TextureData> GetLoadedTexture(std::filesystem::path const& path);
+		AutoPtr<TextureData> GetLoadedTexture(std::filesystem::path const& path);
 
 		// Texture cache traversal
 		// Note: the iterator locks all cache write-accesses for the duration its lifespan !
 		class Iterator
 		{
 		public:
-			typedef std::unordered_map<std::string, std::shared_ptr<TextureData>>::iterator CacheIter;
+			typedef std::unordered_map<std::string, AutoPtr<TextureData>>::iterator CacheIter;
 
 			Iterator& operator++() { ++m_Iterator; return *this; }
 			

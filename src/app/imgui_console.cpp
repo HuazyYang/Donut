@@ -71,7 +71,7 @@ static ImVec4 getSeverityColor(donut::log::Severity severity)
 	return ImVec4(1.f, 1.f, 1.f, 1.f);
 }
 
-ImGui_Console::ImGui_Console(std::shared_ptr<console::Interpreter> interpreter, Options const& options) 
+ImGui_Console::ImGui_Console(console::Interpreter* interpreter, Options const& options) 
 	: m_Options(options)
 	, m_Interpreter(interpreter)
 {

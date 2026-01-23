@@ -23,7 +23,6 @@
 #pragma once
 
 #include <donut/engine/SceneGraph.h>
-#include <memory>
 #include <vector>
 
 namespace donut::engine
@@ -35,11 +34,11 @@ namespace donut::render
 {
     struct DrawItem;
 
-    class IDrawStrategy
+    class IDrawStrategy: public ObjectImpl<IObject>
     {
     public:
         virtual void PrepareForView(
-            const std::shared_ptr<engine::SceneGraphNode>& rootNode,
+            engine::SceneGraphNode* rootNode,
             const engine::IView& view) = 0;
 
         virtual const DrawItem* GetNextItem() = 0;
@@ -55,7 +54,7 @@ namespace donut::render
 
     public:
         void PrepareForView(
-            const std::shared_ptr<engine::SceneGraphNode>& rootNode,
+            engine::SceneGraphNode* rootNode,
             const engine::IView& view) override { }
 
         const DrawItem* GetNextItem() override;
@@ -78,7 +77,7 @@ namespace donut::render
     public:
 
         void PrepareForView(
-            const std::shared_ptr<engine::SceneGraphNode>& rootNode,
+            engine::SceneGraphNode* rootNode,
             const engine::IView& view) override;
 
         const DrawItem* GetNextItem() override;
@@ -98,7 +97,7 @@ namespace donut::render
         bool DrawDoubleSidedMaterialsSeparately = true;
         
         void PrepareForView(
-            const std::shared_ptr<engine::SceneGraphNode>& rootNode,
+            engine::SceneGraphNode* rootNode,
             const engine::IView& view) override;
 
         const DrawItem* GetNextItem() override;

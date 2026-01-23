@@ -24,6 +24,7 @@
 #include <donut/core/log.h>
 #include <donut/core/json.h>
 #include <sstream>
+#include <donut/engine/ShadowMap.h>
 
 using namespace donut::engine;
 
@@ -46,8 +47,8 @@ void SceneGraphLeaf::SetName(const std::string& name) const
         assert(!"The leaf must be attached in order to set its name");
 }
 
-SkinnedMeshInstance::SkinnedMeshInstance(std::shared_ptr<SceneTypeFactory> sceneTypeFactory, std::shared_ptr<MeshInfo> prototypeMesh)
-    : MeshInstance(nullptr)
+SkinnedMeshInstance::SkinnedMeshInstance(IWeakReference *pWeakRef, SceneTypeFactory* sceneTypeFactory, MeshInfo *prototypeMesh)
+    : MeshInstance(pWeakRef, nullptr)
     , m_SceneTypeFactory(sceneTypeFactory)
 {
     m_PrototypeMesh = std::move(prototypeMesh);
@@ -63,7 +64,7 @@ SkinnedMeshInstance::SkinnedMeshInstance(std::shared_ptr<SceneTypeFactory> scene
     
     for (const auto& geometry : m_PrototypeMesh->geometries)
     {
-        std::shared_ptr<MeshGeometry> newGeometry = m_SceneTypeFactory->CreateMeshGeometry();
+        auto newGeometry = m_SceneTypeFactory->CreateMeshGeometry();
         *newGeometry = *geometry;
         skinnedMesh->geometries.push_back(newGeometry);
     }
@@ -71,26 +72,26 @@ SkinnedMeshInstance::SkinnedMeshInstance(std::shared_ptr<SceneTypeFactory> scene
     m_Mesh = skinnedMesh;
 }
 
-std::shared_ptr<SceneGraphLeaf> SkinnedMeshInstance::Clone()
+donut::AutoPtr<SceneGraphLeaf> SkinnedMeshInstance::Clone()
 {
-    auto copy = std::make_shared<SkinnedMeshInstance>(m_SceneTypeFactory, m_PrototypeMesh);
+    auto copy = MAKE_RC_OBJ_PTR(SkinnedMeshInstance, m_SceneTypeFactory, m_PrototypeMesh);
 
     for (const auto& joint : joints)
     {
         copy->joints.push_back(joint);
     }
 
-    return std::static_pointer_cast<SceneGraphLeaf>(copy);
+    return copy;
 }
 
-std::shared_ptr<SceneGraphLeaf> SkinnedMeshReference::Clone()
+donut::AutoPtr<SceneGraphLeaf> SkinnedMeshReference::Clone()
 {
-    return std::make_shared<SkinnedMeshReference>(m_Instance.lock());
+    return MAKE_RC_OBJ_PTR(SkinnedMeshReference, m_Instance.Lock());
 }
 
-std::shared_ptr<SceneGraphLeaf> MeshInstance::Clone()
+donut::AutoPtr<SceneGraphLeaf> MeshInstance::Clone()
 {
-    return std::make_shared<MeshInstance>(m_Mesh);
+    return MAKE_RC_OBJ_PTR(MeshInstance, m_Mesh);
 }
 
 SceneContentFlags MeshInstance::GetContentFlags() const
@@ -148,9 +149,9 @@ dm::affine3 SceneCamera::GetWorldToViewMatrix() const
     return dm::affine3(inverse(node->GetLocalToWorldTransform())) * dm::scaling(dm::float3(1.f, 1.f, -1.f));
 }
 
-std::shared_ptr<SceneGraphLeaf> PerspectiveCamera::Clone()
+donut::AutoPtr<SceneGraphLeaf> PerspectiveCamera::Clone()
 {
-    auto copy = std::make_shared<PerspectiveCamera>();
+    auto copy = MAKE_RC_OBJ_PTR(PerspectiveCamera);
     copy->zNear = zNear;
     copy->zFar = zFar;
     copy->verticalFov = verticalFov;
@@ -195,9 +196,9 @@ bool PerspectiveCamera::SetProperty(const std::string& name, const dm::float4& v
     return SceneGraphLeaf::SetProperty(name, value);
 }
 
-std::shared_ptr<SceneGraphLeaf> OrthographicCamera::Clone()
+donut::AutoPtr<SceneGraphLeaf> OrthographicCamera::Clone()
 {
-    auto copy = std::make_shared<OrthographicCamera>();
+    auto copy = MAKE_RC_OBJ_PTR(OrthographicCamera);
     copy->zNear = zNear;
     copy->zFar = zFar;
     copy->xMag = xMag;
@@ -305,19 +306,19 @@ void SceneGraphNode::SetTranslation(const dm::double3& translation)
     SetTransform(&translation, nullptr, nullptr);
 }
 
-void SceneGraphNode::SetLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf)
+void SceneGraphNode::SetLeaf(SceneGraphLeaf* leaf)
 {
-    auto graph = m_Graph.lock();
+    auto graph = m_Graph.Lock();
 
     if (m_Leaf)
     {
-        m_Leaf->m_Node.reset();
+        m_Leaf->m_Node.Reset();
         if (graph)
             graph->UnregisterLeaf(m_Leaf);
     }
 
     m_Leaf = leaf;
-    leaf->m_Node = weak_from_this();
+    leaf->m_Node = WeakPtr<SceneGraphNode>(this);
     if (graph)
         graph->RegisterLeaf(leaf);
 
@@ -396,8 +397,8 @@ int SceneGraphWalker::Up()
 
 bool SceneGraphAnimationChannel::Apply(float time) const
 {
-    auto node = m_TargetNode.lock();
-    auto material = m_TargetMaterial.lock();
+    auto node = m_TargetNode.Lock();
+    auto material = m_TargetMaterial.Lock();
     if ((!node && m_Attribute != AnimationAttribute::LeafProperty) || 
         (!material && !node && m_Attribute == AnimationAttribute::LeafProperty))
         return false;
@@ -471,24 +472,24 @@ bool SceneGraphAnimationChannel::Apply(float time) const
     return true;
 }
 
-std::shared_ptr<SceneGraphLeaf> SceneGraphAnimation::Clone()
+donut::AutoPtr<SceneGraphLeaf> SceneGraphAnimation::Clone()
 {
-    auto copy = std::make_shared<SceneGraphAnimation>();
+    auto copy = MAKE_RC_OBJ_PTR(SceneGraphAnimation);
     for (const auto& channel : m_Channels)
     {
-        auto channelCopy = std::make_shared<SceneGraphAnimationChannel>(
+        auto channelCopy = MAKE_RC_OBJ_PTR(SceneGraphAnimationChannel,
             channel->GetSampler(), channel->GetTargetNode(), channel->GetAttribute());
         copy->AddChannel(channelCopy);
     }
-    return std::static_pointer_cast<SceneGraphLeaf>(copy);
+    return copy;
 }
 
 bool SceneGraphAnimationChannel::IsValid() const
 {
-    return !m_TargetNode.expired();
+    return m_TargetNode.IsValid();
 }
 
-void SceneGraphAnimation::AddChannel(const std::shared_ptr<SceneGraphAnimationChannel>& channel)
+void SceneGraphAnimation::AddChannel(SceneGraphAnimationChannel *channel)
 {
     m_Channels.push_back(channel);
     m_Duration = std::max(m_Duration, channel->GetSampler()->GetEndTime());
@@ -517,12 +518,12 @@ bool SceneGraphAnimation::IsVald() const
     return true;
 }
 
-void SceneGraph::RegisterLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf)
+void SceneGraph::RegisterLeaf(SceneGraphLeaf *leaf)
 {
     if (!leaf)
         return;
     
-    auto meshInstance = std::dynamic_pointer_cast<MeshInstance>(leaf);
+    auto meshInstance = dynamic_cast<MeshInstance *>(leaf);
     if (meshInstance)
     {
         const auto& mesh = meshInstance->GetMesh();
@@ -558,7 +559,7 @@ void SceneGraph::RegisterLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf)
         }
         m_MeshInstances.push_back(meshInstance);
 
-        auto skinnedInstance = std::dynamic_pointer_cast<SkinnedMeshInstance>(meshInstance);
+        auto skinnedInstance = dynamic_cast<SkinnedMeshInstance *>(meshInstance);
         if (skinnedInstance)
         {
             m_SkinnedMeshInstances.push_back(skinnedInstance);
@@ -567,21 +568,21 @@ void SceneGraph::RegisterLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf)
         return;
     }
     
-    auto animation = std::dynamic_pointer_cast<SceneGraphAnimation>(leaf);
+    auto animation = dynamic_cast<SceneGraphAnimation *>(leaf);
     if (animation)
     {
         m_Animations.push_back(animation);
         return;
     }
 
-    auto camera = std::dynamic_pointer_cast<SceneCamera>(leaf);
+    auto camera = dynamic_cast<SceneCamera *>(leaf);
     if (camera)
     {
         m_Cameras.push_back(camera);
         return;
     }
 
-    auto light = std::dynamic_pointer_cast<Light>(leaf);
+    auto light = dynamic_cast<Light *>(leaf);
     if (light)
     {
         m_Lights.push_back(light);
@@ -589,12 +590,12 @@ void SceneGraph::RegisterLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf)
     }
 }
 
-void SceneGraph::UnregisterLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf)
+void SceneGraph::UnregisterLeaf(SceneGraphLeaf *leaf)
 {
     if (!leaf)
         return;
 
-    auto meshInstance = std::dynamic_pointer_cast<MeshInstance>(leaf);
+    auto meshInstance = dynamic_cast<MeshInstance *>(leaf);
     if (meshInstance)
     {
         const auto& mesh = meshInstance->GetMesh();
@@ -630,7 +631,7 @@ void SceneGraph::UnregisterLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf)
         return;
     }
 
-    auto skinnedInstance = std::dynamic_pointer_cast<SkinnedMeshInstance>(leaf);
+    auto skinnedInstance = dynamic_cast<SkinnedMeshInstance *>(leaf);
     if (skinnedInstance)
     {
         auto it = std::find(m_SkinnedMeshInstances.begin(), m_SkinnedMeshInstances.end(), skinnedInstance);
@@ -639,7 +640,7 @@ void SceneGraph::UnregisterLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf)
         return;
     }
 
-    auto animation = std::dynamic_pointer_cast<SceneGraphAnimation>(leaf);
+    auto animation = dynamic_cast<SceneGraphAnimation *>(leaf);
     if (animation)
     {
         auto it = std::find(m_Animations.begin(), m_Animations.end(), animation);
@@ -648,7 +649,7 @@ void SceneGraph::UnregisterLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf)
         return;
     }
 
-    auto camera = std::dynamic_pointer_cast<SceneCamera>(leaf);
+    auto camera = dynamic_cast<SceneCamera *>(leaf);
     if (camera)
     {
         auto it = std::find(m_Cameras.begin(), m_Cameras.end(), camera);
@@ -657,7 +658,7 @@ void SceneGraph::UnregisterLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf)
         return;
     }
 
-    auto light = std::dynamic_pointer_cast<Light>(leaf);
+    auto light = dynamic_cast<Light *>(leaf);
     if (light)
     {
         auto it = std::find(m_Lights.begin(), m_Lights.end(), light);
@@ -667,7 +668,7 @@ void SceneGraph::UnregisterLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf)
     }
 }
 
-std::shared_ptr<SceneGraphNode> SceneGraph::SetRootNode(const std::shared_ptr<SceneGraphNode>& root)
+donut::AutoPtr<SceneGraphNode> SceneGraph::SetRootNode(SceneGraphNode *root)
 {
     auto oldRoot = m_Root;
     if (m_Root)
@@ -678,10 +679,9 @@ std::shared_ptr<SceneGraphNode> SceneGraph::SetRootNode(const std::shared_ptr<Sc
     return oldRoot;
 }
 
-std::shared_ptr<SceneGraphNode> SceneGraph::Attach(const std::shared_ptr<SceneGraphNode>& parent, const std::shared_ptr<SceneGraphNode>& child)
-{
-    auto parentGraph = parent ? parent->m_Graph.lock() : shared_from_this();
-    auto childGraph = child->m_Graph.lock();
+donut::AutoPtr<SceneGraphNode> SceneGraph::Attach(SceneGraphNode* parent, SceneGraphNode* child) {
+    auto parentGraph = parent ? parent->m_Graph.Lock() : AutoPtr<SceneGraph>(this);
+    auto childGraph = child->m_Graph.Lock();
 
     if (!parentGraph && !childGraph)
     {
@@ -689,12 +689,12 @@ std::shared_ptr<SceneGraphNode> SceneGraph::Attach(const std::shared_ptr<SceneGr
 
         assert(parent);
         parent->m_Children.push_back(child);
-        child->m_Parent = parent.get();
+        child->m_Parent = parent;
         return child;
     }
 
-    assert(parentGraph.get() == this);
-    std::shared_ptr<SceneGraphNode> attachedChild;
+    assert(parentGraph == this);
+    AutoPtr<SceneGraphNode> attachedChild;
     
     if (childGraph)
     {
@@ -702,19 +702,19 @@ std::shared_ptr<SceneGraphNode> SceneGraph::Attach(const std::shared_ptr<SceneGr
         // copy the subgraph first
 
         // keep a mapping of old nodes to new nodes to patch the copied animations
-        std::unordered_map<SceneGraphNode*, std::shared_ptr<SceneGraphNode>> nodeMap;
+        std::unordered_map<SceneGraphNode*, AutoPtr<SceneGraphNode>> nodeMap;
         
-        SceneGraphNode* currentParent = parent.get();
-        SceneGraphWalker walker(child.get());
+        SceneGraphNode* currentParent = parent;
+        SceneGraphWalker walker(child);
         while (walker)
         {
             // make a copy of the current node
-            std::shared_ptr<SceneGraphNode> copy = std::make_shared<SceneGraphNode>();
+            auto copy = MAKE_RC_OBJ_PTR(SceneGraphNode);
             nodeMap[walker.Get()] = copy;
 
             copy->m_Name = walker->m_Name;
             copy->m_Parent = currentParent;
-            copy->m_Graph = weak_from_this();
+            copy->m_Graph = WeakPtr<SceneGraph>(this);
             copy->m_Dirty = walker->m_Dirty;
 
             if (walker->m_HasLocalTransform)
@@ -747,7 +747,7 @@ std::shared_ptr<SceneGraphNode> SceneGraph::Attach(const std::shared_ptr<SceneGr
 
             if (deltaDepth > 0)
             {
-                currentParent = copy.get();
+                currentParent = copy;
             }
             else
             {
@@ -760,44 +760,44 @@ std::shared_ptr<SceneGraphNode> SceneGraph::Attach(const std::shared_ptr<SceneGr
         }
 
         // go over the new nodes and patch the cloned animations and skinned groups to use the *new* nodes
-        walker = SceneGraphWalker(attachedChild.get());
+        walker = SceneGraphWalker(attachedChild);
         while (walker)
         {
-            if (auto animation = dynamic_cast<SceneGraphAnimation*>(walker->m_Leaf.get()))
+            if (auto animation = dynamic_cast<SceneGraphAnimation*>(walker->m_Leaf.Get()))
             {
                 for (const auto& channel : animation->GetChannels())
                 {
-                    auto newNode = nodeMap[channel->GetTargetNode().get()];
+                    auto newNode = nodeMap[channel->GetTargetNode()];
                     if (newNode)
                     {
                         channel->SetTargetNode(newNode);
                     }
                 }
             }
-            else if (auto skinnedInstance = dynamic_cast<SkinnedMeshInstance*>(walker->m_Leaf.get()))
+            else if (auto skinnedInstance = dynamic_cast<SkinnedMeshInstance*>(walker->m_Leaf.Get()))
             {
                 for (auto& joint : skinnedInstance->joints)
                 {
-                    auto jointNode = joint.node.lock();
-                    auto newNode = nodeMap[jointNode.get()];
+                    auto jointNode = joint.node.Lock();
+                    auto newNode = nodeMap[jointNode.Get()];
                     if (newNode)
                     {
                         joint.node = newNode;
                     }
                 }
             }
-            else if (auto meshReference = dynamic_cast<SkinnedMeshReference*>(walker->m_Leaf.get()))
+            else if (auto meshReference = dynamic_cast<SkinnedMeshReference*>(walker->m_Leaf.Get()))
             {
-                auto instance = meshReference->m_Instance.lock();
+                auto instance = meshReference->m_Instance.Lock();
                 if (instance)
                 {
                     auto oldNode = instance->GetNode();
 
                     auto newNode = nodeMap[oldNode];
                     if (newNode)
-                        meshReference->m_Instance = std::dynamic_pointer_cast<SkinnedMeshInstance>(newNode->m_Leaf);
+                        meshReference->m_Instance = dynamic_cast<SkinnedMeshInstance *>(newNode->m_Leaf.Get());
                     else
-                        meshReference->m_Instance.reset();
+                        meshReference->m_Instance.Reset();
                 }
             }
 
@@ -808,17 +808,17 @@ std::shared_ptr<SceneGraphNode> SceneGraph::Attach(const std::shared_ptr<SceneGr
     {
         // attaching a subgraph that has been detached from another graph (or never attached)
 
-        SceneGraphWalker walker(child.get());
+        SceneGraphWalker walker(child);
         while (walker)
         {
-            walker->m_Graph = weak_from_this();
+            walker->m_Graph = this;
             auto leaf = walker->GetLeaf();
             if (leaf)
                 RegisterLeaf(leaf);
             walker.Next(true);
         }
 
-        child->m_Parent = parent.get();
+        child->m_Parent = parent;
 
         if (parent)
         {
@@ -838,9 +838,9 @@ std::shared_ptr<SceneGraphNode> SceneGraph::Attach(const std::shared_ptr<SceneGr
     return attachedChild;
 }
 
-std::shared_ptr<SceneGraphNode> SceneGraph::AttachLeafNode(const std::shared_ptr<SceneGraphNode>& parent, const std::shared_ptr<SceneGraphLeaf>& leaf)
+donut::AutoPtr<SceneGraphNode> SceneGraph::AttachLeafNode(SceneGraphNode *parent, SceneGraphLeaf *leaf)
 {
-    auto node = std::make_shared<SceneGraphNode>();
+    auto node = MAKE_RC_OBJ_PTR(SceneGraphNode);
     if (leaf->GetNode())
         node->SetLeaf(leaf->Clone());
     else
@@ -848,19 +848,19 @@ std::shared_ptr<SceneGraphNode> SceneGraph::AttachLeafNode(const std::shared_ptr
     return Attach(parent, node);
 }
 
-std::shared_ptr<SceneGraphNode> SceneGraph::Detach(const std::shared_ptr<SceneGraphNode>& node, bool preserveOrder)
+donut::AutoPtr<SceneGraphNode> SceneGraph::Detach(SceneGraphNode* node, bool preserveOrder)
 {
-    auto nodeGraph = node->m_Graph.lock();
+    auto nodeGraph = node->m_Graph.Lock();
 
     if (nodeGraph)
     {
-        assert(nodeGraph.get() == this);
+        assert(nodeGraph == this);
 
         // unregister all leaves in the subgraph, detach all nodes from the graph
-        SceneGraphWalker walker(node.get());
+        SceneGraphWalker walker(node);
         while (walker)
         {
-            walker->m_Graph.reset();
+            walker->m_Graph.Reset();
             auto leaf = walker->GetLeaf();
             if (leaf)
                 UnregisterLeaf(leaf);
@@ -871,7 +871,7 @@ std::shared_ptr<SceneGraphNode> SceneGraph::Detach(const std::shared_ptr<SceneGr
     // remove the node from its parent
     if (node->m_Parent)
     {
-        std::vector<std::shared_ptr<SceneGraphNode>>& siblings = node->m_Parent->m_Children;
+        std::vector<AutoPtr<SceneGraphNode>>& siblings = node->m_Parent->m_Children;
 
         node->m_Parent->PropagateDirtyFlags(SceneGraphNode::DirtyFlags::SubgraphStructure);
 
@@ -903,14 +903,13 @@ std::shared_ptr<SceneGraphNode> SceneGraph::Detach(const std::shared_ptr<SceneGr
 
     if (m_Root == node)
     {
-        m_Root.reset();
-        m_Root = std::make_shared<SceneGraphNode>();
+        m_Root = MAKE_RC_OBJ_PTR(SceneGraphNode);
     }
 
     return node;
 }
 
-std::shared_ptr<SceneGraphNode> SceneGraph::FindNode(const std::filesystem::path& path, SceneGraphNode* context) const
+SceneGraphNode* SceneGraph::FindNode(const std::filesystem::path& path, SceneGraphNode* context) const
 {
     auto pathComponent = path.begin();
 
@@ -919,7 +918,7 @@ std::shared_ptr<SceneGraphNode> SceneGraph::FindNode(const std::filesystem::path
 
     if (*pathComponent == "/")
     {
-        context = m_Root.get();
+        context = m_Root;
         ++pathComponent;
     }
 
@@ -941,11 +940,11 @@ std::shared_ptr<SceneGraphNode> SceneGraph::FindNode(const std::filesystem::path
         }
 
         auto found = std::find_if(current->m_Children.begin(), current->m_Children.end(),
-            [&pathComponent](std::shared_ptr<SceneGraphNode> const& item) { return item->GetName() == *pathComponent; });
+            [&pathComponent](AutoPtr<SceneGraphNode> const& item) { return item->GetName() == *pathComponent; });
 
         if (found != current->m_Children.end())
         {
-            current = found->get();
+            current = found->Get();
             ++pathComponent;
             continue;
         }
@@ -953,7 +952,7 @@ std::shared_ptr<SceneGraphNode> SceneGraph::FindNode(const std::filesystem::path
         return nullptr;
     }
 
-    return current->shared_from_this();
+    return current;
 }
 
 void SceneGraph::Refresh(uint32_t frameIndex)
@@ -969,7 +968,7 @@ void SceneGraph::Refresh(uint32_t frameIndex)
     StackItem context;
     std::vector<StackItem> stack;
 
-    SceneGraphWalker walker(m_Root.get());
+    SceneGraphWalker walker(m_Root);
     while (walker)
     {
         auto current = walker.Get();
@@ -1025,11 +1024,11 @@ void SceneGraph::Refresh(uint32_t frameIndex)
         }
 
         // store the update frame number for skinned groups
-        if (auto meshReference = dynamic_cast<SkinnedMeshReference*>(current->m_Leaf.get()))
+        if (auto meshReference = dynamic_cast<SkinnedMeshReference*>(current->m_Leaf.Get()))
         {
             if ((current->m_Dirty & SceneGraphNode::DirtyFlags::LocalTransform) != 0)
             {
-                auto instance = meshReference->m_Instance.lock();
+                auto instance = meshReference->m_Instance.Lock();
                 if (instance)
                 {
                     instance->m_LastUpdateFrameIndex = frameIndex;
@@ -1134,60 +1133,60 @@ void SceneGraph::Refresh(uint32_t frameIndex)
     }
 }
 
-std::shared_ptr<SceneGraphLeaf> SceneTypeFactory::CreateLeaf(const std::string& type)
+donut::AutoPtr<SceneGraphLeaf> SceneTypeFactory::CreateLeaf(const std::string& type)
 {
     if (type == "DirectionalLight")
     {
-        return std::make_shared<DirectionalLight>();
+        return MAKE_RC_OBJ_PTR(DirectionalLight);
     }
     if (type == "PointLight")
     {
-        return std::make_shared<PointLight>();
+        return MAKE_RC_OBJ_PTR(PointLight);
     }
     if (type == "SpotLight")
     {
-        return std::make_shared<SpotLight>();
+        return MAKE_RC_OBJ_PTR(SpotLight);
     }
     if (type == "PerspectiveCamera")
     {
-        return std::make_shared<PerspectiveCamera>();
+        return MAKE_RC_OBJ_PTR(PerspectiveCamera);
     }
     if (type == "OrthographicCamera")
     {
-        return std::make_shared<OrthographicCamera>();
+        return MAKE_RC_OBJ_PTR(OrthographicCamera);
     }
 
     return nullptr;
 }
 
-std::shared_ptr<Material> SceneTypeFactory::CreateMaterial()
+donut::AutoPtr<Material> SceneTypeFactory::CreateMaterial()
 {
-    return std::make_shared<Material>();
+    return MAKE_RC_OBJ_PTR(Material);
 }
 
-std::shared_ptr<MeshInfo> SceneTypeFactory::CreateMesh()
+donut::AutoPtr<MeshInfo> SceneTypeFactory::CreateMesh()
 {
-    return std::make_shared<MeshInfo>();
+    return MAKE_RC_OBJ_PTR(MeshInfo);
 }
 
-std::shared_ptr<MeshGeometry> SceneTypeFactory::CreateMeshGeometry()
+donut::AutoPtr<MeshGeometry> SceneTypeFactory::CreateMeshGeometry()
 {
-    return std::make_shared<MeshGeometry>();
+    return MAKE_RC_OBJ_PTR(MeshGeometry);
 }
 
-std::shared_ptr<MeshInstance> SceneTypeFactory::CreateMeshInstance(const std::shared_ptr<MeshInfo>& mesh)
+donut::AutoPtr<MeshInstance> SceneTypeFactory::CreateMeshInstance(MeshInfo* mesh)
 {
-    return std::make_shared<MeshInstance>(mesh);
+    return MAKE_RC_OBJ_PTR(MeshInstance, mesh);
 }
 
-std::shared_ptr<SkinnedMeshInstance> SceneTypeFactory::CreateSkinnedMeshInstance(const std::shared_ptr<SceneTypeFactory> & sceneTypeFactory, const std::shared_ptr<MeshInfo> & prototypeMesh)
+donut::AutoPtr<SkinnedMeshInstance> SceneTypeFactory::CreateSkinnedMeshInstance(SceneTypeFactory *sceneTypeFactory, MeshInfo *prototypeMesh)
 {
-    return std::make_shared<SkinnedMeshInstance>(sceneTypeFactory, prototypeMesh);
+    return MAKE_RC_OBJ_PTR(SkinnedMeshInstance, sceneTypeFactory, prototypeMesh);
 }
 
-void donut::engine::PrintSceneGraph(const std::shared_ptr<SceneGraphNode>& root)
+void donut::engine::PrintSceneGraph(const SceneGraphNode *root)
 {
-    SceneGraphWalker walker(root.get());
+    SceneGraphWalker walker(const_cast<SceneGraphNode *>(root));
     int depth = 0;
     while(walker)
     {
@@ -1225,7 +1224,7 @@ void donut::engine::PrintSceneGraph(const std::shared_ptr<SceneGraphNode>& root)
         {
             ss << ": ";
 
-            if (auto meshInstance = dynamic_cast<MeshInstance*>(walker->GetLeaf().get()))
+            if (auto meshInstance = dynamic_cast<MeshInstance*>(walker->GetLeaf()))
             {
                 if (!meshInstance->GetMesh()->name.empty())
                     ss << meshInstance->GetMesh()->name;
@@ -1240,7 +1239,7 @@ void donut::engine::PrintSceneGraph(const std::shared_ptr<SceneGraphNode>& root)
                     ss << " - skinned, " << skinnedInstance->joints.size() << " joints";
                 }
             }
-            else if (auto animation = dynamic_cast<SceneGraphAnimation*>(walker->GetLeaf().get()))
+            else if (auto animation = dynamic_cast<SceneGraphAnimation*>(walker->GetLeaf()))
             {
                 ss << "Animation (" << animation->GetChannels().size() << " channels)";
                 log::info("%s", ss.str().c_str());
@@ -1282,7 +1281,7 @@ void donut::engine::PrintSceneGraph(const std::shared_ptr<SceneGraphNode>& root)
                     ss.str(std::string()); // clear
                 }
             }
-            else if (auto camera = dynamic_cast<SceneCamera*>(walker->GetLeaf().get()))
+            else if (auto camera = dynamic_cast<SceneCamera*>(walker->GetLeaf()))
             {
                 auto perspective = dynamic_cast<PerspectiveCamera*>(camera);
                 auto orthographic = dynamic_cast<OrthographicCamera*>(camera);
@@ -1303,7 +1302,7 @@ void donut::engine::PrintSceneGraph(const std::shared_ptr<SceneGraphNode>& root)
                     ss << "Unknown Type Camera";
                 }
             }
-            else if (auto light = dynamic_cast<Light*>(walker->GetLeaf().get()))
+            else if (auto light = dynamic_cast<Light*>(walker->GetLeaf()))
             {
                 auto directional = dynamic_cast<DirectionalLight*>(light);
                 auto point = dynamic_cast<PointLight*>(light);
@@ -1345,7 +1344,7 @@ void donut::engine::PrintSceneGraph(const std::shared_ptr<SceneGraphNode>& root)
                     ss << "Unknown Type Light";
                 }
             }
-            else if (dynamic_cast<SkinnedMeshReference*>(walker->GetLeaf().get()))
+            else if (dynamic_cast<SkinnedMeshReference*>(walker->GetLeaf()))
             {
                 ss << "Joint";
             }

@@ -54,8 +54,8 @@ using namespace donut::render;
 
 TemporalAntiAliasingPass::TemporalAntiAliasingPass(
     nvrhi::IDevice* device,
-    std::shared_ptr<ShaderFactory> shaderFactory, 
-    std::shared_ptr<CommonRenderPasses> commonPasses,
+    ShaderFactory *shaderFactory, 
+    CommonRenderPasses *commonPasses,
     const ICompositeView& compositeView,
     const CreateParameters& params)
     : m_CommonPasses(commonPasses)
@@ -145,7 +145,7 @@ TemporalAntiAliasingPass::TemporalAntiAliasingPass(
         }
         m_MotionVectorsBindingSet = device->createBindingSet(bindingSetDesc, m_MotionVectorsBindingLayout);
 
-        m_MotionVectorsFramebufferFactory = std::make_unique<FramebufferFactory>(device);
+        m_MotionVectorsFramebufferFactory = MAKE_RC_OBJ_PTR(FramebufferFactory, device);
         m_MotionVectorsFramebufferFactory->RenderTargets = { params.motionVectors };
 
         nvrhi::GraphicsPipelineDesc pipelineDesc;

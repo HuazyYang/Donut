@@ -625,5 +625,5 @@ void DeviceManager_DX12::Shutdown()
 
 DeviceManager *DeviceManager::CreateD3D12(void)
 {
-    return new DeviceManager_DX12();
+    return MAKE_RC_OBJ(DeviceManager_DX12);
 }

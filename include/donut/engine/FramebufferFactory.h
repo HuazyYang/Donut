@@ -21,7 +21,7 @@
 */
 
 #pragma once
-
+#include <donut/core/object/Foundation.h>
 #include <nvrhi/nvrhi.h>
 #include <vector>
 #include <unordered_map>
@@ -30,7 +30,7 @@ namespace donut::engine
 {
     class IView;
 
-    class FramebufferFactory
+    class FramebufferFactory: public ObjectImpl<IObject>
     {
     private:
         nvrhi::DeviceHandle m_Device;

@@ -105,7 +105,7 @@ void donut::engine::MaterialBindingCache::Clear()
     m_BindingSets.clear();
 }
 
-nvrhi::BindingSetItem MaterialBindingCache::GetTextureBindingSetItem(uint32_t slot, const std::shared_ptr<LoadedTexture>& texture) const
+nvrhi::BindingSetItem MaterialBindingCache::GetTextureBindingSetItem(uint32_t slot, const LoadedTexture* texture) const
 {
     return nvrhi::BindingSetItem::Texture_SRV(slot, texture && texture->texture ? texture->texture.Get() : m_FallbackTexture.Get());
 }

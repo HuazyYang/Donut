@@ -46,8 +46,8 @@ using namespace donut::engine;
 
 IesProfileLoader::IesProfileLoader(
     nvrhi::IDevice* device, 
-    std::shared_ptr<ShaderFactory> shaderFactory, 
-    std::shared_ptr<DescriptorTableManager> descriptorTableManager)
+    ShaderFactory* shaderFactory, 
+    DescriptorTableManager *descriptorTableManager)
     : m_Device(device)
     , m_ShaderFactory(shaderFactory)
     , m_DescriptorTableManager(descriptorTableManager)
@@ -204,24 +204,24 @@ static IesStatus ParseIesFile(char* fileData,
     return IesStatus::Success;
 }
 
-std::shared_ptr<IesProfile> IesProfileLoader::LoadIesProfile(donut::vfs::IFileSystem& fs, const std::filesystem::path& path)
+AutoPtr<IesProfile> IesProfileLoader::LoadIesProfile(donut::vfs::IFileSystem *fs, const std::filesystem::path& path)
 {
-    auto fileBlob = fs.readFile(path);
-
-    if (!fileBlob)
+    AutoPtr<IDataBlob> fileBlob;
+    if (FFAILED(fs->readFile(path, &fileBlob)))
         return nullptr;
 
-    if (fileBlob->size() == 0)
+    if (fileBlob->GetSize() == 0)
         return nullptr;
 
     // make a copy of the data because we need to modify it, and blobs are immutable
-    char* fileData = (char*)malloc(fileBlob->size() + 1);
-    if (!fileData)
+    AutoPtr<IDataBlob> fileDataBlob;
+    if(FFAILED(CreateBlob(fileBlob->GetSize() + 1, &fileDataBlob))) {
         return nullptr;
+    }
 
-    memcpy(fileData, fileBlob->data(), fileBlob->size());
-    fileData[fileBlob->size()] = 0;
-
+    auto fileData = (char*)fileDataBlob->GetDataPtr();
+    memcpy(fileData, fileBlob->GetDataPtr(), fileBlob->GetSize());
+    fileData[fileBlob->GetSize()] = 0;
     fileBlob = nullptr;
 
     std::vector<float> numericData;
@@ -229,7 +229,7 @@ std::shared_ptr<IesProfile> IesProfileLoader::LoadIesProfile(donut::vfs::IFileSy
 
     IesStatus status = ParseIesFile(fileData, numericData, maxCandelas);
 
-    free(fileData);
+    fileDataBlob = nullptr;
 
     if (status != IesStatus::Success)
         return nullptr;
@@ -237,7 +237,7 @@ std::shared_ptr<IesProfile> IesProfileLoader::LoadIesProfile(donut::vfs::IFileSy
     // Stash the normalization factor in data[0], we don't use that anyway
     numericData[0] = 1.f / maxCandelas;
 
-    std::shared_ptr<IesProfile> profile = std::make_shared<IesProfile>();
+    auto profile = MAKE_RC_OBJ_PTR(IesProfile);
     profile->name = path.filename().generic_string();
     profile->textureIndex = -1;
     profile->rawData = std::move(numericData);

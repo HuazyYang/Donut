@@ -21,10 +21,10 @@
 */
 
 #pragma once
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <nvrhi/nvrhi.h>
-#include <memory>
 #include <unordered_map>
 
 namespace donut::engine
@@ -58,7 +58,7 @@ namespace donut::engine
         nvrhi::Color blendConstantColor = nvrhi::Color(0.f);
     };
 
-    class CommonRenderPasses
+    class CommonRenderPasses: public ObjectImpl<IObject>
     {
     protected:
         nvrhi::DeviceHandle m_Device;
@@ -113,7 +113,7 @@ namespace donut::engine
 
         nvrhi::BindingLayoutHandle m_BlitBindingLayout;
         
-        CommonRenderPasses(nvrhi::IDevice* device, std::shared_ptr<ShaderFactory> shaderFactory);
+        CommonRenderPasses(nvrhi::IDevice* device, ShaderFactory *shaderFactory);
         
         void BlitTexture(nvrhi::ICommandList* commandList, const BlitParameters& params, BindingCache* bindingCache = nullptr);
 

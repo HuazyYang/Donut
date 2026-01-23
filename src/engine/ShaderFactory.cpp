@@ -33,8 +33,8 @@ using namespace std;
 using namespace donut::vfs;
 using namespace donut::engine;
 
-ShaderFactory::ShaderFactory(nvrhi::DeviceHandle rendererInterface,
-	std::shared_ptr<IFileSystem> fs,
+ShaderFactory::ShaderFactory(nvrhi::IDevice *rendererInterface,
+	IFileSystem* fs,
 	const std::filesystem::path& basePath)
 	: m_Device(rendererInterface)
 	, m_fs(fs)
@@ -59,7 +59,7 @@ void ShaderFactory::ClearCache()
 	m_BytecodeCache.clear();
 }
 
-std::shared_ptr<IBlob> ShaderFactory::GetBytecode(const char* fileName, const char* entryName)
+donut::AutoPtr<donut::IDataBlob> ShaderFactory::GetBytecode(const char* fileName, const char* entryName)
 {
     if (!m_fs)
         return nullptr;
@@ -79,14 +79,12 @@ std::shared_ptr<IBlob> ShaderFactory::GetBytecode(const char* fileName, const ch
 
     std::filesystem::path shaderFilePath = m_basePath / (adjustedName + ".bin");
 
-    std::shared_ptr<IBlob>& data = m_BytecodeCache[shaderFilePath.generic_string()];
+    auto& data = m_BytecodeCache[shaderFilePath.generic_string()];
 
     if (data)
         return data;
 
-    data = m_fs->readFile(shaderFilePath);
-
-    if (!data)
+    if (FFAILED(m_fs->readFile(shaderFilePath, &data)))
     {
         log::error("Couldn't read the binary file for shader %s from %s", fileName, shaderFilePath.generic_string().c_str());
         return nullptr;
@@ -97,7 +95,7 @@ std::shared_ptr<IBlob> ShaderFactory::GetBytecode(const char* fileName, const ch
 
 nvrhi::ShaderHandle ShaderFactory::CreateShader(const char* fileName, const char* entryName, const vector<ShaderMacro>* pDefines, const nvrhi::ShaderDesc& desc)
 {
-    std::shared_ptr<IBlob> byteCode = GetBytecode(fileName, entryName);
+    auto byteCode = GetBytecode(fileName, entryName);
 
     if(!byteCode)
         return nullptr;
@@ -107,7 +105,7 @@ nvrhi::ShaderHandle ShaderFactory::CreateShader(const char* fileName, const char
     if (descCopy.debugName.empty())
         descCopy.debugName = fileName;
 
-    return CreateStaticShader(StaticShader{ byteCode->data(), byteCode->size() }, pDefines, descCopy);
+    return CreateStaticShader(StaticShader{ byteCode->GetDataPtr(), byteCode->GetSize() }, pDefines, descCopy);
 }
 
 nvrhi::ShaderHandle ShaderFactory::CreateShader(const char* fileName, const char* entryName, const vector<ShaderMacro>* pDefines, nvrhi::ShaderType shaderType)
@@ -117,12 +115,12 @@ nvrhi::ShaderHandle ShaderFactory::CreateShader(const char* fileName, const char
 
 nvrhi::ShaderLibraryHandle ShaderFactory::CreateShaderLibrary(const char* fileName, const std::vector<ShaderMacro>* pDefines)
 {
-    std::shared_ptr<IBlob> byteCode = GetBytecode(fileName, nullptr);
+    auto byteCode = GetBytecode(fileName, nullptr);
 
     if (!byteCode)
         return nullptr;
 
-    return CreateStaticShaderLibrary(StaticShader{ byteCode->data(), byteCode->size() }, pDefines);
+    return CreateStaticShaderLibrary(StaticShader{ byteCode->GetDataPtr(), byteCode->GetSize() }, pDefines);
 }
 
 nvrhi::ShaderHandle ShaderFactory::CreateStaticShader(StaticShader shader, const std::vector<ShaderMacro>* pDefines, const nvrhi::ShaderDesc& desc)
@@ -254,8 +252,8 @@ std::pair<const void*, size_t> donut::engine::ShaderFactory::FindShaderFromHash(
 {
     for (auto& entry : m_BytecodeCache)
     {
-        const void* shaderBytes = entry.second->data();
-        size_t shaderSize = entry.second->size();
+        const void* shaderBytes = entry.second->GetDataPtr();
+        size_t shaderSize = entry.second->GetSize();
 
         // the bytecode could contain multiple permutations
         std::vector<std::string> permutations;

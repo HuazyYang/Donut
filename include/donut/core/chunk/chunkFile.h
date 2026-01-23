@@ -23,16 +23,10 @@
 #pragma once
 
 #include <donut/core/log.h>
-
+#include <donut/core/object/Foundation.h>
 #include <cstdint>
-#include <memory>
 #include <vector>
 #include <string>
-
-namespace donut::vfs
-{
-    class IBlob;
-}
 
 //
 // Low-level Chunk file API
@@ -84,21 +78,22 @@ struct Chunk
            size;            // size of chunk user data (in bytes)
 
     void const * data;      // chunk user data
+    bool deleteUserData;
 };
 
 //
 // ChunkFile
 //
 
-class ChunkFile
+class ChunkFile: public ObjectImpl<IObject>
 {
 
 public:
-
+    ~ChunkFile();
     // deserialization interface
 
-    static std::shared_ptr<ChunkFile const> deserialize(
-        std::weak_ptr<donut::vfs::IBlob const> blobPtr, char const * filepath);
+    static FRESULT deserialize(
+        IDataBlob *pBlob, char const * filepath, ChunkFile **pChunkFile);
 
     std::string const & getFilePath() const { return _filepath; }
 
@@ -106,7 +101,7 @@ public:
 
     // serialization interface
 
-    std::shared_ptr<donut::vfs::IBlob const> serialize() const;
+    FRESULT serialize(IDataBlob **ppBlob) const;
 
     template <typename ChunkDesc> ChunkId addChunk(void const * data, size_t size);
 
@@ -127,7 +122,6 @@ public:
     template <typename ChunkDesc> bool validateChunk(Chunk const * chunk) const;
 
 private:
-
     struct Header;
 
     struct ChunkTableEntry;
@@ -136,9 +130,9 @@ private:
 
     std::string _filepath;
 
-    std::vector<std::unique_ptr<Chunk const>> _chunks;
+    std::vector<Chunk *> _chunks;
 
-    std::shared_ptr<donut::vfs::IBlob const> _data;
+    IDataBlob *_data = nullptr;
 };
 
 

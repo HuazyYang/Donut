@@ -36,45 +36,16 @@ using namespace donut::vfs;
 using namespace donut::engine;
 
 
-class BufferRegionBlob : public IBlob
-{
-private:
-    std::shared_ptr<IBlob> m_parent;
-    const void* m_data;
-    size_t m_size;
-
-public:
-    BufferRegionBlob(const std::shared_ptr<IBlob>& parent, size_t offset, size_t size)
-        : m_parent(parent)
-        , m_data(static_cast<const uint8_t*>(parent->data()) + offset)
-        , m_size(size)
-    {
-    }
-
-    [[nodiscard]] const void* data() const override
-    {
-        return m_data;
-    }
-
-    [[nodiscard]] size_t size() const override
-    {
-        return m_size;
-    }
-};
-
-
-
-GltfImporter::GltfImporter(std::shared_ptr<vfs::IFileSystem> fs, std::shared_ptr<SceneTypeFactory> sceneTypeFactory)
-    : m_fs(std::move(fs))
-    , m_SceneTypeFactory(std::move(sceneTypeFactory))
+GltfImporter::GltfImporter(vfs::IFileSystem* fs, SceneTypeFactory* sceneTypeFactory)
+    : m_fs(fs)
+    , m_SceneTypeFactory(sceneTypeFactory)
 {
 }
 
-
 struct cgltf_vfs_context
 {
-    std::shared_ptr<donut::vfs::IFileSystem> fs;
-    std::vector<std::shared_ptr<IBlob>> blobs;
+    donut::vfs::IFileSystem* fs;
+    std::vector<donut::AutoPtr<donut::IDataBlob>> blobs;
 };
 
 static cgltf_result cgltf_read_file_vfs(const struct cgltf_memory_options* memory_options,
@@ -82,15 +53,15 @@ static cgltf_result cgltf_read_file_vfs(const struct cgltf_memory_options* memor
 {
     cgltf_vfs_context* context = (cgltf_vfs_context*)file_options->user_data;
 
-    auto blob = context->fs->readFile(path);
+    donut::AutoPtr<donut::IDataBlob> blob;
 
-    if (!blob)
+    if (FFAILED(context->fs->readFile(path, &blob)))
         return cgltf_result_file_not_found;
 
     context->blobs.push_back(blob);
 
-    if (size) *size = blob->size();
-    if (data) *data = (void*)blob->data();  // NOLINT(clang-diagnostic-cast-qual)
+    if (size) *size = blob->GetSize();
+    if (data) *data = (void*)blob->GetDataPtr();  // NOLINT(clang-diagnostic-cast-qual)
 
     return cgltf_result_success;
 }
@@ -653,7 +624,7 @@ bool GltfImporter::Load(
     // even if the DDS is not specified in the glTF file.
     constexpr bool c_SearchForDds = true;
 
-    result.rootNode.reset();
+    result.rootNode.Reset();
 
     cgltf_vfs_context vfsContext;
     vfsContext.fs = m_fs;
@@ -680,7 +651,7 @@ bool GltfImporter::Load(
         return false;
     }
 
-    std::unordered_map<const cgltf_image*, std::shared_ptr<GltfInlineData>> inlineImageDataCache;
+    std::unordered_map<const cgltf_image*, AutoPtr<GltfInlineData>> inlineImageDataCache;
 
     auto load_image_data = [this, &inlineImageDataCache, &fileName, objects, &vfsContext, &options]
         (const cgltf_image* image, bool searchForDDS)
@@ -703,19 +674,21 @@ bool GltfImporter::Load(
             const size_t dataSize = image->buffer_view->size;
 
             // We need to have a managed pointer to the texture data for async decoding.
-            std::shared_ptr<IBlob> textureData;
+            AutoPtr<IDataBlob> textureData;
 
             // Try to find an existing file blob that includes our data.
             for (const auto& blob : vfsContext.blobs)
             {
-                const uint8_t* blobData = static_cast<const uint8_t*>(blob->data());
-                const size_t blobSize = blob->size();
+                const uint8_t* blobData = static_cast<const uint8_t*>(blob->GetDataPtr());
+                const size_t blobSize = blob->GetSize();
 
                 if (blobData < dataPtr && blobData + blobSize > dataPtr)
                 {
                     // Found the file blob - create a range blob out of it and keep a strong reference.
                     assert(dataPtr + dataSize <= blobData + blobSize);
-                    textureData = std::make_shared<BufferRegionBlob>(blob, dataPtr - blobData, dataSize);
+                    if(FFAILED(CreateProxyBlobFromSource(blob, dataPtr - blobData, dataSize, &textureData))) {
+                        log::error("Failed to create proxy blob!");
+                    }
                     break;
                 }
             }
@@ -723,13 +696,13 @@ bool GltfImporter::Load(
             // Didn't find a file blob - copy the data into a new container.
             if (!textureData)
             {
-                void* dataCopy = malloc(dataSize);
-                assert(dataCopy);
-                memcpy(dataCopy, dataPtr, dataSize);
-                textureData = std::make_shared<vfs::Blob>(dataCopy, dataSize);
+                if(FFAILED(CreateBlob(dataSize, &textureData))) {
+                    log::error("Failed to create blob!");
+                }
+                memcpy(textureData->GetDataPtr(), dataPtr, dataSize);
             }
 
-            result.data = std::make_shared<GltfInlineData>();
+            result.data = MAKE_RC_OBJ_PTR(GltfInlineData);
             result.data->name = image->name
                 ? image->name
                 : fileName.filename().generic_string() + "[" + std::to_string(imageIndex) + "]";
@@ -761,13 +734,22 @@ bool GltfImporter::Load(
 
                 if (res == cgltf_result_success)
                 {
-                    result.data = std::make_shared<GltfInlineData>();
+                    result.data = MAKE_RC_OBJ_PTR(GltfInlineData);
                     result.data->name = image->name
                         ? image->name
                         : fileName.filename().generic_string() + "[" + std::to_string(imageIndex) + "]";
                     result.data->mimeType = image->mime_type ? image->mime_type : "";
-                    result.data->buffer = std::make_shared<vfs::Blob>(data, size);
 
+                    if(FFAILED(CreateBlob(size, &result.data->buffer))) {
+                        assert(0);
+                    }
+                    memcpy(result.data->buffer->GetDataPtr(), data, size);
+                    {
+                        void (*memory_free)(void*, void*) = options.memory.free_func
+                                                                ? options.memory.free_func
+                                                                : &cgltf_default_free;
+                        memory_free(options.memory.user_data, data);
+                    }
                     inlineImageDataCache[image] = result.data;
                 }
                 else
@@ -802,7 +784,7 @@ bool GltfImporter::Load(
         return result;
     };
 
-    std::unordered_map<const cgltf_image*, std::shared_ptr<LoadedTexture>> imageCache;
+    std::unordered_map<const cgltf_image*, AutoPtr<LoadedTexture>> imageCache;
 
     auto load_image = [&imageCache, &textureCache, threadPool, &load_image_data]
         (const cgltf_image* image, bool sRGB, bool searchForDDS)
@@ -811,7 +793,7 @@ bool GltfImporter::Load(
         if (it != imageCache.end())
             return it->second;
 
-        std::shared_ptr<LoadedTexture> loadedTexture;
+        AutoPtr<LoadedTexture> loadedTexture;
         FilePathOrInlineData textureSource = load_image_data(image, searchForDDS);
 
         if (textureSource.data)
@@ -835,13 +817,13 @@ bool GltfImporter::Load(
         return loadedTexture;
     };
 
-    std::unordered_map<const cgltf_texture*, std::shared_ptr<LoadedTexture>> gltfTextureCache;
+    std::unordered_map<const cgltf_texture*, AutoPtr<LoadedTexture>> gltfTextureCache;
 
     auto load_texture = [objects, c_SearchForDds, &gltfTextureCache, &load_image, &load_image_data]
-        (const cgltf_texture* texture, bool sRGB)
+        (const cgltf_texture* texture, bool sRGB) -> AutoPtr<LoadedTexture>
     {
         if (!texture)
-            return std::shared_ptr<LoadedTexture>(nullptr);
+            return nullptr;
 
         auto it = gltfTextureCache.find(texture);
         if (it != gltfTextureCache.end())
@@ -849,7 +831,7 @@ bool GltfImporter::Load(
 
         cgltf_texture_extensions const extensions = cgltf_parse_texture_extensions(texture, objects);
 
-        std::shared_ptr<LoadedTexture> loadedTexture;
+        AutoPtr<LoadedTexture> loadedTexture;
         
         // See if the extensions include a DDS image.
         // Try loading the DDS first if it's specified, fall back to the regular image.
@@ -864,7 +846,7 @@ bool GltfImporter::Load(
         {
             if (!loadedTexture)
             {
-                loadedTexture = std::make_shared<LoadedTexture>();
+                loadedTexture = MAKE_RC_OBJ_PTR(LoadedTexture);
             }
 
             // Convert the swizzle options from glTF structures to TextureSwizzle and merge them into the
@@ -904,13 +886,13 @@ bool GltfImporter::Load(
         return loadedTexture;
     };
 
-    std::unordered_map<const cgltf_material*, std::shared_ptr<Material>> materials;
+    std::unordered_map<const cgltf_material*, AutoPtr<Material>> materials;
     
     for (size_t mat_idx = 0; mat_idx < objects->materials_count; mat_idx++)
     {
         const cgltf_material& material = objects->materials[mat_idx];
         
-        std::shared_ptr<Material> matinfo = m_SceneTypeFactory->CreateMaterial();
+        AutoPtr<Material> matinfo = m_SceneTypeFactory->CreateMaterial();
         if (material.name)
             matinfo->name = material.name;
         matinfo->modelFileName = normalizedFileName;
@@ -995,7 +977,7 @@ bool GltfImporter::Load(
         }
 
         // Parse SSS and Hair Extensions
-        ParseMaterialExtensions(&options, &material, matinfo.get());
+        ParseMaterialExtensions(&options, &material, matinfo);
 
         materials[&material] = matinfo;
     }
@@ -1043,7 +1025,7 @@ bool GltfImporter::Load(
         }
     }
 
-    auto buffers = std::make_shared<BufferGroup>();
+    auto buffers = MAKE_RC_OBJ_PTR(BufferGroup);
 
     buffers->indexData.resize(totalIndices);
     buffers->positionData.resize(totalVertices);
@@ -1063,18 +1045,18 @@ bool GltfImporter::Load(
     totalIndices = 0;
     totalVertices = 0;
 
-    std::unordered_map<const cgltf_mesh*, std::shared_ptr<MeshInfo>> meshMap;
+    std::unordered_map<const cgltf_mesh*, AutoPtr<MeshInfo>> meshMap;
 
     std::vector<float3> computedTangents;
     std::vector<float3> computedBitangents;
-    std::vector<std::shared_ptr<MeshInfo>> meshes;
-    std::shared_ptr<Material> emptyMaterial;
+    std::vector<AutoPtr<MeshInfo>> meshes;
+    AutoPtr<Material> emptyMaterial;
 
     for (size_t mesh_idx = 0; mesh_idx < objects->meshes_count; mesh_idx++)
     {
         const cgltf_mesh& mesh = objects->meshes[mesh_idx];
 
-        std::shared_ptr<MeshInfo> minfo = m_SceneTypeFactory->CreateMesh();
+        AutoPtr<MeshInfo> minfo = m_SceneTypeFactory->CreateMesh();
         if (mesh.name) minfo->name = mesh.name;
         minfo->buffers = buffers;
         minfo->indexOffset = (uint32_t)totalIndices;
@@ -1526,7 +1508,7 @@ bool GltfImporter::Load(
                 log::warning("Geometry %d for mesh '%s' doesn't have a material.", uint32_t(minfo->geometries.size()), minfo->name.c_str());
                 if (!emptyMaterial)
                 {
-                    emptyMaterial = std::make_shared<Material>();
+                    emptyMaterial = MAKE_RC_OBJ_PTR(Material);
                     emptyMaterial->name = "(empty)";
                 }
                 geometry->material = emptyMaterial;
@@ -1632,15 +1614,15 @@ bool GltfImporter::Load(
         }
     }
 
-    std::unordered_map<const cgltf_camera*, std::shared_ptr<SceneCamera>> cameraMap;
+    std::unordered_map<const cgltf_camera*, AutoPtr<SceneCamera>> cameraMap;
     for (size_t camera_idx = 0; camera_idx < objects->cameras_count; camera_idx++)
     {
         const cgltf_camera* src = &objects->cameras[camera_idx];
-        std::shared_ptr<SceneCamera> dst;
+        AutoPtr<SceneCamera> dst;
 
         if (src->type == cgltf_camera_type_perspective)
         {
-            std::shared_ptr<PerspectiveCamera> perspectiveCamera = std::make_shared<PerspectiveCamera>();
+            AutoPtr<PerspectiveCamera> perspectiveCamera = MAKE_RC_OBJ_PTR(PerspectiveCamera);
 
             perspectiveCamera->zNear = src->data.perspective.znear;
             if (src->data.perspective.has_zfar)
@@ -1653,7 +1635,7 @@ bool GltfImporter::Load(
         }
         else
         {
-            std::shared_ptr<OrthographicCamera> orthographicCamera = std::make_shared<OrthographicCamera>();
+            AutoPtr<OrthographicCamera> orthographicCamera = MAKE_RC_OBJ_PTR(OrthographicCamera);
             
             orthographicCamera->zNear = src->data.orthographic.znear;
             orthographicCamera->zFar = src->data.orthographic.zfar;
@@ -1666,23 +1648,23 @@ bool GltfImporter::Load(
         cameraMap[src] = dst;
     }
 
-    std::unordered_map<const cgltf_light*, std::shared_ptr<Light>> lightMap;
+    std::unordered_map<const cgltf_light*, AutoPtr<Light>> lightMap;
     for (size_t light_idx = 0; light_idx < objects->lights_count; light_idx++)
     {
         const cgltf_light* src = &objects->lights[light_idx];
-        std::shared_ptr<Light> dst;
+        AutoPtr<Light> dst;
 
         switch(src->type)  // NOLINT(clang-diagnostic-switch-enum)
         {
         case cgltf_light_type_directional: {
-            auto directional = std::dynamic_pointer_cast<DirectionalLight>(m_SceneTypeFactory->CreateLeaf("DirectionalLight"));
+            AutoPtr<DirectionalLight> directional{dynamic_cast<DirectionalLight *>(m_SceneTypeFactory->CreateLeaf("DirectionalLight").Get())};
             directional->irradiance = src->intensity;
             directional->color = src->color;
             dst = directional;
             break;
         }
         case cgltf_light_type_point: {
-            auto point = std::dynamic_pointer_cast<PointLight>(m_SceneTypeFactory->CreateLeaf("PointLight"));
+            AutoPtr<PointLight> point {dynamic_cast<PointLight *>(m_SceneTypeFactory->CreateLeaf("PointLight").Get())};
             point->intensity = src->intensity;
             point->color = src->color;
             point->range = src->range;
@@ -1690,7 +1672,7 @@ bool GltfImporter::Load(
             break;
         }
         case cgltf_light_type_spot: {
-            auto spot = std::dynamic_pointer_cast<SpotLight>(m_SceneTypeFactory->CreateLeaf("SpotLight"));
+            AutoPtr<SpotLight> spot{dynamic_cast<SpotLight *>(m_SceneTypeFactory->CreateLeaf("SpotLight").Get())};
             spot->intensity = src->intensity;
             spot->color = src->color;
             spot->range = src->range;
@@ -1710,14 +1692,14 @@ bool GltfImporter::Load(
     }
 
     // build the scene graph
-    std::shared_ptr<SceneGraph> graph = std::make_shared<SceneGraph>();
-    std::shared_ptr<SceneGraphNode> root = std::make_shared<SceneGraphNode>();
-    std::unordered_map<cgltf_node*, std::shared_ptr<SceneGraphNode>> nodeMap;
+    auto graph = MAKE_RC_OBJ_PTR(SceneGraph);
+    auto root = MAKE_RC_OBJ_PTR(SceneGraphNode);
+    std::unordered_map<cgltf_node*, AutoPtr<SceneGraphNode>> nodeMap;
     std::vector<cgltf_node*> skinnedNodes;
     
     struct StackItem
     {
-        std::shared_ptr<SceneGraphNode> dstParent;
+        AutoPtr<SceneGraphNode> dstParent;
         cgltf_node** srcNodes = nullptr;
         size_t srcCount = 0;
     };
@@ -1738,7 +1720,7 @@ bool GltfImporter::Load(
         ++context.srcNodes;
         --context.srcCount;
 
-        auto dst = std::make_shared<SceneGraphNode>();
+        auto dst = MAKE_RC_OBJ_PTR(SceneGraphNode);
 
         nodeMap[src] = dst;
 
@@ -1797,7 +1779,7 @@ bool GltfImporter::Load(
 
                 if (dst->GetLeaf())
                 {
-                    auto node = std::make_shared<SceneGraphNode>();
+                    auto node = MAKE_RC_OBJ_PTR(SceneGraphNode);
                     node->SetLeaf(camera);
                     graph->Attach(dst, node);
                 }
@@ -1828,7 +1810,7 @@ bool GltfImporter::Load(
 
                 if (dst->GetLeaf())
                 {
-                    auto node = std::make_shared<SceneGraphNode>();
+                    auto node = MAKE_RC_OBJ_PTR(SceneGraphNode);
                     node->SetLeaf(light);
                     graph->Attach(dst, node);
                 }
@@ -1862,7 +1844,7 @@ bool GltfImporter::Load(
         assert(src->skin);
         assert(src->mesh);
 
-        std::shared_ptr<MeshInfo> prototypeMesh;
+        AutoPtr<MeshInfo> prototypeMesh;
         auto found = meshMap.find(src->mesh);
         if (found != meshMap.end())
         {
@@ -1878,10 +1860,10 @@ bool GltfImporter::Load(
                 cgltf_accessor_read_float(src->skin->inverse_bind_matrices, joint_idx, joint.inverseBindMatrix.m_data, 16);
                 joint.node = nodeMap[src->skin->joints[joint_idx]];
 
-                auto jointNode = joint.node.lock();
+                auto jointNode = joint.node.Lock();
                 if (!jointNode->GetLeaf())
                 {
-                    jointNode->SetLeaf(std::make_shared<SkinnedMeshReference>(skinnedInstance));
+                    jointNode->SetLeaf(MAKE_RC_OBJ_PTR(SkinnedMeshReference, skinnedInstance));
                 }
             }
 
@@ -1895,17 +1877,17 @@ bool GltfImporter::Load(
     auto animationContainer = root;
     if (objects->animations_count > 1)
     {
-        animationContainer = std::make_shared<SceneGraphNode>();
+        animationContainer = MAKE_RC_OBJ_PTR(SceneGraphNode);
         animationContainer->SetName("Animations");
         graph->Attach(root, animationContainer);
     }
 
-    std::unordered_map<const cgltf_animation_sampler*, std::shared_ptr<animation::Sampler>> animationSamplers;
+    std::unordered_map<const cgltf_animation_sampler*, AutoPtr<animation::Sampler>> animationSamplers;
     
     for (size_t a_idx = 0; a_idx < objects->animations_count; a_idx++)
     {
         const cgltf_animation* srcAnim = &objects->animations[a_idx];
-        auto dstAnim = std::make_shared<SceneGraphAnimation>();
+        auto dstAnim = MAKE_RC_OBJ_PTR(SceneGraphAnimation);
 
         animationSamplers.clear();
 
@@ -1913,7 +1895,7 @@ bool GltfImporter::Load(
         {
             const cgltf_animation_sampler* srcSampler = &srcAnim->samplers[s_idx];
             const cgltf_animation_channel* srcChannel = &srcAnim->channels[s_idx];
-            auto dstSampler = std::make_shared<animation::Sampler>();
+            auto dstSampler = MAKE_RC_OBJ_PTR(animation::Sampler);
 
             switch (srcSampler->interpolation)
             {
@@ -1999,14 +1981,14 @@ bool GltfImporter::Load(
             if (!dstSampler)
                 continue;
 
-            auto dstTrack = std::make_shared<SceneGraphAnimationChannel>(dstSampler, dstNode, attribute);
+            auto dstTrack = MAKE_RC_OBJ_PTR(SceneGraphAnimationChannel, dstSampler, dstNode, attribute);
             
             dstAnim->AddChannel(dstTrack);
         }
 
         if (dstAnim->IsVald())
         {
-            auto animationNode = std::make_shared<SceneGraphNode>();
+            auto animationNode = MAKE_RC_OBJ_PTR(SceneGraphNode);
             animationNode->SetName(dstAnim->GetName());
             graph->Attach(animationContainer, animationNode);
             animationNode->SetLeaf(dstAnim);

@@ -28,6 +28,7 @@
 #include <filesystem>
 #include <thread>
 #include <vector>
+#include <donut/core/object/AutoPtr.h>
 
 namespace donut::engine
 {
@@ -46,9 +47,9 @@ namespace donut::app
     protected:
         typedef IRenderPass Super;
 
-        std::shared_ptr<engine::TextureCache> m_TextureCache;
-        std::unique_ptr<std::thread> m_SceneLoadingThread;
-        std::shared_ptr<engine::CommonRenderPasses> m_CommonPasses;
+        AutoPtr<engine::TextureCache> m_TextureCache;
+        MonoPtr<std::thread> m_SceneLoadingThread;
+        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
 
         bool m_IsAsyncLoad;
 
@@ -60,8 +61,8 @@ namespace donut::app
 
         virtual void RenderScene(nvrhi::IFramebuffer* framebuffer);
         virtual void RenderSplashScreen(nvrhi::IFramebuffer* framebuffer);
-        virtual void BeginLoadingScene(std::shared_ptr<vfs::IFileSystem> fs, const std::filesystem::path& sceneFileName);
-        virtual bool LoadScene(std::shared_ptr<vfs::IFileSystem> fs, const std::filesystem::path& sceneFileName) = 0;
+        virtual void BeginLoadingScene(vfs::IFileSystem* fs, const std::filesystem::path& sceneFileName);
+        virtual bool LoadScene(vfs::IFileSystem *fs, const std::filesystem::path& sceneFileName) = 0;
         virtual void SceneUnloading();
         virtual void SceneLoaded();
 
@@ -69,7 +70,7 @@ namespace donut::app
         bool IsSceneLoading() const;
         bool IsSceneLoaded() const;
 
-        std::shared_ptr<engine::CommonRenderPasses> GetCommonPasses() const;
+        engine::CommonRenderPasses* GetCommonPasses() const;
     };
 
 	// returns the path to the currently running application's binary

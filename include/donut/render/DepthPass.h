@@ -24,7 +24,6 @@
 
 #include <donut/engine/SceneTypes.h>
 #include <donut/render/GeometryPasses.h>
-#include <memory>
 #include <mutex>
 #include <nvrhi/nvrhi.h>
 
@@ -74,7 +73,7 @@ namespace donut::render
 
         struct CreateParameters
         {
-            std::shared_ptr<engine::MaterialBindingCache> materialBindings;
+            AutoPtr<engine::MaterialBindingCache> materialBindings;
             int depthBias = 0;
             float depthBiasClamp = 0.f;
             float slopeScaledDepthBias = 0.f;
@@ -108,8 +107,8 @@ namespace donut::render
 
         std::unordered_map<const engine::BufferGroup*, nvrhi::BindingSetHandle> m_InputBindingSets;
         
-        std::shared_ptr<engine::CommonRenderPasses> m_CommonPasses;
-        std::shared_ptr<engine::MaterialBindingCache> m_MaterialBindings;
+        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
+        AutoPtr<engine::MaterialBindingCache> m_MaterialBindings;
 
         virtual nvrhi::ShaderHandle CreateVertexShader(engine::ShaderFactory& shaderFactory, const CreateParameters& params);
         virtual nvrhi::ShaderHandle CreatePixelShader(engine::ShaderFactory& shaderFactory, const CreateParameters& params);
@@ -117,7 +116,7 @@ namespace donut::render
         virtual nvrhi::BindingLayoutHandle CreateInputBindingLayout();
         virtual nvrhi::BindingSetHandle CreateInputBindingSet(const engine::BufferGroup* bufferGroup);
         virtual void CreateViewBindings(nvrhi::BindingLayoutHandle& layout, nvrhi::BindingSetHandle& set, const CreateParameters& params);
-        virtual std::shared_ptr<engine::MaterialBindingCache> CreateMaterialBindingCache(engine::CommonRenderPasses& commonPasses);
+        virtual AutoPtr<engine::MaterialBindingCache> CreateMaterialBindingCache(engine::CommonRenderPasses& commonPasses);
         virtual nvrhi::GraphicsPipelineHandle CreateGraphicsPipeline(PipelineKey key, nvrhi::FramebufferInfo const& framebufferInfo);
         nvrhi::BindingSetHandle GetOrCreateInputBindingSet(const engine::BufferGroup* bufferGroup);
 
@@ -125,7 +124,7 @@ namespace donut::render
     public:
         DepthPass(
             nvrhi::IDevice* device,
-            std::shared_ptr<engine::CommonRenderPasses> commonPasses);
+            engine::CommonRenderPasses *commonPasses);
 
         virtual void Init(
             engine::ShaderFactory& shaderFactory,

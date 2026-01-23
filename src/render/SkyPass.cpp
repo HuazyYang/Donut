@@ -48,9 +48,9 @@ using namespace donut::render;
 
 SkyPass::SkyPass(
     nvrhi::IDevice* device,
-    const std::shared_ptr<engine::ShaderFactory>& shaderFactory,
-    const std::shared_ptr<engine::CommonRenderPasses>& commonPasses,
-    const std::shared_ptr<engine::FramebufferFactory>& framebufferFactory,
+    engine::ShaderFactory *shaderFactory,
+    engine::CommonRenderPasses* commonPasses,
+    engine::FramebufferFactory* framebufferFactory,
     const ICompositeView& compositeView)
     : m_FramebufferFactory(framebufferFactory)
 {

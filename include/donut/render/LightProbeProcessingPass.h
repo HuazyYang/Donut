@@ -22,10 +22,9 @@
 
 #pragma once
 
-
+#include <donut/core/object/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <nvrhi/nvrhi.h>
-#include <memory>
 #include <unordered_map>
 
 namespace donut::engine
@@ -58,7 +57,7 @@ namespace donut::render
         nvrhi::TextureHandle m_EnvironmentBrdfTexture;
         uint32_t m_EnvironmentBrdfTextureSize;
 
-        std::shared_ptr<engine::CommonRenderPasses> m_CommonPasses;
+        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
 
         std::unordered_map<nvrhi::FramebufferInfo, nvrhi::GraphicsPipelineHandle> m_BlitPsoCache;
         std::unordered_map<nvrhi::FramebufferInfo, nvrhi::GraphicsPipelineHandle> m_DiffusePsoCache;
@@ -91,8 +90,8 @@ namespace donut::render
     public:
         LightProbeProcessingPass(
             nvrhi::IDevice* device,
-            std::shared_ptr<engine::ShaderFactory> shaderFactory,
-            std::shared_ptr<engine::CommonRenderPasses> commonPasses,
+            engine::ShaderFactory* shaderFactory,
+            engine::CommonRenderPasses* commonPasses,
             uint32_t intermediateTextureSize = 1024,
             nvrhi::Format intermediateTextureFormat = nvrhi::Format::RGBA16_FLOAT
         );

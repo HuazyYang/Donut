@@ -33,7 +33,7 @@ Baptiste Lepilleur and The JsonCpp Authors explicitly disclaim copyright in all
 jurisdictions which recognize such a disclaimer. In such jurisdictions, 
 this software is released into the Public Domain.
 */
-
+#include <donut/core/object/AutoPtr.h>
 #include <donut/core/json.h>
 #include <donut/core/vfs/VFS.h>
 #include <donut/core/log.h>
@@ -46,9 +46,8 @@ namespace donut::json
 {
     bool LoadFromFile(IFileSystem& fs, const std::filesystem::path& jsonFileName, Json::Value& documentRoot)
     {
-        std::shared_ptr<IBlob> data = fs.readFile(jsonFileName);
-        if (!data)
-        {
+        AutoPtr<IDataBlob> data;
+        if(FFAILED(fs.readFile(jsonFileName, &data))) {
             log::error("Couldn't read file %s", jsonFileName.generic_string().c_str());
             return false;
         }
@@ -57,9 +56,9 @@ namespace donut::json
         builder["collectComments"] = false;
         Json::CharReader* reader = builder.newCharReader();
 
-        const char* dataPtr = static_cast<const char*>(data->data());
+        const char* dataPtr = static_cast<const char*>(data->GetDataPtr());
         std::string errors;
-        bool success = reader->parse(dataPtr, dataPtr + data->size(), &documentRoot, &errors);
+        bool success = reader->parse(dataPtr, dataPtr + data->GetSize(), &documentRoot, &errors);
 
         if (!success)
         {

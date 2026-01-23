@@ -51,7 +51,7 @@ PlanarShadowMap::PlanarShadowMap(
     m_ShadowMapSize = float2(static_cast<float>(resolution));
     m_TextureSize = m_ShadowMapSize;
 
-    m_View = std::make_shared<engine::PlanarView>();
+    m_View = MAKE_RC_OBJ_PTR(engine::PlanarView);
     m_View->SetViewport(nvrhi::Viewport(float(resolution), float(resolution)));
     m_View->SetArraySlice(0);
 }
@@ -68,7 +68,7 @@ PlanarShadowMap::PlanarShadowMap(
     m_TextureSize = float2(static_cast<float>(textureDesc.width), static_cast<float>(textureDesc.height));
     m_ShadowMapSize = float2(viewport.maxX - viewport.minX, viewport.maxY - viewport.minY);
 
-    m_View = std::make_shared<engine::PlanarView>();
+    m_View = MAKE_RC_OBJ_PTR(engine::PlanarView);
     m_View->SetViewport(viewport);
     m_View->SetArraySlice(arraySlice);
 }
@@ -170,7 +170,7 @@ void PlanarShadowMap::SetFalloffDistance(float distance)
     m_FalloffDistance = distance;
 }
 
-std::shared_ptr<PlanarView> PlanarShadowMap::GetPlanarView()
+PlanarView* PlanarShadowMap::GetPlanarView()
 {
     return m_View;
 }

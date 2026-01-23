@@ -19,7 +19,8 @@
 * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 * DEALINGS IN THE SOFTWARE.
 */
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <donut/core/chunk/chunk.h>
 #include <donut/core/chunk/chunkFile.h>
 #include <donut/core/log.h>
@@ -27,7 +28,6 @@
 #include "./chunkDescs.h"
 
 #include <cassert>
-#include <memory>
 #include <vector>
 
 namespace donut::chunk
@@ -40,15 +40,15 @@ struct ChunkReader
 
     bool loadStreamChunk_0x100(ChunkId chunkId, StreamHandle * handle);
 
-    bool loadMeshInfosChunk_0x100(ChunkId chunkId, std::shared_ptr<MeshSetBase> mset);
+    bool loadMeshInfosChunk_0x100(ChunkId chunkId, MeshSetBase *mset);
 
-    bool loadMeshInstancesChunk_0x100(ChunkId chunkId, std::shared_ptr<MeshSetBase> mset);
+    bool loadMeshInstancesChunk_0x100(ChunkId chunkId, MeshSetBase *mset);
 
-    bool loadMeshNodesChunk_0x100(ChunkId chunkId, std::shared_ptr<MeshSetBase> mset);
+    bool loadMeshNodesChunk_0x100(ChunkId chunkId, MeshSetBase *mset);
 
-    std::shared_ptr<MeshSetBase> loadMeshSetChunk_0x100(Chunk const * chunk);
+    FRESULT loadMeshSetChunk_0x100(Chunk const * chunk, MeshSetBase **ppMeshSet);
 
-    std::shared_ptr<ChunkFile const> cfile;
+    AutoPtr<ChunkFile> cfile;
 
     inline char const * uncacheString(size_t index)
     {
@@ -89,7 +89,7 @@ bool ChunkReader::loadStringsTableChunk_0x100(Chunk const * chunk)
 }
 
 bool ChunkReader::loadMeshInfosChunk_0x100(
-    ChunkId chunkId, std::shared_ptr<MeshSetBase> mset)
+    ChunkId chunkId, MeshSetBase *mset)
 {
     assert(mset);
 
@@ -135,13 +135,13 @@ bool ChunkReader::loadMeshInfosChunk_0x100(
             case Desc::MESH : {
                 MeshInfo * minfos = (MeshInfo *)minfosData;
                 setStrings(minfos);
-                std::static_pointer_cast<MeshSet>(mset)->meshInfos = minfos;
+                static_cast<MeshSet *>(mset)->meshInfos = minfos;
             } break;
 
             case Desc::MESHLET : {
                 MeshletInfo * minfos = (MeshletInfo *)minfosData;
                 setStrings(minfos);
-                std::static_pointer_cast<MeshletSet>(mset)->meshInfos = minfos;
+                static_cast<MeshletSet *>(mset)->meshInfos = minfos;
             } break;
 
             default:
@@ -156,7 +156,7 @@ bool ChunkReader::loadMeshInfosChunk_0x100(
 }
 
 bool ChunkReader::loadMeshInstancesChunk_0x100(
-    ChunkId chunkId, std::shared_ptr<MeshSetBase> mset)
+    ChunkId chunkId, MeshSetBase *mset)
 {
     assert(mset);
 
@@ -189,7 +189,7 @@ bool ChunkReader::loadMeshInstancesChunk_0x100(
 }
 
 bool ChunkReader::loadMeshNodesChunk_0x100(
-    ChunkId chunkId, std::shared_ptr<MeshSetBase> mset)
+    ChunkId chunkId, MeshSetBase *mset)
 {
     assert(mset);
 
@@ -277,14 +277,14 @@ bool ChunkReader::loadStreamChunk_0x100(ChunkId chunkId, StreamHandle * handle) 
     return false;
 }
 
-std::shared_ptr<MeshSetBase> ChunkReader::loadMeshSetChunk_0x100(Chunk const * chunk)
+FRESULT ChunkReader::loadMeshSetChunk_0x100(Chunk const * chunk, MeshSetBase **ppMeshSet)
 {
     typedef MeshSet_ChunkDesc_0x100 Desc;
 
     if (!cfile->validateChunk<Desc>(chunk))
-        return nullptr;
+        return FE_GENERIC_ERROR;
 
-    std::shared_ptr<MeshSetBase> mset;
+    AutoPtr<MeshSetBase> mset;
 
     Desc const & desc = *(Desc const *)chunk->data;
 
@@ -293,18 +293,18 @@ std::shared_ptr<MeshSetBase> ChunkReader::loadMeshSetChunk_0x100(Chunk const * c
     switch (stype) {
 
         case Desc::MESH :
-            mset = std::make_shared<MeshSet>();
+            mset = MAKE_RC_OBJ_PTR(MeshSet);
             mset->type = MeshSetBase::MESH;
             break;
 
         case Desc::MESHLET :
-            mset = std::make_shared<MeshletSet>();
+            mset = MAKE_RC_OBJ_PTR(MeshletSet);
             mset->type = MeshSetBase::MESHLET;
             break;
 
         default:
             log::error("incorrect Set type (%d)", stype);
-            return nullptr;
+            return FE_GENERIC_ERROR;
     }
 
     mset->name = uncacheString(desc.name);
@@ -318,7 +318,7 @@ std::shared_ptr<MeshSetBase> ChunkReader::loadMeshSetChunk_0x100(Chunk const * c
         mset->streams.position = (donut::math::float3 const *)handle.data;
         mset->nverts = (uint32_t)handle.elemCount;
     } else
-        return nullptr;
+        return FE_GENERIC_ERROR;
 
     handle = {"TexCoord0", FP32, VERTEX, TEXCOORD, mset->nverts, sizeof(donut::math::float2), nullptr};
     if (loadStreamChunk_0x100(desc.streamChunkIds[Desc::TEXCOORDS0], &handle))
@@ -342,7 +342,7 @@ std::shared_ptr<MeshSetBase> ChunkReader::loadMeshSetChunk_0x100(Chunk const * c
 
     if (stype==Desc::MESH)
     {
-        std::shared_ptr<MeshSet> set = std::static_pointer_cast<MeshSet>(mset);
+        MeshSet *set = static_cast<MeshSet *>(mset.Get());
 
         set->meshInfos=nullptr;
 
@@ -352,12 +352,12 @@ std::shared_ptr<MeshSetBase> ChunkReader::loadMeshSetChunk_0x100(Chunk const * c
             set->indices = (uint32_t *)handle.data;
             set->nindices = (uint32_t)handle.elemCount;
         } else
-            return nullptr;
+            return FE_GENERIC_ERROR;
 
     }
     else if (stype==Desc::MESHLET)
     {
-        std::shared_ptr<MeshletSet> set = std::static_pointer_cast<MeshletSet>(mset);
+        MeshletSet *set = static_cast<MeshletSet *>(mset.Get());
 
         set->meshInfos=nullptr;
 
@@ -367,7 +367,7 @@ std::shared_ptr<MeshSetBase> ChunkReader::loadMeshSetChunk_0x100(Chunk const * c
             set->indices32 = (uint32_t *)handle.data;
             set->nindices32 = (uint32_t)handle.elemCount;
         } else
-            return nullptr;
+            return FE_GENERIC_ERROR;
 
         handle = {"Indices8", UINT8, VARY_NONE, INDEX, 0, sizeof(uint8_t), nullptr};
         if (loadStreamChunk_0x100(desc.streamChunkIds[Desc::MESHLET_INDICES8], &handle))
@@ -375,7 +375,7 @@ std::shared_ptr<MeshSetBase> ChunkReader::loadMeshSetChunk_0x100(Chunk const * c
             set->indices8 = (uint8_t *)handle.data;
             set->nindices8 = (uint32_t)handle.elemCount;
         } else
-            return nullptr;
+            return FE_GENERIC_ERROR;
 
         handle = {"Meshlet Headers", UINT32, VARY_NONE, MESHLET_INFO, 0, 0, nullptr};
         if (loadStreamChunk_0x100(desc.streamChunkIds[Desc::MESHLET_INFO], &handle))
@@ -384,35 +384,40 @@ std::shared_ptr<MeshSetBase> ChunkReader::loadMeshSetChunk_0x100(Chunk const * c
             set->nmeshlets = (uint32_t)handle.elemCount;
             set->meshletSize = (uint8_t)(handle.elemSize / sizeof(uint32_t));
         } else
-            return nullptr;
+            return FE_GENERIC_ERROR;
     }
 
     if (!loadMeshInfosChunk_0x100(desc.minfosChunkId, mset))
-        return nullptr;
+        return FE_GENERIC_ERROR;
 
     if (!loadMeshInstancesChunk_0x100(desc.instancesChunkId, mset))
-        return nullptr;
+        return FE_GENERIC_ERROR;
 
     if (desc.nodesChunkId.valid())
         if (!loadMeshNodesChunk_0x100(desc.nodesChunkId, mset))
-            return nullptr;
+            return FE_GENERIC_ERROR;
 
-    return mset;
+    if(ppMeshSet) {
+        *ppMeshSet = mset;
+        mset->AddRef();
+    }
+
+    return FS_OK;
 }
 
 //
 // implementation
 //
 
-std::shared_ptr<MeshSetBase const> deserialize(
-    std::weak_ptr<donut::vfs::IBlob const> iblob, char const * assetpath)
+FRESULT deserialize(
+    IDataBlob *blob, char const * assetpath, MeshSetBase **ppMeshSet)
 {
-
+    FRESULT fr;
     ChunkReader reader;
 
-    if (auto const blob = iblob.lock())
+    if (blob)
     {
-        if ((reader.cfile = ChunkFile::deserialize(blob, assetpath)))
+        if (FSUCCEEDED(fr = ChunkFile::deserialize(blob, assetpath, &reader.cfile)))
         {
             std::vector<Chunk const *> chunks(1);
 
@@ -422,10 +427,10 @@ std::shared_ptr<MeshSetBase const> deserialize(
             {
                 log::error("Chunk deserialize : invalid number of"
                     " string table chunks in asset '%s'", assetpath);
-                return nullptr;
+                return FE_GENERIC_ERROR;
             }
             if (!reader.loadStringsTableChunk_0x100(chunks[0]))
-                return nullptr;
+                return FE_GENERIC_ERROR;
 
             // load meshset chunk
             reader.cfile->getChunks(CHUNKTYPE_MESHSET, chunks);
@@ -433,15 +438,12 @@ std::shared_ptr<MeshSetBase const> deserialize(
             {
                 log::error("Chunk deserialize : invalid number of"
                     " meshset chunks in asset '%s'", assetpath);
-                return nullptr;
+                return FE_GENERIC_ERROR;
             }
 
-            std::shared_ptr<MeshSetBase> mset =
-                reader.loadMeshSetChunk_0x100(chunks[0]);
-            if (mset)
-            {
-                mset->blob = blob;
-                return mset;
+            if(FSUCCEEDED(fr = reader.loadMeshSetChunk_0x100(chunks[0], ppMeshSet))) {
+                (*ppMeshSet)->blob = blob;
+                blob->AddRef();
             }
         }
     }
@@ -449,7 +451,7 @@ std::shared_ptr<MeshSetBase const> deserialize(
     {
         log::error("Chunk deserialize : invalid data blob in asset '%s'", assetpath);
     }
-    return nullptr;
+    return FE_GENERIC_ERROR;
 }
 
 }

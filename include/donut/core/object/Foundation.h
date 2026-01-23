@@ -205,8 +205,8 @@ struct ObjectWrapperStorage {
 template <typename ObjectType>
 struct IsWeakReferenceSource {
     static constexpr bool value =
-        std::is_base_of<IWeakReferenceSource, ObjectType>::value ||
-        std::is_same<IWeakReferenceSource, ObjectType>::value;
+        std::is_base_of<IWeakable, ObjectType>::value ||
+        std::is_same<IWeakable, ObjectType>::value;
 };
 
 template <typename ObjectType>
@@ -217,14 +217,35 @@ struct WeakRefTypeTrait;
 
 }  // namespace details
 
-template <class Allocator = IMemoryAllocator>
+template <class AllocatorType = IMemoryAllocator>
 class MakeNewRCObj;
 
-template <typename ObjectType, typename AllocatorType = IMemoryAllocator>
-class MakeNewRCDelegating;
+class UserAllocated {
+ protected:
+    template <typename AllocatorType>
+    friend class MakeNewRCObj;
+
+    template <typename ObjectType, typename AllocatorType>
+    friend class details::PackedObjectWrapper;
+
+    friend class DefaultMemoryAllocator;
+    void operator delete(void* ptr) { GetDefaultMemAllocator()->Free(ptr); }
+
+    template <typename AllocatorType>
+    void operator delete(void* ptr, AllocatorType* Allocator) {
+        return Allocator->Free(ptr);
+    }
+
+    void* operator new(size_t Size) { return GetDefaultMemAllocator()->Allocate(Size); }
+
+    template <typename AllocatorType>
+    void* operator new(size_t Size, AllocatorType* Allocator) {
+        return Allocator->Allocate(Size);
+    }
+};
 
 // This class controls the lifetime of a refcounted object
-class WeakReferenceImpl final : public IWeakReference {
+class WeakReferenceImpl final : public IWeakReference, public UserAllocated {
  public:
     FLONG AddRef() override final { return AddWeakRef(); }
 
@@ -719,9 +740,9 @@ class WeakReferenceImpl final : public IWeakReference {
     details::ObjectWrapperStorage m_ObjectWrapperBuffer{};
 };
 
-/// Base class for all reference counting objects, must be one of IWeakReferenceSource
+/// Base class for all reference counting objects, must be one of IWeakable
 template <typename BaseItf>
-class RefCountedObject : public BaseItf {
+class RefCountedObject : public BaseItf, public UserAllocated {
  public:
     // Constructor with weak reference syntax
     RefCountedObject(IWeakReference* pWeakRef) noexcept
@@ -779,9 +800,6 @@ class RefCountedObject : public BaseItf {
     IWeakReference* GetWeakReference() override final { return m_pWeakRef; }
 
  protected:
-    template <typename AllocatorType>
-    friend class MakeNewRCObj;
-
     template <typename ObjectType, typename AllocatorType>
     friend class details::ObjectWrapper;
 
@@ -793,34 +811,7 @@ class RefCountedObject : public BaseItf {
 
     using WeakRefImplType = WeakReferenceImpl;
 
-    // Operator delete can only be called from MakeNewRCObj if an exception is thrown,
-    // or from WeakReference when object is destroyed
-    // It needs to be protected (not private!) to allow generation of destructors in derived
-    // classes
-
-    void operator delete(void* ptr) { GetDefaultMemAllocator()->Free(ptr); }
-
-    template <typename ObjectAllocatorType>
-    void operator delete(void* ptr, ObjectAllocatorType& Allocator,
-                         const char* dbgDescription, const char* dbgFileName,
-                         const int32_t dbgLineNumber) {
-        return Allocator.Free(ptr);
-    }
-
  private:
-    // Operator new is private, and can only be called by MakeNewRCObj
-
-    void* operator new(size_t Size) {
-        GetDefaultMemAllocator()->Allocate(Size, nullptr, nullptr, 0);
-    }
-
-    template <typename ObjectAllocatorType>
-    void* operator new(size_t Size, ObjectAllocatorType& Allocator,
-                       const char* dbgDescription, const char* dbgFileName,
-                       const int32_t dbgLineNumber) {
-        return Allocator.Allocate(Size, dbgDescription, dbgFileName, dbgLineNumber);
-    }
-
     // Note that the type of the reference counters is WeakReference,
     // not IWeakReference. This avoids virtual calls from
     // AddRef() and Release() methods
@@ -828,9 +819,9 @@ class RefCountedObject : public BaseItf {
 };
 
 template <typename BaseItf>
-struct WeakObjectImpl : public RefCountedObject<BaseItf> {
+struct WeakableImpl : public RefCountedObject<BaseItf> {
  public:
-    WeakObjectImpl(IWeakReference* pWeakRef) : RefCountedObject<BaseItf>(pWeakRef) {}
+    WeakableImpl(IWeakReference* pWeakRef) : RefCountedObject<BaseItf>(pWeakRef) {}
 
     FRESULT QueryInterface(FREFIID riid, void** ppv) override {
         if (riid == IID_IObject) {
@@ -845,10 +836,16 @@ struct WeakObjectImpl : public RefCountedObject<BaseItf> {
             return FE_NOINTERFACE;
         }
     }
+
+private:
+   WeakableImpl(const WeakableImpl&) = delete;
+   WeakableImpl(WeakableImpl&&) = delete;
+   WeakableImpl& operator=(const WeakableImpl&) = delete;
+   WeakableImpl& operator=(WeakableImpl&&) = delete;
 };
 
 template <typename BaseItf>
-struct ObjectImpl: public BaseItf {
+struct ObjectImpl: public BaseItf, public UserAllocated {
  public:
     ObjectImpl() {}
 
@@ -884,27 +881,10 @@ struct ObjectImpl: public BaseItf {
         pWrapper->DestroyObject();
     }
 
- protected:
+ private:
     template <typename AllocatorType>
     friend class MakeNewRCObj;
 
-    template <typename ObjectType, typename AllocatorType>
-    friend class details::ObjectWrapper;
-    // Operator delete can only be called from MakeNewRCObj if an exception is thrown,
-    // or from WeakReference when object is destroyed
-    // It needs to be protected (not private!) to allow generation of destructors in derived
-    // classes
-
-    void operator delete(void* ptr) { GetDefaultMemAllocator()->Free(ptr); }
-
-    template <typename ObjectAllocatorType>
-    void operator delete(void* ptr, ObjectAllocatorType& Allocator,
-                         const char* dbgDescription, const char* dbgFileName,
-                         const int32_t dbgLineNumber) {
-        return Allocator.Free(ptr);
-    }
-
- private:
     template <typename ObjectType, typename AllocatorType>
     void Attach(ObjectType* pObject, AllocatorType* pAllocator) throw() {
         static_assert(sizeof(details::ObjectWrapper<ObjectType, AllocatorType>) ==
@@ -914,18 +894,10 @@ struct ObjectImpl: public BaseItf {
             details::ObjectWrapper<ObjectType, AllocatorType>{pObject, pAllocator};
     }
 
-    // Operator new is private, and can only be called by MakeNewRCObj
-
-    void* operator new(size_t Size) {
-        return GetDefaultMemAllocator()->Allocate(Size, nullptr, 0);
-    }
-
-    template <typename ObjectAllocatorType>
-    void* operator new(size_t Size, ObjectAllocatorType& Allocator,
-                       const char* dbgDescription, const char* dbgFileName,
-                       const int32_t dbgLineNumber) {
-        return Allocator.Allocate(Size, dbgFileName, dbgLineNumber);
-    }
+    ObjectImpl(const ObjectImpl&) = delete;
+    ObjectImpl(ObjectImpl&&) = delete;
+    ObjectImpl& operator=(const ObjectImpl&) = delete;
+    ObjectImpl& operator=(ObjectImpl&&) = delete;
 
     std::atomic<FLONG> m_NumStrongReferences{1};
     details::ObjectWrapperStorage m_ObjWrapperStorage{};
@@ -934,7 +906,7 @@ struct ObjectImpl: public BaseItf {
 template <
     typename BaseItf,
     typename std::enable_if<!details::IsWeakReferenceSource<BaseItf>::value, int>::type = 0>
-class DelegatingObjectImpl : public BaseItf {
+class DelegatingObjectImpl : public BaseItf, private UserAllocated {
  public:
     DelegatingObjectImpl(IObject* pOwner) : m_pOwner(pOwner) {}
 
@@ -958,28 +930,16 @@ class DelegatingObjectImpl : public BaseItf {
     }
 
  protected:
-    template <typename ObjectType, typename AllocatorType>
-    friend class MakeNewRCDelegating;
 
     template <typename ObjectType, typename AllocatorType>
     friend class details::ObjectWrapper;
-    // Operator delete can only be called from MakeNewRCObj if an exception is thrown,
-    // or from WeakReference when object is destroyed
-    // It needs to be protected (not private!) to allow generation of destructors in derived
-    // classes
-
-    void operator delete(void* ptr) { GetDefaultMemAllocator()->Free(ptr); }
-
-    template <typename ObjectAllocatorType>
-    void operator delete(void* ptr, ObjectAllocatorType& Allocator,
-                         const char* dbgDescription, const char* dbgFileName,
-                         const int32_t dbgLineNumber) {
-        return Allocator.Free(ptr);
-    }
 
     IObject* m_pOwner;
 
  private:
+    template <typename AllocatorType>
+    friend class MakeNewRCObj;
+
     template <typename ObjectType, typename AllocatorType>
     void Attach(ObjectType* pObject, AllocatorType* pAllocator) throw() {
         static_assert(sizeof(details::ObjectWrapper<ObjectType, AllocatorType>) ==
@@ -989,18 +949,10 @@ class DelegatingObjectImpl : public BaseItf {
             details::ObjectWrapper<ObjectType, AllocatorType>{pObject, pAllocator};
     }
 
-    // Operator new is private, and can only be called by MakeNewRCObj
-
-    void* operator new(size_t Size) {
-        return GetDefaultMemAllocator()->Allocate(Size, nullptr, 0);
-    }
-
-    template <typename ObjectAllocatorType>
-    void* operator new(size_t Size, ObjectAllocatorType& Allocator,
-                       const char* dbgDescription, const char* dbgFileName,
-                       const int32_t dbgLineNumber) {
-        return Allocator.Allocate(Size, dbgFileName, dbgLineNumber);
-    }
+    DelegatingObjectImpl(const DelegatingObjectImpl&) = delete;
+    DelegatingObjectImpl(DelegatingObjectImpl&&) = delete;
+    DelegatingObjectImpl& operator=(const DelegatingObjectImpl&) = delete;
+    DelegatingObjectImpl& operator=(DelegatingObjectImpl&&) = delete;
 
     details::ObjectWrapperStorage m_ObjWrapperStorage{};
 };
@@ -1009,31 +961,11 @@ class DelegatingObjectImpl : public BaseItf {
 namespace details {
 
 template <typename ObjectType>
-struct PackedCtrlBlock {
+struct PackedCtrlBlock: public UserAllocated {
     WeakReferenceImpl WeakRef;
     typename std::aligned_storage<sizeof(ObjectType), alignof(ObjectType)>::type Storage;
     PackedCtrlBlock() {}
     ~PackedCtrlBlock() {}
-
-    void operator delete(void* ptr) { GetDefaultMemAllocator()->Free(ptr); }
-
-    template <typename ObjectAllocatorType>
-    void operator delete(void* ptr, ObjectAllocatorType& Allocator,
-                         const char* dbgDescription, const char* dbgFileName,
-                         const int32_t dbgLineNumber) {
-        return Allocator.Free(ptr);
-    }
-
-    void* operator new(size_t Size) {
-        return GetDefaultMemAllocator()->Allocate(Size, nullptr, 0);
-    }
-
-    template <typename ObjectAllocatorType>
-    void* operator new(size_t Size, ObjectAllocatorType& Allocator,
-                       const char* dbgDescription, const char* dbgFileName,
-                       const int32_t dbgLineNumber) {
-        return Allocator.Allocate(Size, dbgFileName, dbgLineNumber);
-    }
 };
 
 template <typename ObjectType, typename AllocatorType>
@@ -1053,30 +985,7 @@ inline void PackedObjectWrapper<ObjectType, AllocatorType>::DeletePackedStorage(
 template <typename AllocatorType>
 class MakeNewRCObj {
  public:
-    MakeNewRCObj(AllocatorType& Allocator, const char* Description, const char* FileName,
-                 const int32_t LineNumber) noexcept
-        :  // clang-format off
-        m_pAllocator{&Allocator}
-#ifdef DONUT_DEVELOPMENT
-      , m_dvpDescription{Description}
-      , m_dvpFileName   {FileName   }
-      , m_dvpLineNumber {LineNumber }
-    // clang-format on
-#endif
-    {
-    }
-
-    MakeNewRCObj() noexcept
-        :  // clang-format off
-        m_pAllocator    {nullptr}
-#ifdef DONUT_DEVELOPMENT
-      , m_dvpDescription{nullptr}
-      , m_dvpFileName   {nullptr}
-      , m_dvpLineNumber {0      }
-#endif
-    // clang-format on
-    {
-    }
+    MakeNewRCObj(AllocatorType* Allocator) noexcept : m_pAllocator{Allocator} {}
 
     // clang-format off
     MakeNewRCObj           (const MakeNewRCObj&)  = delete;
@@ -1090,17 +999,18 @@ class MakeNewRCObj {
         return RcNewImpl<ObjectType>(0, std::forward<CtorArgTypes>(CtorArgs)...);
     }
 
+    template <typename ObjectType, typename OwnerType, typename... CtorArgTypes>
+    ObjectType* RcNewDelegating(OwnerType* pOwner, CtorArgTypes&&... CtorArgs) const {
+        return RcNewDelegatingImpl<ObjectType>(pOwner,
+                                               std::forward<CtorArgTypes>(CtorArgs)...);
+    }
+
  private:
     // SFINEA overload for IWeakReferenceSoure kind object type
     template <typename Tp, typename... CtorArgTypes>
     Tp* RcNewImpl(
         typename std::enable_if<details::IsWeakReferenceSource<Tp>::value, int>::type,
         CtorArgTypes&&... CtorArgs) const {
-#ifndef DONUT_DEVELOPMENT
-        static constexpr const char* m_dvpDescription = "<Unavailable in release build>";
-        static constexpr const char* m_dvpFileName = "<Unavailable in release build>";
-        static constexpr int32_t m_dvpLineNumber = -1;
-#endif
 
 #if DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
         using Tpcb = details::PackedCtrlBlock<Tp>;
@@ -1110,8 +1020,7 @@ class MakeNewRCObj {
 
         try {
             if (m_pAllocator) {
-                pCBlock = new (*m_pAllocator, m_dvpDescription, m_dvpFileName,
-                               m_dvpLineNumber) Tpcb{};
+                pCBlock = new (m_pAllocator) Tpcb{};
             } else
                 pCBlock = new Tpcb{};
 
@@ -1150,7 +1059,7 @@ class MakeNewRCObj {
             // Operators new and delete of RefCountedObject are private and only accessible
             // by methods of MakeNewRCObj
             if (m_pAllocator)
-                pObj = new (*m_pAllocator, m_dvpDescription, m_dvpFileName, m_dvpLineNumber)
+                pObj = new (m_pAllocator)
                     Tp{pWeakRef, std::forward<CtorArgTypes>(CtorArgs)...};
             else
                 pObj = new Tp{pWeakRef, std::forward<CtorArgTypes>(CtorArgs)...};
@@ -1173,24 +1082,17 @@ class MakeNewRCObj {
 #endif
     }
 
-    // SFINEA overload for IObject (but non-IWeakReferenceSource) kind object type
+    // SFINEA overload for IObject (but non-IWeakable) kind object type
     template <typename Tp, typename... CtorArgTypes>
     Tp* RcNewImpl(
         typename std::enable_if<!details::IsWeakReferenceSource<Tp>::value, int>::type,
         CtorArgTypes&&... CtorArgs) const {
-#ifndef DONUT_DEVELOPMENT
-        static constexpr const char* m_dvpDescription = "<Unavailable in release build>";
-        static constexpr const char* m_dvpFileName = "<Unavailable in release build>";
-        static constexpr int32_t m_dvpLineNumber = -1;
-#endif
-
         Tp* pObj = nullptr;
         try {
             // Operators new and delete of RefCountedObject are private and only accessible
             // by methods of MakeNewRCObj
             if (m_pAllocator)
-                pObj = new (*m_pAllocator, m_dvpDescription, m_dvpFileName, m_dvpLineNumber)
-                    Tp{std::forward<CtorArgTypes>(CtorArgs)...};
+                pObj = new (m_pAllocator) Tp{std::forward<CtorArgTypes>(CtorArgs)...};
             else
                 pObj = new Tp{std::forward<CtorArgTypes>(CtorArgs)...};
 
@@ -1209,70 +1111,19 @@ class MakeNewRCObj {
         return pObj;
     }
 
-    AllocatorType* m_pAllocator;
-
-#ifdef DONUT_DEVELOPMENT
-    const char* const m_dvpDescription;
-    const char* const m_dvpFileName;
-    int32_t const m_dvpLineNumber;
-#endif
-};
-
-template <typename ObjectType, typename AllocatorType>
-class MakeNewRCDelegating {
- public:
-    MakeNewRCDelegating(AllocatorType& Allocator, IObject* pOwner, const char* Description,
-                        const char* FileName,
-                        const int32_t LineNumber) noexcept
-        :  // clang-format off
-        m_pAllocator{&Allocator}
-        , m_pOwner(pOwner)
-#ifdef DONUT_DEVELOPMENT
-      , m_dvpDescription{Description}
-      , m_dvpFileName   {FileName   }
-      , m_dvpLineNumber {LineNumber }
-    // clang-format on
-#endif
-    {
-    }
-
-    MakeNewRCDelegating(IObject* pOwner) noexcept
-        :  // clang-format off
-        m_pAllocator    {nullptr}
-        , m_pOwner{pOwner}
-#ifdef DONUT_DEVELOPMENT
-      , m_dvpDescription{nullptr}
-      , m_dvpFileName   {nullptr}
-      , m_dvpLineNumber {0      }
-#endif
-    // clang-format on
-    {
-    }
-
-    // clang-format off
-    MakeNewRCDelegating           (const MakeNewRCDelegating&)  = delete;
-    MakeNewRCDelegating           (      MakeNewRCDelegating&&) = delete;
-    MakeNewRCDelegating& operator=(const MakeNewRCDelegating&)  = delete;
-    MakeNewRCDelegating& operator=(      MakeNewRCDelegating&&) = delete;
-    // clang-format on
-
-    template <typename... CtorArgTypes>
-    ObjectType* operator()(CtorArgTypes&&... CtorArgs) const {
-#ifndef DONUT_DEVELOPMENT
-        static constexpr const char* m_dvpDescription = "<Unavailable in release build>";
-        static constexpr const char* m_dvpFileName = "<Unavailable in release build>";
-        static constexpr int32_t m_dvpLineNumber = -1;
-#endif
+    template <typename ObjectType, typename OwnerType, typename... CtorArgTypes,
+              std::enable_if_t<std::is_base_of_v<IObject, OwnerType>, int> = 0>
+    ObjectType* RcNewDelegatingImpl(OwnerType* pOwner, CtorArgTypes&&... CtorArgs) const {
 
         ObjectType* pObj = nullptr;
         try {
             // Operators new and delete of RefCountedObject are private and only accessible
             // by methods of MakeNewRCObj
             if (m_pAllocator)
-                pObj = new (*m_pAllocator, m_dvpDescription, m_dvpFileName, m_dvpLineNumber)
-                    ObjectType{m_pOwner, std::forward<CtorArgTypes>(CtorArgs)...};
+                pObj = new (m_pAllocator)
+                    ObjectType{pOwner, std::forward<CtorArgTypes>(CtorArgs)...};
             else
-                pObj = new ObjectType{m_pOwner, std::forward<CtorArgTypes>(CtorArgs)...};
+                pObj = new ObjectType{pOwner, std::forward<CtorArgTypes>(CtorArgs)...};
 
             pObj->template Attach<ObjectType, AllocatorType>(pObj, m_pAllocator);
         } catch (...) {
@@ -1289,34 +1140,45 @@ class MakeNewRCDelegating {
         return pObj;
     }
 
- private:
     AllocatorType* m_pAllocator;
-    IObject* m_pOwner;
-
-#ifdef DONUT_DEVELOPMENT
-    const char* const m_dvpDescription;
-    const char* const m_dvpFileName;
-    int32_t const m_dvpLineNumber;
-#endif
 };
 
-#define MAKE_RC_OBJ(Allocator, Type)                                                   \
+#define MAKE_GENERIC_RC_OBJ(Allocator, Type, ...)                                        \
     donut::MakeNewRCObj<typename std::remove_reference<decltype(Allocator)>::type>( \
-        Allocator, #Type, __FILE__, __LINE__)                                          \
+        Allocator)                                                                  \
         .RcNew<Type>
+#define MAKE_GENERIC_RC_OBJ_TR(Allocator, Type, ...) \
+    donut::TakeOver(MAKE_GENERIC_RC_OBJ(Allocator, Type, ##__VA_ARGS__))
 
-#define MAKE_RC_OBJ0(Type)                                                  \
-    donut::MakeNewRCObj<donut::DefaultMemoryAllocator>(               \
-        *donut::GetDefaultMemAllocator(), #Type, __FILE__, __LINE__) \
-        .RcNew<Type>
+#define MAKE_RC_OBJ(Type, ...)                                                           \
+    donut::MakeNewRCObj<donut::DefaultMemoryAllocator>(donut::GetDefaultMemAllocator()) \
+        .RcNew<Type>(__VA_ARGS__)
+#define MAKE_RC_OBJ_PTR(Type, ...) TakeOver(MAKE_RC_OBJ(Type, ##__VA_ARGS__))
 
-#define MAKE_RC_DELEGATING(Allocator, Type, Owner)                        \
-    donut::MakeNewRCDelegating<                                        \
-        Type, typename std::remove_reference<decltype(Allocator)>::type>( \
-        Allocator, Owner, #Type, __FILE__, __LINE__)
+#define MAKE_GENERIC_RC_DELEGATING(Allocator, Type, ...)                            \
+    donut::MakeNewRCObj<typename std::remove_reference<decltype(Allocator)>::type>( \
+        Allocator)                                                                  \
+        .RcNewDelegating<Type>(__VA_ARGS__)
+#define MAKE_GENERIC_RC_DELEGATING_PTR(Allocator, Type, ...) \
+    donut::TakeOver(MAKE_GENERIC_RC_DELEGATING(Allocator, Type, ##__VA_ARGS__))
 
-#define MAKE_RC_DELEGATING0(Type, Owner)                             \
-    donut::MakeNewRCDelegating<Type, donut::DefaultMemoryAllocator>( \
-        *donut::GetDefaultMemAllocator(), Owner, #Type, __FILE__, __LINE__)
+#define MAKE_RC_DELEGATING(Type, ...)                                                   \
+    donut::MakeNewRCObj<donut::DefaultMemoryAllocator>(donut::GetDefaultMemAllocator()) \
+        .RcNewDelegating<Type>(__VA_ARGS__)
+#define MAKE_RC_DELEGATING_PTR(Type, ...) \
+    donut::TakeOver(MAKE_RC_DELEGATING(Type, ##__VA_ARGS__))
+
+template <typename T>
+void SafeAddRef(T* p) {
+    if (p) p->AddRef();
+}
+
+template <typename T>
+void SafeRelease(T*& p) {
+    if (p) {
+        p->Release();
+        p = nullptr;
+    }
+}
 
 }  // namespace donut

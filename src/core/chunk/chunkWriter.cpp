@@ -269,7 +269,7 @@ static ChunkId chunkMeshNodes(
 }
 
 // serialize MeshSets
-std::shared_ptr<donut::vfs::IBlob const> serialize(MeshSetBase const & mset)
+FRESULT serialize(MeshSetBase const & mset, IDataBlob **ppBlob)
 {
 
     ChunkWriter writer;
@@ -282,7 +282,7 @@ std::shared_ptr<donut::vfs::IBlob const> serialize(MeshSetBase const & mset)
         case MeshSetBase::MESHLET : type = Desc::MESHLET; break;
         default:
             log::error("unsupported set type (%d)", mset.type);
-            return nullptr;
+            return FE_GENERIC_ERROR;
     }
 
     Desc desc;
@@ -349,7 +349,7 @@ std::shared_ptr<donut::vfs::IBlob const> serialize(MeshSetBase const & mset)
         if (set.meshletSize>255)
         {
             log::error("meshlet info size too big : %d (max 255)", set.meshletSize);
-            return nullptr;
+            return FE_GENERIC_ERROR;
         }
 
         desc.meshletMaxVerts = set.maxVerts;
@@ -369,7 +369,7 @@ std::shared_ptr<donut::vfs::IBlob const> serialize(MeshSetBase const & mset)
     else
     {
         log::error("Unknown type of MeshSet");
-        return nullptr;
+        return FE_GENERIC_ERROR;
     }
 
     desc.instancesChunkId = chunkMeshInstances(mset.instances, mset.ninstances, writer);
@@ -385,12 +385,12 @@ std::shared_ptr<donut::vfs::IBlob const> serialize(MeshSetBase const & mset)
     memcpy(chunkData, &desc, chunkSize);
 
     if (!writer.cfile.addChunk<Desc>(chunkData, chunkSize).valid())
-        return nullptr;
+        return FE_GENERIC_ERROR;
 
     if (!writer.createStringsTableChunk().valid())
-        return nullptr;
+        return FE_GENERIC_ERROR;
 
-    return writer.cfile.serialize();
+    return writer.cfile.serialize(ppBlob);
 }
 
 }

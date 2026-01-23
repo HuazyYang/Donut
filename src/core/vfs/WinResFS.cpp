@@ -25,20 +25,9 @@
 #include <donut/core/string_utils.h>
 #include <Windows.h>
 
-using namespace donut::vfs;
+namespace donut::vfs {
+
 namespace fs = std::filesystem;
-
-class NonOwningBlob : public IBlob
-{
-private:
-    void* m_data;
-    size_t m_size;
-
-public:
-    NonOwningBlob(void* data, size_t size) : m_data(data), m_size(size) { }
-    [[nodiscard]] const void* data() const override { return m_data; }
-    [[nodiscard]] size_t size() const override { return m_size; }
-};
 
 static BOOL CALLBACK EnumResourcesCallback(HMODULE hModule, LPCSTR lpType, LPSTR lpName, LONG_PTR lParam)
 {
@@ -73,7 +62,7 @@ bool WinResFileSystem::fileExists(const fs::path& name)
     return (hResource != nullptr);
 }
 
-std::shared_ptr<IBlob> WinResFileSystem::readFile(const fs::path& name)
+FRESULT WinResFileSystem::readFile(const fs::path& name, IDataBlob **ppBlob)
 {
     std::string nameString = name.lexically_normal().generic_string();
     donut::string_utils::ltrim(nameString, '/');
@@ -81,22 +70,35 @@ std::shared_ptr<IBlob> WinResFileSystem::readFile(const fs::path& name)
     HRSRC hResource = FindResourceA((HMODULE)m_hModule, nameString.c_str(), m_Type.c_str());
 
     if (hResource == nullptr)
-        return nullptr;
+        return FE_NOT_FOUND;
 
     DWORD size = SizeofResource((HMODULE)m_hModule, hResource);
     if (size == 0)
     {
         // empty resource (can that really happen?)
-        return std::make_shared<NonOwningBlob>(nullptr, 0);
+        return FE_GENERIC_ERROR;
     }
 
     HGLOBAL hGlobal = LoadResource((HMODULE)m_hModule, hResource);
 
     if (hGlobal == nullptr)
-        return nullptr;
+        return FE_GENERIC_ERROR;
 
     void* pData = LockResource(hGlobal);
-    return std::make_shared<NonOwningBlob>(pData, size);
+
+    IDataBlob* pBlob;
+    FRESULT fr;
+    if(FFAILED(fr = CreateProxyBlob(size, pData, &pBlob))) {
+        return fr;
+    }
+
+    if(ppBlob) {
+        *ppBlob = pBlob;
+        pBlob->AddRef();
+    }
+    pBlob->Release();
+
+    return FS_OK;
 }
 
 bool WinResFileSystem::writeFile(const fs::path&, const void*, size_t)
@@ -130,3 +132,5 @@ int WinResFileSystem::enumerateDirectories(const std::filesystem::path& path, en
     (void)allowDuplicates;
     return status::NotImplemented;
 }
+
+}  // namespace donut::vfs

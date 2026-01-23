@@ -55,7 +55,7 @@ namespace donut::render
     {
     };
     
-    class IGeometryPass
+    class IGeometryPass: public ObjectImpl<IObject>
     {
     public:
         [[nodiscard]] virtual engine::ViewType::Enum GetSupportedViewTypes() const = 0;
@@ -80,8 +80,8 @@ namespace donut::render
         nvrhi::ICommandList* commandList,
         const engine::ICompositeView* compositeView,
         const engine::ICompositeView* compositeViewPrev,
-        engine::FramebufferFactory& framebufferFactory,
-        const std::shared_ptr<engine::SceneGraphNode>& rootNode,
+        engine::FramebufferFactory* framebufferFactory,
+        engine::SceneGraphNode* rootNode,
         IDrawStrategy& drawStrategy,
         IGeometryPass& pass,
         GeometryPassContext& passContext,

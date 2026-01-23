@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include <memory>
+#include <donut/core/object/Foundation.h>
 #include <string>
 #include <filesystem>
 #include <functional>
@@ -52,39 +52,8 @@ namespace donut::vfs
         return [&v](std::string_view s) { v.push_back(std::string(s)); };
     }
 
-    // A blob is a package for untyped data, typically read from a file.
-    class IBlob
-    {
-    public:
-        virtual ~IBlob() = default;
-        [[nodiscard]] virtual const void* data() const = 0;
-        [[nodiscard]] virtual size_t size() const = 0;
-
-        // Returns true if the provided blob contains no data.
-        // Note: the previous version of this function was called IsEmpty (capital I)
-        // and it returned the inverse of what it was supposed to.
-        static bool isEmpty(IBlob const* blob)
-        {
-            return blob == nullptr || blob->data() == nullptr || blob->size() == 0;
-        }
-    };
-
-    // Specific blob implementation that owns the data and frees it when deleted.
-    class Blob : public IBlob
-    {
-    private:
-        void* m_data;
-        size_t m_size;
-
-    public:
-        Blob(void* data, size_t size);
-        ~Blob() override;
-        [[nodiscard]] const void* data() const override;
-        [[nodiscard]] size_t size() const override;
-    };
-
     // Basic interface for the virtual file system.
-    class IFileSystem
+    class IFileSystem: public ObjectImpl<IObject>
     {
     public:
         virtual ~IFileSystem() = default;
@@ -97,7 +66,7 @@ namespace donut::vfs
 
         // Read the entire file.
         // Returns nullptr if the file cannot be read.
-        virtual std::shared_ptr<IBlob> readFile(const std::filesystem::path& name) = 0;
+        virtual FRESULT readFile(const std::filesystem::path& name, IDataBlob** ppBlob) = 0;
 
         // Write the entire file.
         // Returns false if the file cannot be written.
@@ -121,7 +90,7 @@ namespace donut::vfs
     public:
 		bool folderExists(const std::filesystem::path& name) override;
         bool fileExists(const std::filesystem::path& name) override;
-        std::shared_ptr<IBlob> readFile(const std::filesystem::path& name) override;
+        FRESULT readFile(const std::filesystem::path& name, IDataBlob** ppBlob) override;
         bool writeFile(const std::filesystem::path& name, const void* data, size_t size) override;
         int enumerateFiles(const std::filesystem::path& path, const std::vector<std::string>& extensions, enumerate_callback_t callback, bool allowDuplicates = false) override;
         int enumerateDirectories(const std::filesystem::path& path, enumerate_callback_t callback, bool allowDuplicates = false) override;
@@ -133,16 +102,17 @@ namespace donut::vfs
     class RelativeFileSystem : public IFileSystem
     {
     private:
-        std::shared_ptr<IFileSystem> m_UnderlyingFS;
+        IFileSystem *m_UnderlyingFS;
         std::filesystem::path m_BasePath;
     public:
-        RelativeFileSystem(std::shared_ptr<IFileSystem> fs, const std::filesystem::path& basePath);
+        RelativeFileSystem(IFileSystem *fs, const std::filesystem::path& basePath);
+        ~RelativeFileSystem();
 
         [[nodiscard]] std::filesystem::path const& GetBasePath() const { return m_BasePath; }
 
         bool folderExists(const std::filesystem::path& name) override;
         bool fileExists(const std::filesystem::path& name) override;
-        std::shared_ptr<IBlob> readFile(const std::filesystem::path& name) override;
+        FRESULT readFile(const std::filesystem::path& name, IDataBlob **ppBlob) override;
         bool writeFile(const std::filesystem::path& name, const void* data, size_t size) override;
         int enumerateFiles(const std::filesystem::path& path, const std::vector<std::string>& extensions, enumerate_callback_t callback, bool allowDuplicates = false) override;
         int enumerateDirectories(const std::filesystem::path& path, enumerate_callback_t callback, bool allowDuplicates = false) override;
@@ -153,17 +123,19 @@ namespace donut::vfs
     class RootFileSystem : public IFileSystem
     {
     private:
-        std::vector<std::pair<std::string, std::shared_ptr<IFileSystem>>> m_MountPoints;
+        std::vector<std::pair<std::string, IFileSystem *>> m_MountPoints;
 
         bool findMountPoint(const std::filesystem::path& path, std::filesystem::path* pRelativePath, IFileSystem** ppFS);
     public:
-        void mount(const std::filesystem::path& path, std::shared_ptr<IFileSystem> fs);
+        ~RootFileSystem();
+        void mount(const std::filesystem::path& path, IFileSystem *fs);
         void mount(const std::filesystem::path& path, const std::filesystem::path& nativePath);
         bool unmount(const std::filesystem::path& path);
 
 		bool folderExists(const std::filesystem::path& name) override;
         bool fileExists(const std::filesystem::path& name) override;
-        std::shared_ptr<IBlob> readFile(const std::filesystem::path& name) override;
+        FRESULT readFile(const std::filesystem::path& name,
+                                        IDataBlob** ppBlob) override;
         bool writeFile(const std::filesystem::path& name, const void* data, size_t size) override;
         int enumerateFiles(const std::filesystem::path& path, const std::vector<std::string>& extensions, enumerate_callback_t callback, bool allowDuplicates = false) override;
         int enumerateDirectories(const std::filesystem::path& path, enumerate_callback_t callback, bool allowDuplicates = false) override;

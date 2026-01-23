@@ -44,6 +44,8 @@ this software is released into the Public Domain.
 #include <json/json-forwards.h>
 
 #include "donut/engine/ShaderFactory.h"
+#include <donut/engine/TextureCache.h>
+#include <donut/core/vfs/VFS.h>
 
 #if DONUT_WITH_STATIC_SHADERS
 #if DONUT_WITH_DX11
@@ -81,28 +83,28 @@ struct Scene::Resources
 
 Scene::Scene(
     nvrhi::IDevice* device,
-    ShaderFactory& shaderFactory,
-    std::shared_ptr<IFileSystem> fs,
-    std::shared_ptr<TextureCache> textureCache,
-    std::shared_ptr<DescriptorTableManager> descriptorTable,
-    std::shared_ptr<SceneTypeFactory> sceneTypeFactory)
-    : m_fs(std::move(fs))
-    , m_SceneTypeFactory(std::move(sceneTypeFactory))
-    , m_TextureCache(std::move(textureCache))
-    , m_DescriptorTable(std::move(descriptorTable))
+    ShaderFactory* shaderFactory,
+    vfs::IFileSystem *fs,
+    TextureCache* textureCache,
+    DescriptorTableManager* descriptorTable,
+    SceneTypeFactory* sceneTypeFactory)
+    : m_fs(fs)
+    , m_SceneTypeFactory(sceneTypeFactory)
+    , m_TextureCache(textureCache)
+    , m_DescriptorTable(descriptorTable)
     , m_Device(device)
 {
-    m_Resources = std::make_shared<Resources>();
+    m_Resources = MakeMono<Resources>();
 
     if (!m_SceneTypeFactory)
-        m_SceneTypeFactory = std::make_shared<SceneTypeFactory>();
+        m_SceneTypeFactory = MAKE_RC_OBJ_PTR(SceneTypeFactory);
 
-    m_GltfImporter = std::make_shared<GltfImporter>(m_fs, m_SceneTypeFactory);
+    m_GltfImporter =MAKE_RC_OBJ_PTR(GltfImporter, m_fs, m_SceneTypeFactory);
 
     m_EnableBindlessResources = !!m_DescriptorTable;
     m_RayTracingSupported = m_Device->queryFeatureSupport(nvrhi::Feature::RayTracingAccelStruct);
 
-    m_SkinningShader = shaderFactory.CreateAutoShader("donut/skinning_cs", "main", DONUT_MAKE_PLATFORM_SHADER(g_skinning_cs), nullptr, nvrhi::ShaderType::Compute);
+    m_SkinningShader = shaderFactory->CreateAutoShader("donut/skinning_cs", "main", DONUT_MAKE_PLATFORM_SHADER(g_skinning_cs), nullptr, nvrhi::ShaderType::Compute);
 
     {
         nvrhi::BindingLayoutDesc layoutDesc;
@@ -136,7 +138,7 @@ bool Scene::LoadWithThreadPool(const std::filesystem::path& sceneFileName, Threa
     g_LoadingStats.ObjectsLoaded = 0;
     g_LoadingStats.ObjectsTotal = 0;
     
-    m_SceneGraph = std::make_shared<SceneGraph>();
+    m_SceneGraph = MAKE_RC_OBJ_PTR(SceneGraph);
 
     if (sceneFileName.extension() == ".gltf" || sceneFileName.extension() == ".glb")
     {
@@ -155,7 +157,7 @@ bool Scene::LoadWithThreadPool(const std::filesystem::path& sceneFileName, Threa
     }
     else
     {
-        std::shared_ptr<SceneGraphNode> rootNode = std::make_shared<SceneGraphNode>();
+        auto rootNode = MAKE_RC_OBJ_PTR(SceneGraphNode);
         rootNode->SetName("SceneRoot");
         m_SceneGraph->SetRootNode(rootNode);
 
@@ -235,7 +237,7 @@ void Scene::LoadModels(
         threadPool->WaitForTasks();
 }
 
-void Scene::LoadSceneGraph(const Json::Value& nodeList, const std::shared_ptr<SceneGraphNode>& parent)
+void Scene::LoadSceneGraph(const Json::Value& nodeList, SceneGraphNode* parent)
 {
     for (const auto& src : nodeList)
     {
@@ -252,7 +254,7 @@ void Scene::LoadSceneGraph(const Json::Value& nodeList, const std::shared_ptr<Sc
             nodeName = name.asString();
         }
 
-        std::shared_ptr<SceneGraphNode> customParent = parent;
+        AutoPtr<SceneGraphNode> customParent = parent;
         const auto& parentNode = src["parent"];
         if (parentNode.isString())
         {
@@ -270,7 +272,7 @@ void Scene::LoadSceneGraph(const Json::Value& nodeList, const std::shared_ptr<Sc
                 nodeName.c_str());
         }
 
-        std::shared_ptr<SceneGraphNode> dst;
+        AutoPtr<SceneGraphNode> dst;
 
         const auto& modelNode = src["model"];
         if (!modelNode.isNull())
@@ -298,7 +300,7 @@ void Scene::LoadSceneGraph(const Json::Value& nodeList, const std::shared_ptr<Sc
         }
         else
         {
-            dst = std::make_shared<SceneGraphNode>();
+            dst = MAKE_RC_OBJ_PTR(SceneGraphNode);
         }
 
         dst = m_SceneGraph->Attach(customParent, dst);
@@ -388,13 +390,13 @@ static dm::float4 ReadUpToFloat4(const Json::Value& node)
 
 void Scene::LoadAnimations(const Json::Value& nodeList)
 {
-    std::shared_ptr<SceneGraphNode> animationContainer;
+    AutoPtr<SceneGraphNode> animationContainer;
 
     for (const auto& animationNode : nodeList)
     {
-        const auto& animation = std::make_shared<SceneGraphAnimation>();
+        const auto& animation = MAKE_RC_OBJ_PTR(SceneGraphAnimation);
 
-        const auto& sceneAnimationNode = std::make_shared<SceneGraphNode>();
+        const auto& sceneAnimationNode = MAKE_RC_OBJ_PTR(SceneGraphNode);
         sceneAnimationNode->SetLeaf(animation);
 
         const auto& nameNode = animationNode["name"];
@@ -412,7 +414,7 @@ void Scene::LoadAnimations(const Json::Value& nodeList)
                 // Increment the index in the beginning because there are 'continue' statements below
                 ++channelIndex;
 
-                const auto& sampler = std::make_shared<animation::Sampler>();
+                const auto& sampler = MAKE_RC_OBJ_PTR(animation::Sampler);
 
                 const auto& modeNode = channelSrc["mode"];
                 if (modeNode.isString())
@@ -490,7 +492,7 @@ void Scene::LoadAnimations(const Json::Value& nodeList)
                         {
                             targetName = targetName.substr(9);
 
-                            std::shared_ptr<Material> material;
+                            AutoPtr<Material> material;
                             for (const auto& it : m_SceneGraph->GetMaterials())
                             {
                                 if (it->name == targetName)
@@ -502,7 +504,7 @@ void Scene::LoadAnimations(const Json::Value& nodeList)
 
                             if (material)
                             {
-                                const auto& channel = std::make_shared<SceneGraphAnimationChannel>(sampler, material);
+                                const auto& channel = MAKE_RC_OBJ_PTR(SceneGraphAnimationChannel, sampler, material);
                                 channel->SetLeafProperyName(attributeNode.asString());
                                 animation->AddChannel(channel);
                             }
@@ -517,7 +519,7 @@ void Scene::LoadAnimations(const Json::Value& nodeList)
                             const auto& target = m_SceneGraph->FindNode(targetNode.asString());
                             if (target)
                             {
-                                const auto& channel = std::make_shared<SceneGraphAnimationChannel>(sampler, target, attribute);
+                                const auto& channel = MAKE_RC_OBJ_PTR(SceneGraphAnimationChannel, sampler, target, attribute);
                                 if (attribute == AnimationAttribute::LeafProperty)
                                     channel->SetLeafProperyName(attributeNode.asString());
                                 animation->AddChannel(channel);
@@ -559,7 +561,7 @@ void Scene::LoadAnimations(const Json::Value& nodeList)
         {
             if (!animationContainer)
             {
-                animationContainer = std::make_shared<SceneGraphNode>();
+                animationContainer = MAKE_RC_OBJ_PTR(SceneGraphNode);
                 animationContainer->SetName("Animations");
                 m_SceneGraph->Attach(m_SceneGraph->GetRootNode(), animationContainer);
             }
@@ -579,6 +581,8 @@ bool Scene::LoadCustomData(Json::Value& rootNode, ThreadPool* threadPool)
     // Reserved for derived classes
     return true;
 }
+
+Scene::~Scene() {}
 
 void Scene::FinishedLoading(uint32_t frameIndex)
 {
@@ -734,7 +738,7 @@ void Scene::UpdateSkinnedMeshes(nvrhi::ICommandList* commandList, uint32_t frame
 
         for (size_t i = 0; i < skinnedInstance->joints.size(); i++)
         {
-            auto jointNode = skinnedInstance->joints[i].node.lock();
+            auto jointNode = skinnedInstance->joints[i].node.Lock();
 
             dm::float4x4 jointMatrix = dm::affineToHomogeneous(dm::affine3(jointNode->GetLocalToWorldTransform() * worldToRoot));
             jointMatrix = skinnedInstance->joints[i].inverseBindMatrix * jointMatrix;
@@ -842,8 +846,8 @@ void Scene::CreateMeshBuffers(nvrhi::ICommandList* commandList)
 
             if (m_DescriptorTable)
             {
-                buffers->indexBufferDescriptor = std::make_shared<DescriptorHandle>(m_DescriptorTable->CreateDescriptorHandle(
-                    nvrhi::BindingSetItem::RawBuffer_SRV(0, buffers->indexBuffer)));
+                buffers->indexBufferDescriptor = m_DescriptorTable->CreateDescriptorHandle(
+                    nvrhi::BindingSetItem::RawBuffer_SRV(0, buffers->indexBuffer));
             }
 
             commandList->beginTrackingBufferState(buffers->indexBuffer, nvrhi::ResourceStates::Common);
@@ -926,8 +930,8 @@ void Scene::CreateMeshBuffers(nvrhi::ICommandList* commandList)
             buffers->vertexBuffer = m_Device->createBuffer(bufferDesc);
             if (m_DescriptorTable)
             {
-                buffers->vertexBufferDescriptor = std::make_shared<DescriptorHandle>(
-                    m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, buffers->vertexBuffer)));
+                buffers->vertexBufferDescriptor = 
+                    m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, buffers->vertexBuffer));
             }
 
             commandList->beginTrackingBufferState(buffers->vertexBuffer, nvrhi::ResourceStates::Common);
@@ -1004,7 +1008,7 @@ void Scene::CreateMeshBuffers(nvrhi::ICommandList* commandList)
 
         if (!skinnedMesh->buffers)
         {
-            skinnedMesh->buffers = std::make_shared<BufferGroup>();
+            skinnedMesh->buffers =MAKE_RC_OBJ_PTR(BufferGroup);
 
             uint32_t totalVertices = skinnedMesh->totalVertices;
 
@@ -1062,8 +1066,8 @@ void Scene::CreateMeshBuffers(nvrhi::ICommandList* commandList)
 
             if (m_DescriptorTable)
             {
-                skinnedBuffers->vertexBufferDescriptor = std::make_shared<DescriptorHandle>(
-                    m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, skinnedBuffers->vertexBuffer)));
+                skinnedBuffers->vertexBufferDescriptor = 
+                    m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, skinnedBuffers->vertexBuffer));
             }
         }
 
@@ -1173,12 +1177,12 @@ void Scene::WriteInstanceBuffer(nvrhi::ICommandList* commandList) const
         m_Resources->instanceData.size() * sizeof(InstanceData));
 }
 
-void Scene::UpdateMaterial(const std::shared_ptr<Material>& material)
+void Scene::UpdateMaterial(const Material* material)
 {
     material->FillConstantBuffer(m_Resources->materialData[material->materialID], m_UseResourceDescriptorHeapBindless);
 }
 
-void Scene::UpdateGeometry(const std::shared_ptr<MeshInfo>& mesh)
+void Scene::UpdateGeometry(const MeshInfo* mesh)
 {
     // TODO: support 64-bit buffer offsets in the CB.
     for (const auto& geometry : mesh->geometries)
@@ -1219,7 +1223,7 @@ GeometryData* Scene::GetGeometryData(const MeshGeometry& geometry) const
 }
 
 
-void Scene::UpdateInstance(const std::shared_ptr<MeshInstance>& instance)
+void Scene::UpdateInstance(const MeshInstance* instance)
 {
     SceneGraphNode* node = instance->GetNode();
     if (!node)

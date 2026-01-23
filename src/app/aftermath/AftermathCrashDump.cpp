@@ -34,7 +34,7 @@ static void DumpFileCallback(const void* pGpuCrashDump, const uint32_t gpuCrashD
     donut::app::AftermathCrashDump *dumper = reinterpret_cast<donut::app::AftermathCrashDump*>(pUserData);
     std::filesystem::create_directory(dumper->GetDumpFolder());
 
-    auto nativeFS = std::make_unique<donut::vfs::NativeFileSystem>();
+    auto nativeFS = MAKE_RC_OBJ_PTR(donut::vfs::NativeFileSystem);
     std::filesystem::path dumpPath = dumper->GetDumpFolder() / "crash.nv-gpudmp";
     nativeFS->writeFile(dumpPath, pGpuCrashDump, gpuCrashDumpSize);
 
@@ -77,7 +77,7 @@ static void ShaderDebugInfoCallback(const void* pShaderDebugInfo, const uint32_t
     donut::app::AftermathCrashDump* dumper = reinterpret_cast<donut::app::AftermathCrashDump*>(pUserData);
     std::filesystem::create_directory(dumper->GetDumpFolder());
 
-    auto nativeFS = std::make_unique<donut::vfs::NativeFileSystem>();
+    auto nativeFS = MAKE_RC_OBJ_PTR(donut::vfs::NativeFileSystem);
     // the hash used for nsight is stored in the shader debug info file in address 0x20-0x40
     // the name (in terms of uint64s at byte addresses) is 0x28 0x20 - 0x38 0x30
     // which in terms of uint64 addresses is 0x5 0x4 - 0x7 0x6

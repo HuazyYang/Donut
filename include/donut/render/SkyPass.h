@@ -21,10 +21,10 @@
 */
 
 #pragma once
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <nvrhi/nvrhi.h>
-#include <memory>
 
 
 namespace donut::engine
@@ -55,7 +55,7 @@ namespace donut::render
         float maxLightRadiance = 100.f; // clamp for light radiance derived from its angular size, 0 = no clamp
     };
 
-    class SkyPass
+    class SkyPass: ObjectImpl<IObject>
     {
     private:
         nvrhi::ShaderHandle m_PixelShader;
@@ -64,14 +64,14 @@ namespace donut::render
         nvrhi::BindingSetHandle m_RenderBindingSet;
         nvrhi::GraphicsPipelineHandle m_RenderPso;
         
-        std::shared_ptr<engine::FramebufferFactory> m_FramebufferFactory;
+        AutoPtr<engine::FramebufferFactory> m_FramebufferFactory;
 
     public:
         SkyPass(
             nvrhi::IDevice* device,
-            const std::shared_ptr<engine::ShaderFactory>& shaderFactory,
-            const std::shared_ptr<engine::CommonRenderPasses>& commonPasses,
-            const std::shared_ptr<engine::FramebufferFactory>& framebufferFactory,
+            engine::ShaderFactory* shaderFactory,
+            engine::CommonRenderPasses* commonPasses,
+            engine::FramebufferFactory* framebufferFactory,
             const engine::ICompositeView& compositeView);
 
         void Render(

@@ -21,8 +21,8 @@
 */
 
 #pragma once
-
-#include <memory>
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <filesystem>
 
 namespace donut::vfs
@@ -44,15 +44,15 @@ namespace donut::engine
 
 namespace donut::engine
 {
-    class GltfImporter
+    class GltfImporter: public ObjectImpl<IObject>
     {   
     protected:
-        std::shared_ptr<vfs::IFileSystem> m_fs;
-        std::shared_ptr<SceneTypeFactory> m_SceneTypeFactory;
+        AutoPtr<vfs::IFileSystem> m_fs;
+        AutoPtr<SceneTypeFactory> m_SceneTypeFactory;
         
     public:
-        explicit GltfImporter(std::shared_ptr<vfs::IFileSystem> fs, std::shared_ptr<SceneTypeFactory> sceneTypeFactory);
-        
+        explicit GltfImporter(vfs::IFileSystem* fs, SceneTypeFactory* sceneTypeFactory);
+
         bool Load(
             const std::filesystem::path& fileName,
             TextureCache& textureCache,

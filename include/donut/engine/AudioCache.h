@@ -21,10 +21,10 @@
 */
 
 #pragma once
-
+#include <donut/core/object/Foundation.h>
+#include <donut/core/object/AutoPtr.h>
 #include <cstdint>
 #include <filesystem>
-#include <memory>
 #include <map>
 #include <mutex>
 #include <string>
@@ -48,7 +48,7 @@ class AudioCache;
 // AudioData : handle issued by the AudioCache with basic interface to
 // audio sample data.
 //
-class AudioData
+class AudioData: public ObjectImpl<IObject>
 {
 public:
 
@@ -83,17 +83,17 @@ private:
 
     friend class AudioCache;
 
-    std::shared_ptr<donut::vfs::IBlob> m_data;
+    AutoPtr<IDataBlob> m_data;
 };
 
 // AudioCache : cache for audio data with synch & async read from 
 // donut vfs::IFileSystem
 //
-class AudioCache
+class AudioCache: ObjectImpl<IObject>
 {
 public:
 
-    AudioCache(std::shared_ptr<vfs::IFileSystem> fs);
+    AudioCache(vfs::IFileSystem* fs);
 
     // Release all cached audio files
     void Reset();
@@ -101,28 +101,28 @@ public:
 public:
 
     // Synchronous read
-    std::shared_ptr<AudioData const> LoadFromFile(const std::filesystem::path & path);
+    AutoPtr<AudioData> LoadFromFile(const std::filesystem::path & path);
 
     // Asynchronous read
-    std::shared_ptr<AudioData const> LoadFromFileAsync(const std::filesystem::path & path, ThreadPool& threadPool);
+    AutoPtr<AudioData> LoadFromFileAsync(const std::filesystem::path & path, ThreadPool& threadPool);
 
 private:
 
-    static std::shared_ptr<AudioData const> importRiff(std::shared_ptr<donut::vfs::IBlob> blob, char const * filepath);
+    static AutoPtr<AudioData> importRiff(IDataBlob* blob, char const * filepath);
 
-    std::shared_ptr<AudioData const> loadAudioFile (const std::filesystem::path & path);
+    AutoPtr<AudioData> loadAudioFile(const std::filesystem::path& path);
 
-    bool findInCache(const std::filesystem::path & path, std::shared_ptr<AudioData const> & result);
+    bool findInCache(const std::filesystem::path & path, AudioData **result);
 
-    void sendAudioLoadedMessage(std::shared_ptr<AudioData const> audio, char const * path);
+    void sendAudioLoadedMessage(const AudioData *audio, char const * path);
 
 private:
 
     std::mutex m_LoadedDataMutex;
 
-    std::map<std::string, std::shared_ptr<AudioData const>> m_LoadedAudioData;
+    std::map<std::string, AutoPtr<AudioData>> m_LoadedAudioData;
 
-    std::shared_ptr<donut::vfs::IFileSystem> m_fs;
+    AutoPtr<donut::vfs::IFileSystem> m_fs;
 };
 
 } // namespace donut::engine::audio

@@ -37,35 +37,7 @@ extern "C" {
 }
 #endif // _WIN32
 
-using namespace donut::vfs;
-
-Blob::Blob(void* data, size_t size)
-    : m_data(data)
-    , m_size(size)
-{
-
-}
-
-const void* Blob::data() const
-{
-    return m_data;
-}
-
-size_t Blob::size() const
-{
-    return m_size;
-}
-
-Blob::~Blob()
-{
-    if (m_data)
-    {
-        free(m_data);
-        m_data = nullptr;
-    }
-
-    m_size = 0;
-}
+namespace donut::vfs {
 
 bool NativeFileSystem::folderExists(const std::filesystem::path& name)
 {
@@ -77,7 +49,7 @@ bool NativeFileSystem::fileExists(const std::filesystem::path& name)
     return std::filesystem::exists(name) && std::filesystem::is_regular_file(name);
 }
 
-std::shared_ptr<IBlob> NativeFileSystem::readFile(const std::filesystem::path& name)
+FRESULT NativeFileSystem::readFile(const std::filesystem::path& name, IDataBlob **ppBlob)
 {
     // TODO: better error reporting
 
@@ -86,7 +58,7 @@ std::shared_ptr<IBlob> NativeFileSystem::readFile(const std::filesystem::path& n
     if (!file.is_open())
     {
         // file does not exist or is locked
-        return nullptr;
+        return FE_INVALID_ARGS;
     }
 
     file.seekg(0, std::ios::end);
@@ -97,29 +69,32 @@ std::shared_ptr<IBlob> NativeFileSystem::readFile(const std::filesystem::path& n
     {
         // file larger than size_t
         assert(false);
-        return nullptr;
+        return FE_GENERIC_ERROR;
     }
 
-    char* data = static_cast<char*>(malloc(size));
-
-    if (data == nullptr)
-    {
-        // out of memory
-        assert(false);
-        return nullptr;
+    IDataBlob* pBlob;
+    FRESULT fr;
+    if(FFAILED(fr = CreateBlob(size, &pBlob))) {
+        return fr;
     }
 
-    file.read(data, size);
+    file.read((char *)pBlob->GetDataPtr(), size);
 
     if (!file.good())
     {
         // reading error
         assert(false);
-        free(data);
-        return nullptr;
+        pBlob->Release();
+        return FE_GENERIC_ERROR;
     }
 
-    return std::make_shared<Blob>(data, size);
+    if(ppBlob) {
+        *ppBlob = pBlob;
+        pBlob->AddRef();
+    }
+
+    pBlob->Release();
+    return FS_OK;
 }
 
 bool NativeFileSystem::writeFile(const std::filesystem::path& name, const void* data, size_t size)
@@ -251,15 +226,17 @@ int NativeFileSystem::enumerateDirectories(const std::filesystem::path& path, en
     return enumerateNativeFiles(pattern.c_str(), true, callback);
 }
 
-RelativeFileSystem::RelativeFileSystem(std::shared_ptr<IFileSystem> fs, const std::filesystem::path& basePath)
-    : m_UnderlyingFS(std::move(fs))
+RelativeFileSystem::RelativeFileSystem(IFileSystem *fs, const std::filesystem::path& basePath)
+    : m_UnderlyingFS(fs)
     , m_BasePath(basePath.lexically_normal())
 {
+    m_UnderlyingFS->AddRef();
 }
 
-bool RelativeFileSystem::folderExists(const std::filesystem::path& name)
-{
-	return m_UnderlyingFS->folderExists(m_BasePath / name.relative_path());
+RelativeFileSystem::~RelativeFileSystem() { SafeRelease(m_UnderlyingFS); }
+
+bool RelativeFileSystem::folderExists(const std::filesystem::path& name) {
+    return m_UnderlyingFS->folderExists(m_BasePath / name.relative_path());
 }
 
 bool RelativeFileSystem::fileExists(const std::filesystem::path& name)
@@ -267,9 +244,9 @@ bool RelativeFileSystem::fileExists(const std::filesystem::path& name)
     return m_UnderlyingFS->fileExists(m_BasePath / name.relative_path());
 }
 
-std::shared_ptr<IBlob> RelativeFileSystem::readFile(const std::filesystem::path& name)
+FRESULT RelativeFileSystem::readFile(const std::filesystem::path& name, IDataBlob **ppBlob)
 {
-    return m_UnderlyingFS->readFile(m_BasePath / name.relative_path());
+    return m_UnderlyingFS->readFile(m_BasePath / name.relative_path(), ppBlob);
 }
 
 bool RelativeFileSystem::writeFile(const std::filesystem::path& name, const void* data, size_t size)
@@ -287,20 +264,30 @@ int RelativeFileSystem::enumerateDirectories(const std::filesystem::path& path, 
     return m_UnderlyingFS->enumerateDirectories(m_BasePath / path.relative_path(), callback, allowDuplicates);
 }
 
-void RootFileSystem::mount(const std::filesystem::path& path, std::shared_ptr<IFileSystem> fs)
-{
+RootFileSystem::~RootFileSystem() {
+    for(auto &item : m_MountPoints) {
+        SafeRelease(item.second);
+    }
+}
+
+void RootFileSystem::mount(const std::filesystem::path& path, IFileSystem* fs) {
     if (findMountPoint(path, nullptr, nullptr))
     {
         log::error("Cannot mount a filesystem at %s: there is another FS that includes this path", path.c_str());
         return;
     }
 
+    SafeAddRef(fs);
     m_MountPoints.push_back(std::make_pair(path.lexically_normal().generic_string(), fs));
 }
 
 void donut::vfs::RootFileSystem::mount(const std::filesystem::path& path, const std::filesystem::path& nativePath)
 {
-    mount(path, std::make_shared<RelativeFileSystem>(std::make_shared<NativeFileSystem>(), nativePath));
+    auto pNativeFS = MAKE_RC_OBJ(NativeFileSystem);
+    auto pRelativeFS = MAKE_RC_OBJ(RelativeFileSystem, pNativeFS, nativePath);
+    mount(path, pRelativeFS);
+    pRelativeFS->Release();
+    pNativeFS->Release();
 }
 
 bool RootFileSystem::unmount(const std::filesystem::path& path)
@@ -311,6 +298,7 @@ bool RootFileSystem::unmount(const std::filesystem::path& path)
     {
         if (m_MountPoints[index].first == spath)
         {
+            SafeRelease(m_MountPoints[index].second);
             m_MountPoints.erase(m_MountPoints.begin() + index);
             return true;
         }
@@ -335,7 +323,7 @@ bool RootFileSystem::findMountPoint(const std::filesystem::path& path, std::file
 
             if (ppFS)
             {
-                *ppFS = it.second.get();
+                *ppFS = it.second;
             }
 
             return true;
@@ -371,17 +359,17 @@ bool RootFileSystem::fileExists(const std::filesystem::path& name)
     return false;
 }
 
-std::shared_ptr<IBlob> RootFileSystem::readFile(const std::filesystem::path& name)
+FRESULT RootFileSystem::readFile(const std::filesystem::path& name, IDataBlob **ppBlob)
 {
     std::filesystem::path relativePath;
     IFileSystem* fs = nullptr;
 
     if (findMountPoint(name, &relativePath, &fs))
     {
-        return fs->readFile(relativePath);
+        return fs->readFile(relativePath, ppBlob);
     }
 
-    return nullptr;
+    return FE_NOT_FOUND;
 }
 
 bool RootFileSystem::writeFile(const std::filesystem::path& name, const void* data, size_t size)
@@ -462,4 +450,6 @@ std::string donut::vfs::getFileSearchRegex(const std::filesystem::path& path, co
     }
 
     return regex.str();
+}
+
 }
