@@ -47,8 +47,8 @@ void SceneGraphLeaf::SetName(const std::string& name) const
         assert(!"The leaf must be attached in order to set its name");
 }
 
-SkinnedMeshInstance::SkinnedMeshInstance(IWeakReference *pWeakRef, SceneTypeFactory* sceneTypeFactory, MeshInfo *prototypeMesh)
-    : MeshInstance(pWeakRef, nullptr)
+SkinnedMeshInstance::SkinnedMeshInstance(SceneTypeFactory* sceneTypeFactory, MeshInfo *prototypeMesh)
+    : MeshInstance(nullptr)
     , m_SceneTypeFactory(sceneTypeFactory)
 {
     m_PrototypeMesh = std::move(prototypeMesh);

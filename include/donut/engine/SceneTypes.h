@@ -122,7 +122,7 @@ namespace donut::engine
         nvrhi::TextureHandle texture;
         TextureAlphaMode alphaMode = TextureAlphaMode::UNKNOWN;
         uint32_t originalBitsPerPixel = 0;
-        AutoPtr<DescriptorHandle> bindlessDescriptor;
+        DescriptorHandle bindlessDescriptor;
         std::string path;
         std::string mimeType;
 
@@ -353,7 +353,7 @@ namespace donut::engine
         }
     };
 
-    struct LightProbe
+    struct LightProbe: ObjectImpl<IObject>
     {
         std::string name;
         nvrhi::TextureHandle diffuseMap;

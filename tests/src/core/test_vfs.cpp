@@ -24,6 +24,7 @@
 
 #include <donut/tests/utils.h>
 #include <filesystem>
+#include <donut/core/object/AutoPtr.h>
 
 using namespace donut;
 
@@ -116,9 +117,9 @@ void test_relative_filesystem()
 	{
 		donut::AutoPtr<donut::IDataBlob> blob;
 		CHECK(FSUCCEEDED(relativeFS.readFile("src/core/test_vfs.cpp", &blob)));
-		CHECK(blob->size() > 0);
+		CHECK(blob->GetSize() > 0);
 
-		std::string data = (char const*)blob->data();
+		std::string data = (char const*)blob->GetDataPtr();
 		CHECK(data.find("***HELLO WORLD***") != std::string::npos);
 	}
 }
@@ -165,10 +166,9 @@ void test_root_filesystem()
 	{
 		donut::AutoPtr<donut::IDataBlob> blob;
 		CHECK(FSUCCEEDED(rootFS.readFile("/tests/src/core/test_vfs.cpp", &blob)));
-		CHECK(blob.use_count() > 0);
-		CHECK(blob->size() > 0);
+		CHECK(blob->GetSize() > 0);
 
-		std::string data = (char const*)blob->data();
+		std::string data = (char const*)blob->GetDataPtr();
 		CHECK(data.find("***HELLO WORLD***") != std::string::npos);
 	}
 

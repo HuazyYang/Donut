@@ -72,9 +72,9 @@ namespace donut::app
         dm::affine3 m_MatTranslatedWorldToView = dm::affine3::identity();
 
         dm::float3 m_CameraPos   = 0.f;   // in worldspace
-        dm::float3 m_CameraDir   = dm::float3(1.f, 0.f, 0.f); // normalized
+        dm::float3 m_CameraDir   = dm::float3(0.f, 0.f, 1.f); // normalized
         dm::float3 m_CameraUp    = dm::float3(0.f, 1.f, 0.f); // normalized
-        dm::float3 m_CameraRight = dm::float3(0.f, 0.f, 1.f); // normalized
+        dm::float3 m_CameraRight = dm::float3(1.f, 0.f, 0.f); // normalized
 
         float m_MoveSpeed = 1.f;      // movement speed in units/second
         float m_RotateSpeed = .005f;  // mouse sensitivity in radians/pixel

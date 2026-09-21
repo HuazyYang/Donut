@@ -261,7 +261,7 @@ void Imgui_ImplNVRHI_UpdateTexture(ImTextureData *tex) {
 
         bd->CommandList->copyTexture(
             backend_tex->Texture,
-            nvrhi::TextureSlice{upload_x, upload_y, 0},
+            nvrhi::TextureSlice{upload_x, upload_y, 0, upload_w, upload_h, 1},
             backend_tex->UploadBuffer,
             nvrhi::TextureSlice{0, 0, 0, upload_w, upload_h, 1});
 

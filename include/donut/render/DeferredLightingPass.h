@@ -43,7 +43,7 @@ namespace donut::render
 {
     class GBufferRenderTargets;
     
-    class DeferredLightingPass
+    class DeferredLightingPass: public ObjectImpl<IObject>
     {
     private:
         nvrhi::DeviceHandle m_Device;

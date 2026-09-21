@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DONUT_CORE_OBJECT_FOUNDATION_H
+#define DONUT_CORE_OBJECT_FOUNDATION_H
 #include <donut/core/object/Threading.h>
 #include <donut/core/object/Types.h>
 #include <donut/core/object/MemoryAllocator.h>
@@ -22,13 +23,21 @@
 #endif
 
 #ifdef __clang__
-#define DONUT_CLSID(Class, StrCLSID) \
+#define DONUT_CCLSID(Class, StrCLSID) \
+    static constexpr donut::GUID IID_##Class = StrCLSID##_donut_guid;
+#define DONUT_SCLSID(Class, StrCLSID) \
     static constexpr donut::GUID IID_##Class = StrCLSID##_donut_guid;
 #else
-#define DONUT_CLSID(Class, StrCLSID)                                          \
+#define DONUT_CCLSID(Class, StrCLSID)                                          \
     static constexpr donut::GUID IID_##Class = StrCLSID##_donut_guid;      \
     template <>                                                                  \
     struct ::UUIDTraits<class Class> {                                           \
+        static constexpr const donut::GUID& uuid_of() { return IID_##Class; } \
+    };
+#define DONUT_SCLSID(Class, StrCLSID)                                         \
+    static constexpr donut::GUID IID_##Class = StrCLSID##_donut_guid;         \
+    template <>                                                               \
+    struct ::UUIDTraits<struct Class> {                                        \
         static constexpr const donut::GUID& uuid_of() { return IID_##Class; } \
     };
 #endif
@@ -130,9 +139,7 @@ class ObjectWrapperBase {
  public:
     virtual void DestroyObject() = 0;
     virtual FRESULT QueryInterface(const FIID& iid, void** ppInterface) = 0;
-#if DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
-    virtual void DeletePackedStorage(void* pWeakRef) noexcept {};
-#endif
+    virtual void DeletePackedStorage(void* pWeakRef) noexcept = 0;
 };
 
 template <typename ObjectType, typename AllocatorType>
@@ -147,13 +154,12 @@ class ObjectWrapper : public ObjectWrapperBase {
         } else {
             delete m_pObject;
         }
-#ifdef DONUT_DUMP_ALIVE_OBJECTS
-        details::ObjectTrackerRemoveObject(m_pObject);
-#endif
     }
     virtual FRESULT QueryInterface(const FIID& iid, void** ppInterface) override final {
         return m_pObject->QueryInterface(iid, ppInterface);
     }
+
+    void DeletePackedStorage(void* pWeakRef) noexcept final {}
 
  private:
     // It is crucially important that the type of the pointer
@@ -170,15 +176,12 @@ class PackedObjectWrapper : public ObjectWrapperBase {
         : m_pObject{pObject}, m_pAllocator{pAllocator} {}
     virtual void DestroyObject() override final {
         m_pObject->~ObjectType();
-#ifdef DONUT_DUMP_ALIVE_OBJECTS
-        details::ObjectTrackerRemoveObject(m_pObject);
-#endif
     }
     virtual FRESULT QueryInterface(const FIID& iid, void** ppInterface) override final {
         return m_pObject->QueryInterface(iid, ppInterface);
     }
 
-    virtual void DeletePackedStorage(void* pWeakRef) noexcept;
+    virtual void DeletePackedStorage(void* pWeakRef) noexcept final;
 
  private:
     // It is crucially important that the type of the pointer
@@ -208,9 +211,6 @@ struct IsWeakReferenceSource {
         std::is_base_of<IWeakable, ObjectType>::value ||
         std::is_same<IWeakable, ObjectType>::value;
 };
-
-template <typename ObjectType>
-struct PackedCtrlBlock;
 
 template <typename TInterface>
 struct WeakRefTypeTrait;
@@ -469,12 +469,12 @@ class WeakReferenceImpl final : public IWeakReference, public UserAllocated {
     // FLONG GetNumWeakRefs() const { return m_NumWeakReferences.load(); }
 
  private:
+    template <typename BaseItf>
+    friend class RefCountedObject;
+    template <typename ObjectType, typename AllocatorType>
+    friend class details::PackedObjectWrapper;
     template <typename AllocatorType>
     friend class MakeNewRCObj;
-#if DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
-    template <typename ObjectType>
-    friend struct details::PackedCtrlBlock;
-#endif
 
     WeakReferenceImpl() noexcept {}
 
@@ -702,9 +702,6 @@ class WeakReferenceImpl final : public IWeakReference, public UserAllocated {
     }
 
     void SelfDestroy() {
-#ifdef DONUT_DUMP_ALIVE_OBJECTS
-        details::ObjectTrackerRemoveObject(this);
-#endif
 
 #if DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
         auto ObjWrappStorageCopy = m_ObjectWrapperBuffer;
@@ -740,16 +737,29 @@ class WeakReferenceImpl final : public IWeakReference, public UserAllocated {
     details::ObjectWrapperStorage m_ObjectWrapperBuffer{};
 };
 
+template<typename ObjectType, typename AllocatorType>
+void details::PackedObjectWrapper<ObjectType, AllocatorType>::DeletePackedStorage(void *pWeakRef) noexcept {
+    reinterpret_cast<WeakReferenceImpl*>(pWeakRef)->~WeakReferenceImpl();
+    if (m_pAllocator) {
+        m_pAllocator->Free(m_pObject);
+    } else
+        delete (const UserAllocated*)m_pObject;
+}
+
 /// Base class for all reference counting objects, must be one of IWeakable
 template <typename BaseItf>
 class RefCountedObject : public BaseItf, public UserAllocated {
  public:
+ #if DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
     // Constructor with weak reference syntax
-    RefCountedObject(IWeakReference* pWeakRef) noexcept
-        : m_pWeakRef{pWeakRef ? ClassPtrCast<WeakReferenceImpl>(pWeakRef) : nullptr} {
+    RefCountedObject() noexcept : m_pWeakRef(::new (&m_WeakRef) WeakReferenceImpl{}) {
         // If object is allocated on stack, ref counters will be null
         // DONUT_VERIFY(pRefCounters != nullptr, "Reference counters must not be null")
     }
+#else
+    RefCountedObject() noexcept
+        : m_pWeakRef((WeakReferenceImpl*)(*(uintptr_t*)((uint8_t*)this + sizeof(void*)))) {}
+#endif
 
     // Virtual destructor makes sure all derived classes can be destroyed
     // through the pointer to the base class
@@ -779,29 +789,30 @@ class RefCountedObject : public BaseItf, public UserAllocated {
     inline virtual FLONG AddRef() override final {
         // Since type of m_pWeakRef is WeakReference,
         // this call will not be virtual and should be inlined
-        DONUT_VERIFY(m_pWeakRef != nullptr);
         return m_pWeakRef->AddStrongRef();
     }
 
     inline virtual FLONG Release() override {
         // Since type of m_pWeakRef is WeakReference,
         // this call will not be virtual and should be inlined
-        DONUT_VERIFY(m_pWeakRef != nullptr);
         return m_pWeakRef->ReleaseStrongRef();
     }
 
     template <class TPreObjectDestroy>
     inline FLONG Release(TPreObjectDestroy&& PreObjectDestroy) {
-        DONUT_VERIFY(m_pWeakRef != nullptr);
         return m_pWeakRef->ReleaseStrongRef(
             std::forward<TPreObjectDestroy>(PreObjectDestroy));
     }
 
     IWeakReference* GetWeakReference() override final { return m_pWeakRef; }
 
+    WeakReferenceImpl* GetWeakReferenceImpl() { return m_pWeakRef; }
+
  protected:
     template <typename ObjectType, typename AllocatorType>
-    friend class details::ObjectWrapper;
+    friend class details::PackedObjectWrapper;
+    template <typename AllocatorType>
+    friend class MakeNewRCObj;
 
     friend class WeakReferenceImpl;
 
@@ -812,16 +823,21 @@ class RefCountedObject : public BaseItf, public UserAllocated {
     using WeakRefImplType = WeakReferenceImpl;
 
  private:
+    using WeakReferenceImplStorage =
+        std::aligned_storage<sizeof(WeakReferenceImpl), alignof(WeakReferenceImpl)>::type;
     // Note that the type of the reference counters is WeakReference,
     // not IWeakReference. This avoids virtual calls from
     // AddRef() and Release() methods
+#if DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
+    WeakReferenceImplStorage m_WeakRef;
+#endif
     WeakReferenceImpl* const m_pWeakRef;
 };
 
 template <typename BaseItf>
 struct WeakableImpl : public RefCountedObject<BaseItf> {
  public:
-    WeakableImpl(IWeakReference* pWeakRef) : RefCountedObject<BaseItf>(pWeakRef) {}
+    WeakableImpl() : RefCountedObject<BaseItf>{} {}
 
     FRESULT QueryInterface(FREFIID riid, void** ppv) override {
         if (riid == IID_IObject) {
@@ -957,31 +973,6 @@ class DelegatingObjectImpl : public BaseItf, private UserAllocated {
     details::ObjectWrapperStorage m_ObjWrapperStorage{};
 };
 
-#if DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
-namespace details {
-
-template <typename ObjectType>
-struct PackedCtrlBlock: public UserAllocated {
-    WeakReferenceImpl WeakRef;
-    typename std::aligned_storage<sizeof(ObjectType), alignof(ObjectType)>::type Storage;
-    PackedCtrlBlock() {}
-    ~PackedCtrlBlock() {}
-};
-
-template <typename ObjectType, typename AllocatorType>
-inline void PackedObjectWrapper<ObjectType, AllocatorType>::DeletePackedStorage(
-    void* pWeakRef) noexcept {
-    using Tpcb = PackedCtrlBlock<ObjectType>;
-    Tpcb* pCtrlBlock = reinterpret_cast<Tpcb*>(pWeakRef);
-    if (m_pAllocator) {
-        pCtrlBlock->~Tpcb();
-        m_pAllocator->Free(pCtrlBlock);
-    } else
-        delete pCtrlBlock;
-}
-}
-#endif
-
 template <typename AllocatorType>
 class MakeNewRCObj {
  public:
@@ -1006,77 +997,78 @@ class MakeNewRCObj {
     }
 
  private:
+    template <typename ObjectType>
+    struct ObjectTypeStorage : public UserAllocated {
+        using StorageType =
+            typename std::aligned_storage<sizeof(ObjectType), alignof(ObjectType)>::type;
+        StorageType Storage;
+    };
+
     // SFINEA overload for IWeakReferenceSoure kind object type
     template <typename Tp, typename... CtorArgTypes>
     Tp* RcNewImpl(
         typename std::enable_if<details::IsWeakReferenceSource<Tp>::value, int>::type,
         CtorArgTypes&&... CtorArgs) const {
-
 #if DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
-        using Tpcb = details::PackedCtrlBlock<Tp>;
-        Tpcb* pCBlock = nullptr;
-        WeakReferenceImpl* pWeakRef = nullptr;
         Tp* pObj = nullptr;
+        WeakReferenceImpl* pWeakRef = nullptr;
 
         try {
-            if (m_pAllocator) {
-                pCBlock = new (m_pAllocator) Tpcb{};
-            } else
-                pCBlock = new Tpcb{};
+            if (m_pAllocator)
+                pObj = new (m_pAllocator) Tp(std::forward<CtorArgTypes>(CtorArgs)...);
+            else
+                pObj = new Tp(std::forward<CtorArgTypes>(CtorArgs)...);
 
-            pWeakRef = &pCBlock->WeakRef;
-
-            pObj = ::new (&pCBlock->Storage)
-                Tp(pWeakRef, std::forward<CtorArgTypes>(CtorArgs)...);
+            pWeakRef = pObj->GetWeakReferenceImpl();
             pWeakRef->Attach(pObj, m_pAllocator);
         } catch (...) {
             if (pWeakRef) {
                 pWeakRef->m_NumStrongReferences = 0;
                 // Obviously, control block is initialized.
                 if (m_pAllocator) {
-                    pCBlock->~Tpcb();
-                    m_pAllocator->Free(pCBlock);
+                    pWeakRef->~WeakReferenceImpl();
+                    m_pAllocator->Free(pObj);
                 } else
-                    delete pCBlock;
+                    delete pObj;
             }
             throw;
         }
 
-#ifdef DONUT_DUMP_ALIVE_OBJECTS
-        details::ObjectTrackerAddObject(pWeakRef);
-        details::ObjectTrackerRemoveObject(pObj);
-#endif
-
         return pObj;
 #else
-        WeakReferenceImpl* pWeakRef = new WeakReferenceImpl;
-#ifdef DONUT_DUMP_ALIVE_OBJECTS
-        details::ObjectTrackerAddObject(pWeakRef);
-#endif
+        static_assert(offsetof(Tp, m_pWeakRef) == sizeof(void *), "Weak pointer address must be fit");
+        using MyObjectStorage = ObjectTypeStorage<Tp>;
 
-        Tp* pObj = nullptr;
+        WeakReferenceImpl* pWeakRef = nullptr;
+        MyObjectStorage* pMem = nullptr;
+        Tp *pObj = nullptr;
         try {
-            // Operators new and delete of RefCountedObject are private and only accessible
-            // by methods of MakeNewRCObj
-            if (m_pAllocator)
-                pObj = new (m_pAllocator)
-                    Tp{pWeakRef, std::forward<CtorArgTypes>(CtorArgs)...};
+           pWeakRef = new WeakReferenceImpl;
+
+            if(m_pAllocator)
+                pMem = new (m_pAllocator)MyObjectStorage;
             else
-                pObj = new Tp{pWeakRef, std::forward<CtorArgTypes>(CtorArgs)...};
+                pMem = new MyObjectStorage;
+
+            ((WeakReferenceImpl *&)((Tp *)pMem)->m_pWeakRef) = pWeakRef;
+            pObj = ::new (pMem) Tp(std::forward<CtorArgTypes>(CtorArgs)...);
 
             pWeakRef->Attach<Tp, AllocatorType>(pObj, m_pAllocator);
         } catch (...) {
-            pWeakRef->m_NumStrongReferences = 0;
-            pWeakRef->SelfDestroy();
-#ifdef DONUT_DUMP_ALIVE_OBJECTS
-            details::ObjectTrackerRemoveObject(pWeakRef);
-#endif
+            if(pWeakRef) {
+                pWeakRef->m_NumStrongReferences = 0;
+                pWeakRef->SelfDestroy();
+            }
+
+            if(pMem) {
+                if(m_pAllocator)
+                    m_pAllocator->Free(pMem);
+                else
+                    delete pMem;
+            }
+
             throw;
         }
-
-#ifdef DONUT_DUMP_ALIVE_OBJECTS
-        details::ObjectTrackerAddObject(pObj);
-#endif
 
         return pObj;
 #endif
@@ -1098,15 +1090,8 @@ class MakeNewRCObj {
 
             pObj->template Attach<Tp, AllocatorType>(pObj, m_pAllocator);
         } catch (...) {
-#ifdef DONUT_DUMP_ALIVE_OBJECTS
-            details::ObjectTrackerRemoveObject(pObj);
-#endif
             throw;
         }
-
-#ifdef DONUT_DUMP_ALIVE_OBJECTS
-        details::ObjectTrackerAddObject(pObj);
-#endif
 
         return pObj;
     }
@@ -1127,15 +1112,8 @@ class MakeNewRCObj {
 
             pObj->template Attach<ObjectType, AllocatorType>(pObj, m_pAllocator);
         } catch (...) {
-#ifdef DONUT_DUMP_ALIVE_OBJECTS
-            details::ObjectTrackerRemoveObject(pObj);
-#endif
             throw;
         }
-
-#ifdef DONUT_DUMP_ALIVE_OBJECTS
-        details::ObjectTrackerAddObject(pObj);
-#endif
 
         return pObj;
     }
@@ -1153,7 +1131,7 @@ class MakeNewRCObj {
 #define MAKE_RC_OBJ(Type, ...)                                                           \
     donut::MakeNewRCObj<donut::DefaultMemoryAllocator>(donut::GetDefaultMemAllocator()) \
         .RcNew<Type>(__VA_ARGS__)
-#define MAKE_RC_OBJ_PTR(Type, ...) TakeOver(MAKE_RC_OBJ(Type, ##__VA_ARGS__))
+#define MAKE_RC_OBJ_PTR(Type, ...) donut::TakeOver(MAKE_RC_OBJ(Type, ##__VA_ARGS__))
 
 #define MAKE_GENERIC_RC_DELEGATING(Allocator, Type, ...)                            \
     donut::MakeNewRCObj<typename std::remove_reference<decltype(Allocator)>::type>( \
@@ -1182,3 +1160,6 @@ void SafeRelease(T*& p) {
 }
 
 }  // namespace donut
+
+
+#endif /* DONUT_CORE_OBJECT_FOUNDATION_H */

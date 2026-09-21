@@ -146,65 +146,10 @@ FRESULT InterfaceTableQueryInterface(void *pThis, const INTERFACE_ENTRY *pTable,
     }
 }
 
-class ObjectTracker {
-public:
-    static ObjectTracker s_Instance;
-
-    void AddObject(IObject *pObj);
-
-    bool RemoveObject(IObject *pObj);
-
-    void Dump();
-
-private:
-    ObjectTracker();
-    ~ObjectTracker();
-
-    ObjectTracker(const ObjectTracker &) = delete;
-    ObjectTracker &operator=(const ObjectTracker &) = delete;
-
-    SpinLock m_Lock;
-    std::deque<IObject *> m_AliveObjectContainer;
-};
-
-ObjectTracker ObjectTracker::s_Instance;
-
-void ObjectTracker::AddObject(IObject *pObj) {
-    std::lock_guard<SpinLock> lock(m_Lock);
-    m_AliveObjectContainer.push_back(pObj);
-}
-
-bool ObjectTracker::RemoveObject(IObject *pObj) {
-    std::lock_guard<SpinLock> lock(m_Lock);
-    auto it = std::find(m_AliveObjectContainer.begin(), m_AliveObjectContainer.end(), pObj);
-    if (it != m_AliveObjectContainer.end()) {
-        m_AliveObjectContainer.erase(it);
-        return true;
-    }
-    return false;
-}
-
-void ObjectTracker::Dump() {
-    std::lock_guard<SpinLock> lock(m_Lock);
-    if (!m_AliveObjectContainer.empty()) {
-        printf("ObjectTracker::Dump() detect %llu alive objects:\n", m_AliveObjectContainer.size());
-    }
-}
-
-ObjectTracker::ObjectTracker() {}
-
-ObjectTracker::~ObjectTracker() { Dump(); }
-
-void ObjectTrackerAddObject(IObject *pObj) { return ObjectTracker::s_Instance.AddObject(pObj); }
-
-bool ObjectTrackerRemoveObject(IObject *pObj) {
-    return ObjectTracker::s_Instance.RemoveObject(pObj);
-}
-
 }
 
 /// Base interface for a data blob
-DONUT_CLSID(DataBlobImpl, "405202ca-4daa-459c-9da8-6996ca3fb1d4")
+DONUT_CCLSID(DataBlobImpl, "405202ca-4daa-459c-9da8-6996ca3fb1d4")
 class DataBlobImpl final : public ObjectImpl<IDataBlob> {
  public:
     DONUT_DECLARE_UUID_TRAITS(DataBlobImpl)
@@ -235,7 +180,7 @@ class DataBlobImpl final : public ObjectImpl<IDataBlob> {
 };
 
 /// String data blob implementation.
-DONUT_CLSID(StringDataBlobImpl, "2bf21355-9bf0-4ed4-b2e9-e5a45a25cfa2")
+DONUT_CCLSID(StringDataBlobImpl, "2bf21355-9bf0-4ed4-b2e9-e5a45a25cfa2")
 class StringDataBlobImpl : public ObjectImpl<IDataBlob> {
     DONUT_DECLARE_UUID_TRAITS(StringDataBlobImpl)
  public:
@@ -262,7 +207,7 @@ class StringDataBlobImpl : public ObjectImpl<IDataBlob> {
     std::string m_String;
 };
 
-DONUT_CLSID(ProxyDataBlobImpl, "d1373bc6-c59a-40c5-ac46-56d299206d43")
+DONUT_CCLSID(ProxyDataBlobImpl, "d1373bc6-c59a-40c5-ac46-56d299206d43")
 class ProxyDataBlobImpl : public ObjectImpl<IDataBlob> {
 public:
     DONUT_DECLARE_UUID_TRAITS(ProxyDataBlobImpl)
@@ -287,7 +232,7 @@ public:
     const size_t m_Size;
 };
 
-DONUT_CLSID(ProxyRefDataBlobImpl, "26307b63-679b-4182-b086-37c7c6078e16")
+DONUT_CCLSID(ProxyRefDataBlobImpl, "26307b63-679b-4182-b086-37c7c6078e16")
 class ProxyRefDataBlobImpl : public ObjectImpl<IDataBlob> {
 public:
     DONUT_DECLARE_UUID_TRAITS(ProxyRefDataBlobImpl)

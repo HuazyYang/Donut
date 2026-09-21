@@ -36,6 +36,11 @@ namespace donut::math
 
         vector<T, n> m_mins, m_maxs;
 
+        constexpr const vector<T, n>& lower() const { return m_mins; }
+        constexpr vector<T, n>& lower() { return m_mins; }
+        constexpr const vector<T, n>& upper() const { return m_maxs; }
+        constexpr vector<T, n>& upper() { return m_maxs; }
+
         constexpr bool isempty() const
         {
             return any(m_mins > m_maxs);

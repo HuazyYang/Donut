@@ -24,6 +24,7 @@ file(GLOB donut_app_src
     LIST_DIRECTORIES false
     include/donut/app/*.h
     src/app/*.cpp
+    src/app/*.c
 )
 
 file(GLOB donut_app_vr_src

@@ -212,6 +212,12 @@ namespace donut::app
         // The elements of this structure will be populated before 'deviceCreateInfoCallback' is called,
         // thereby allowing applications to determine if certain features may be enabled on the device.
         void* physicalDeviceFeatures2Extensions = nullptr;
+
+        struct MultiviewFeature {
+            bool enabled;
+            uint32_t maxMultiviewViewCount;
+            uint32_t maxMultiviewInstanceIndex;
+        } multiViewFeature = {false, 15, 6};
 #endif
     };
 

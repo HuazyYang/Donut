@@ -110,7 +110,10 @@ bool PlanarShadowMap::SetupWholeSceneDirectionalLightView(const DirectionalLight
     return viewIsModified;
 }
 
-bool PlanarShadowMap::SetupDynamicDirectionalLightView(const DirectionalLight& light, float3 anchor, float3 halfShadowBoxSize, float3 preViewTranslation, float fadeRangeWorld)
+bool PlanarShadowMap::SetupDynamicDirectionalLightView(const DirectionalLight& light, float3 anchor,
+                                                       float3 halfShadowBoxSize, float3 preViewTranslation,
+                                                       float fadeRangeWorld)
+
 {
     daffine3 viewToWorld = light.GetNode()->GetLocalToWorldTransform();
     // Zero the translation component to ignore where the actual light scene node is located, we only care about direction
@@ -263,5 +266,11 @@ void PlanarShadowMap::FillShadowConstants(struct ShadowConstants& constants) con
 
 void PlanarShadowMap::Clear(nvrhi::ICommandList* commandList)
 {
-    commandList->clearTextureFloat(m_ShadowMapTexture, m_View->GetSubresources(), nvrhi::Color(1.f));
+    auto format = m_ShadowMapTexture->getDesc().format;
+    auto formatInfo = nvrhi::getFormatInfo(format);
+    if (formatInfo.hasDepth || formatInfo.hasStencil)
+        commandList->clearDepthStencilTexture(m_ShadowMapTexture, m_View->GetSubresources(), true, 1.f,
+                                              formatInfo.hasStencil, 0);
+    else
+        commandList->clearTextureFloat(m_ShadowMapTexture, m_View->GetSubresources(), nvrhi::Color(1.f));
 }

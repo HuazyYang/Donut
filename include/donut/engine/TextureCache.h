@@ -162,7 +162,13 @@ namespace donut::engine
             const std::string& name,
             const std::string& mimeType,
             bool sRGB);
-        
+
+        virtual AutoPtr<LoadedTexture> LoadTextureFromRawImageMemory(IDataBlob* data, const char* name,
+                                                                     uint32_t width, uint32_t height,
+                                                                     nvrhi::Format format, bool sRGB,
+                                                                     uint32_t imageBitsPerPixel,
+                                                                     uint32_t imagePixelStride);
+
         // Tells if the texture has been loaded from file successfully and its data is available in the texture object.
         // After the texture is finalized and uploaded to the GPU, the data is no longer available on the CPU,
         // and this function returns false.

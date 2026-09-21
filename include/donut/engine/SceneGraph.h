@@ -88,8 +88,8 @@ namespace donut::engine
         AutoPtr<MeshInfo> m_Mesh;
 
     public:
-        explicit MeshInstance(IWeakReference *pWeakRef, MeshInfo* mesh)
-            : SceneGraphLeaf(pWeakRef), m_Mesh(mesh)
+        explicit MeshInstance(MeshInfo* mesh)
+            : m_Mesh(mesh)
         { }
 
         [[nodiscard]] MeshInfo* GetMesh() const { return m_Mesh; }
@@ -121,7 +121,7 @@ namespace donut::engine
         nvrhi::BindingSetHandle skinningBindingSet;
         bool skinningInitialized = false;
 
-        explicit SkinnedMeshInstance(IWeakReference *pWeakRef, SceneTypeFactory* sceneTypeFactory, MeshInfo* prototypeMesh);
+        explicit SkinnedMeshInstance(SceneTypeFactory* sceneTypeFactory, MeshInfo* prototypeMesh);
 
         [[nodiscard]] const MeshInfo* GetPrototypeMesh() const { return m_PrototypeMesh; }
         [[nodiscard]] uint32_t GetLastUpdateFrameIndex() const { return m_LastUpdateFrameIndex; }
@@ -137,9 +137,8 @@ namespace donut::engine
         friend class SceneGraph;
         WeakPtr<SkinnedMeshInstance> m_Instance;
     public:
-       explicit SkinnedMeshReference(IWeakReference* pWeakRef,
-                                     SkinnedMeshInstance* instance)
-           : SceneGraphLeaf(pWeakRef), m_Instance(instance) {}
+       explicit SkinnedMeshReference(SkinnedMeshInstance* instance)
+           : m_Instance(instance) {}
        [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
     };
 
@@ -205,8 +204,7 @@ namespace donut::engine
         void SetPosition(const dm::double3& position) const;
         void SetDirection(const dm::double3& direction) const;
     protected:
-       using SceneGraphLeaf::SceneGraphLeaf;
-       ~Light();
+        Light();
     };
 
     class DirectionalLight : public Light
@@ -216,7 +214,7 @@ namespace donut::engine
         float angularSize = 0.f; // Angular size of the light source, in degrees.
         std::vector<AutoPtr<IShadowMap>> perObjectShadows;
 
-        using Light::Light;
+        DirectionalLight();
         [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
         [[nodiscard]] int GetLightType() const override { return LightType_Directional; }
         void FillLightConstants(LightConstants& lightConstants) const override;
@@ -234,7 +232,7 @@ namespace donut::engine
         float innerAngle = 180.f;    // Apex angle of the full-bright cone, in degrees; constant intensity inside the inner cone, smooth falloff between inside and outside.
         float outerAngle = 180.f;    // Apex angle of the light cone, in degrees - everything outside of that cone is dark.
 
-        using Light::Light;
+        SpotLight();
         [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
         [[nodiscard]] int GetLightType() const override { return LightType_Spot; }
         void FillLightConstants(LightConstants& lightConstants) const override;
@@ -250,7 +248,7 @@ namespace donut::engine
         float radius = 0.f;    // Radius of the light sphere, in world units.
         float range = 0.f;     // Range of influence for the light. 0 means infinite range.
 
-        using Light::Light;
+        PointLight();
         [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
         [[nodiscard]] int GetLightType() const override { return LightType_Point; }
         void FillLightConstants(LightConstants& lightConstants) const override;
@@ -302,8 +300,7 @@ namespace donut::engine
         void PropagateDirtyFlags(SceneGraphNode::DirtyFlags flags);
 
     public:
-       SceneGraphNode(IWeakReference* pWeakRef)
-           : WeakableImpl<IWeakable>(pWeakRef) {}
+       SceneGraphNode() {}
        /* non-virtual */ ~SceneGraphNode() = default;
 
        [[nodiscard]] const dm::dquat& GetRotation() const { return m_Rotation; }
@@ -553,8 +550,7 @@ namespace donut::engine
         virtual void UnregisterLeaf(SceneGraphLeaf *leaf);
 
     public:
-       SceneGraph(IWeakReference* pWeakRef)
-           : WeakableImpl<IWeakable>(pWeakRef) {}
+       SceneGraph() {}
 
        SceneResourceCallback<MeshInfo> OnMeshAdded;
        SceneResourceCallback<MeshInfo> OnMeshRemoved;

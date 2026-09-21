@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DONUT_CORE_OBJECT_AUTOPTR_H
+#define DONUT_CORE_OBJECT_AUTOPTR_H
 #include <donut/core/object/Types.h>
 #include <donut/core/object/MemoryAllocator.h>
 
@@ -1048,3 +1049,6 @@ struct hash<donut::MonoPtr<Ty, Dx>>: public donut::details::ConditionalEnabledHa
 };
 
 }
+
+
+#endif /* DONUT_CORE_OBJECT_AUTOPTR_H */

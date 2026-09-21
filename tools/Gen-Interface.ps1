@@ -28,7 +28,7 @@ DONUT_DECLARE_UUID_TRAITS($TypeName)
 
 } else {
     Write-Output @"
-DONUT_CLSID($TypeName, `"$GuidLiteral`")
+DONUT_CCLSID($TypeName, `"$GuidLiteral`")
 struct $TypeName {
     DONUT_DECLARE_UUID_TRAITS($TypeName)
     DONUT_DECLARE_INTERFACE_TABLE()

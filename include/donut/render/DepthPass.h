@@ -73,7 +73,7 @@ namespace donut::render
 
         struct CreateParameters
         {
-            AutoPtr<engine::MaterialBindingCache> materialBindings;
+            engine::MaterialBindingCache* materialBindings = nullptr;
             int depthBias = 0;
             float depthBiasClamp = 0.f;
             float slopeScaledDepthBias = 0.f;

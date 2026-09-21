@@ -92,6 +92,11 @@ namespace donut::log
             }
         }
 
+#ifdef WIN32
+        if(severity == Severity::Fatal || severity == Severity::Error)
+            DebugBreak();
+#endif
+
         if (severity == Severity::Fatal)
             abort();
     }

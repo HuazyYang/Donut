@@ -35,7 +35,7 @@ this software is released into the Public Domain.
 */
 
 #include <donut/engine/Scene.h>
-#include <donut/engine/GltfImporter.h>
+#include "SceneImporterImpl.h"
 #include <donut/engine/ThreadPool.h>
 #include <donut/core/json.h>
 #include <donut/core/log.h>
@@ -99,8 +99,6 @@ Scene::Scene(
     if (!m_SceneTypeFactory)
         m_SceneTypeFactory = MAKE_RC_OBJ_PTR(SceneTypeFactory);
 
-    m_GltfImporter =MAKE_RC_OBJ_PTR(GltfImporter, m_fs, m_SceneTypeFactory);
-
     m_EnableBindlessResources = !!m_DescriptorTable;
     m_RayTracingSupported = m_Device->queryFeatureSupport(nvrhi::Feature::RayTracingAccelStruct);
 
@@ -140,8 +138,10 @@ bool Scene::LoadWithThreadPool(const std::filesystem::path& sceneFileName, Threa
     
     m_SceneGraph = MAKE_RC_OBJ_PTR(SceneGraph);
 
-    if (sceneFileName.extension() == ".gltf" || sceneFileName.extension() == ".glb")
-    {
+    std::string sceneFileName2 = sceneFileName.generic_string();
+    int len = static_cast<int>(sceneFileName2.length());
+
+    if (!(len > 11 && strcasecmp(sceneFileName2.data() + len - 11, ".scene.json")) == 0) {
         ++g_LoadingStats.ObjectsTotal;
         m_Models.resize(1);
         LoadModelAsync(0, sceneFileName, threadPool);
@@ -154,9 +154,7 @@ bool Scene::LoadWithThreadPool(const std::filesystem::path& sceneFileName, Threa
             return false;
 
         m_SceneGraph->SetRootNode(modelResult.rootNode);
-    }
-    else
-    {
+    } else {
         auto rootNode = MAKE_RC_OBJ_PTR(SceneGraphNode);
         rootNode->SetName("SceneRoot");
         m_SceneGraph->SetRootNode(rootNode);
@@ -190,13 +188,27 @@ void Scene::LoadModelAsync(
     uint32_t index,
     const std::filesystem::path& fileName,
     ThreadPool* threadPool)
-{   
+{
+    auto ext = fileName.extension().generic_string();
+    if (strcasecmp(ext.data(), ".glb") == 0 || strcasecmp(ext.data(), ".gltf") == 0) {
+        if (!m_SceneImporter || FFAILED(m_SceneImporter->QueryInterface(__uuid_of<GltfImporter>(), nullptr)))
+            m_SceneImporter = MAKE_RC_OBJ_PTR(GltfImporter, m_fs, m_SceneTypeFactory);
+    } else {
+        log::error("Donut scene loader does not support this scene archive type");
+        DONUT_ASSERT(0 && "Unsupported scene archive type");
+        return;
+#if 0
+        if(!m_SceneImporter || FFAILED(m_SceneImporter->QueryInterface(__uuid_of<AssimpSceneImporter>(), nullptr)))
+            m_SceneImporter = MAKE_RC_OBJ_PTR(AssimpSceneImporter, m_fs, m_SceneTypeFactory);
+#endif
+    }
+
     if (threadPool)
     {
         threadPool->AddTask([this, index, threadPool, fileName]()
         {
             SceneImportResult result;
-            m_GltfImporter->Load(fileName, *m_TextureCache, g_LoadingStats, threadPool, result);
+            m_SceneImporter->Load(fileName, *m_TextureCache, g_LoadingStats, threadPool, result);
             ++g_LoadingStats.ObjectsLoaded;
             m_Models[index] = result;
         });
@@ -204,7 +216,7 @@ void Scene::LoadModelAsync(
     else
     {
         SceneImportResult result;
-        m_GltfImporter->Load(fileName, *m_TextureCache, g_LoadingStats, threadPool, result);
+        m_SceneImporter->Load(fileName, *m_TextureCache, g_LoadingStats, threadPool, result);
         ++g_LoadingStats.ObjectsLoaded;
         m_Models[index] = result;
     }
@@ -846,8 +858,8 @@ void Scene::CreateMeshBuffers(nvrhi::ICommandList* commandList)
 
             if (m_DescriptorTable)
             {
-                buffers->indexBufferDescriptor = m_DescriptorTable->CreateDescriptorHandle(
-                    nvrhi::BindingSetItem::RawBuffer_SRV(0, buffers->indexBuffer));
+                buffers->indexBufferDescriptor = MAKE_RC_OBJ_PTR(DescriptorHandle, m_DescriptorTable->CreateDescriptorHandle(
+                    nvrhi::BindingSetItem::RawBuffer_SRV(0, buffers->indexBuffer)));
             }
 
             commandList->beginTrackingBufferState(buffers->indexBuffer, nvrhi::ResourceStates::Common);
@@ -931,7 +943,7 @@ void Scene::CreateMeshBuffers(nvrhi::ICommandList* commandList)
             if (m_DescriptorTable)
             {
                 buffers->vertexBufferDescriptor = 
-                    m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, buffers->vertexBuffer));
+                    MAKE_RC_OBJ_PTR(DescriptorHandle, m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, buffers->vertexBuffer)));
             }
 
             commandList->beginTrackingBufferState(buffers->vertexBuffer, nvrhi::ResourceStates::Common);
@@ -1067,7 +1079,7 @@ void Scene::CreateMeshBuffers(nvrhi::ICommandList* commandList)
             if (m_DescriptorTable)
             {
                 skinnedBuffers->vertexBufferDescriptor = 
-                    m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, skinnedBuffers->vertexBuffer));
+                    MAKE_RC_OBJ_PTR(DescriptorHandle, m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, skinnedBuffers->vertexBuffer)));
             }
         }
 

@@ -406,6 +406,7 @@ void TextureCache::FinalizeTexture(
         : texture->mipLevels;
     textureDesc.debugName = texture->path;
     textureDesc.isRenderTarget = texture->isRenderTarget;
+    textureDesc.isTypeless = texture->format == nvrhi::Format::D24S8 ? true : false;
     texture->texture = m_Device->createTexture(textureDesc);
 
     commandList->beginTrackingTextureState(texture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
@@ -597,6 +598,8 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemoryAsync(
     texture->path = name;
     texture->mimeType = mimeType;
 
+    data->AddRef();
+
     threadPool.AddTask([this, texture, data, mimeType]()
         {
             if (FillTextureData(data, texture, "", mimeType))
@@ -607,6 +610,8 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemoryAsync(
 
                 m_TexturesToFinalize.push(texture);
             }
+
+            data->Release();
 
             ++m_TexturesLoaded;
         });
@@ -666,6 +671,88 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemoryDeferred(
     return texture;
 }
 
+donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromRawImageMemory(IDataBlob* data, const char* name,
+                                                                            uint32_t width, uint32_t height,
+                                                                            nvrhi::Format format,
+                                                                            bool sRGB,
+                                                                            uint32_t imageBitsPerPixel,
+                                                                            uint32_t imagePixelStride) {
+    AutoPtr<TextureData> texture = CreateTextureData();
+    texture->forceSRGB = false;
+    texture->path = name;
+
+    uint32_t imageBytesPerPixel = div_ceil(imageBitsPerPixel, 8u);
+
+    // Fill texture data
+    {
+        texture->originalBitsPerPixel = imageBitsPerPixel;
+        texture->width = width;
+        texture->height = height;
+        texture->isRenderTarget = true;
+        texture->mipLevels = 1;
+        texture->dimension = nvrhi::TextureDimension::Texture2D;
+
+        texture->dataLayout.resize(1);
+        texture->dataLayout[0].resize(1);
+        texture->dataLayout[0][0].dataOffset = 0;
+        texture->dataLayout[0][0].rowPitch = static_cast<size_t>(width * imageBytesPerPixel);
+        texture->dataLayout[0][0].dataSize = static_cast<size_t>(width * height * imageBytesPerPixel);
+
+        if (sRGB) {
+            switch (format) {
+                case nvrhi::Format::RGBA8_UNORM:
+                    format = nvrhi::Format::SRGBA8_UNORM;
+                    break;
+                case nvrhi::Format::BGRA8_UNORM:
+                    format = nvrhi::Format::SBGRA8_UNORM;
+                    break;
+                case nvrhi::Format::BGRX8_UNORM:
+                    format = nvrhi::Format::SBGRX8_UNORM;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        texture->format = format;
+
+        if(imagePixelStride == 0 || imageBytesPerPixel == imagePixelStride) {
+            texture->data = data;
+        } else {
+            FRESULT fr;
+            size_t rowPitch = texture->dataLayout[0][0].rowPitch;
+            size_t srcRowPitch = width * imagePixelStride;
+
+            AutoPtr<IDataBlob> imageDataUnpacked;
+            if(FFAILED(fr = CreateBlob(rowPitch * height, &imageDataUnpacked))) {
+                log::error("Failed to create unpacked image buffer");
+                return nullptr;
+            }
+
+            auto pSrc = (uint8_t*)data->GetDataPtr();
+            auto pDst = (uint8_t *)imageDataUnpacked->GetDataPtr();
+            for (uint32_t y = 0; y < height; ++y, pDst += rowPitch, pSrc += srcRowPitch) {
+                for (uint32_t x = 0; x < width; ++x) {
+                    memcpy(pDst + x * imageBytesPerPixel, pSrc + x * imagePixelStride, imageBytesPerPixel);
+                }
+            }
+
+            texture->data = imageDataUnpacked;
+        }
+    }
+
+    {
+        TextureLoaded(texture);
+
+        std::lock_guard<std::mutex> guard(m_TexturesToFinalizeMutex);
+
+        m_TexturesToFinalize.push(texture);
+    }
+
+    ++m_TexturesLoaded;
+
+    return texture;
+}
 
 donut::AutoPtr<TextureData> TextureCache::GetLoadedTexture(std::filesystem::path const& path)
 {

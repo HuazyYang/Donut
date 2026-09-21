@@ -33,6 +33,11 @@
 #include <vector>
 #include <regex>
 
+#ifdef _WIN32
+#define strcasecmp _stricmp
+#else
+#endif
+
 // A set of thread-safe string manipulation functions
 
 namespace donut::string_utils {

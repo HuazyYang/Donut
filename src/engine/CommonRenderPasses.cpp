@@ -23,6 +23,7 @@
 #include <donut/engine/CommonRenderPasses.h>
 #include <donut/engine/ShaderFactory.h>
 #include <donut/engine/BindingCache.h>
+#include <nvrhi/utils.h>
 
 #if DONUT_WITH_STATIC_SHADERS
 #if DONUT_WITH_DX11
@@ -121,8 +122,20 @@ CommonRenderPasses::CommonRenderPasses(nvrhi::IDevice* device, ShaderFactory *sh
         textureDesc.debugName = "BlackTexture3D";
         m_BlackTexture3D = m_Device->createTexture(textureDesc);
 
+        const nvrhi::Format dsFormatCandidates[] = {
+            nvrhi::Format::D24S8,
+            nvrhi::Format::D32,
+            nvrhi::Format::D16,
+            nvrhi::Format::D32S8
+        };
+        const nvrhi::FormatSupport dsFormatFeatures = nvrhi::FormatSupport::Texture |
+                                                      nvrhi::FormatSupport::DepthStencil |
+                                                      nvrhi::FormatSupport::ShaderLoad;
+        const nvrhi::Format dsFormat =
+            nvrhi::utils::ChooseFormat(m_Device, dsFormatFeatures, dsFormatCandidates, dim(dsFormatCandidates));
+
         textureDesc.dimension = nvrhi::TextureDimension::Texture2D;
-        textureDesc.format = nvrhi::Format::D24S8;
+        textureDesc.format = dsFormat;
         textureDesc.isRenderTarget = true;
         textureDesc.isTypeless = true;
         textureDesc.debugName = "BlackDepthStencilTexture";

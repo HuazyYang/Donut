@@ -39,8 +39,8 @@ void BaseCamera::BaseLookAt(float3 cameraPos, float3 cameraTarget, float3 camera
     this->m_CameraPos = cameraPos;
     this->m_CameraDir = normalize(cameraTarget - cameraPos);
     this->m_CameraUp = normalize(cameraUp);
-    this->m_CameraRight = normalize(cross(this->m_CameraDir, this->m_CameraUp));
-    this->m_CameraUp = normalize(cross(this->m_CameraRight, this->m_CameraDir));
+    this->m_CameraRight = normalize(cross(this->m_CameraUp, this->m_CameraDir));
+    this->m_CameraUp = normalize(cross(this->m_CameraDir, this->m_CameraRight));
 
     UpdateWorldToView();
 }
@@ -156,7 +156,7 @@ void FirstPersonCamera::UpdateCamera(dm::float3 cameraMoveVec, dm::affine3 camer
     m_CameraPos += cameraMoveVec;
     m_CameraDir = normalize(cameraRotation.transformVector(m_CameraDir));
     m_CameraUp = normalize(cameraRotation.transformVector(m_CameraUp));
-    m_CameraRight = normalize(cross(m_CameraDir, m_CameraUp));
+    m_CameraRight = normalize(cross(m_CameraUp, m_CameraDir));
 
     UpdateWorldToView();
 }
@@ -454,7 +454,7 @@ void ThirdPersonCamera::Animate(float deltaT)
     const float3 camPos = m_TargetPos + vectorToCamera;
 
     m_CameraPos = camPos;
-    m_CameraRight = -targetRotation.row0;
+    m_CameraRight = targetRotation.row0;
     m_CameraUp = targetRotation.row1;
     m_CameraDir = targetRotation.row2;
     UpdateWorldToView();

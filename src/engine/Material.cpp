@@ -35,8 +35,8 @@ namespace donut::engine
                 return -1;
             
             return useResourceDescriptorHeapBindless 
-                ? texture->bindlessDescriptor->GetIndexInHeap()
-                : texture->bindlessDescriptor->Get();
+                ? texture->bindlessDescriptor.GetIndexInHeap()
+                : texture->bindlessDescriptor.Get();
         };
 
         // flags

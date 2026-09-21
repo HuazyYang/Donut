@@ -64,3 +64,8 @@ if (DONUT_WITH_NVRHI AND NOT TARGET glfw)
     set_target_properties(glfw PROPERTIES FOLDER ${third_party_folder})
     set_target_properties(update_mappings PROPERTIES FOLDER ${third_party_folder})
 endif()
+
+# if(NOT TARGET assimp)
+# set(BUILD_SHARED_LIBS OFF)
+# add_subdirectory(assimp-6.0.4)
+# endif()

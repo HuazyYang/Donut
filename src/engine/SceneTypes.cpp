@@ -116,10 +116,11 @@ void Light::SetDirection(const dm::double3& direction) const
     node->SetTransform(nullptr, &rotation, &scaling);
 }
 
-Light::~Light() {}
+Light::Light() {}
 
-donut::AutoPtr<SceneGraphLeaf> DirectionalLight::Clone()
-{
+DirectionalLight::DirectionalLight() {}
+
+donut::AutoPtr<SceneGraphLeaf> DirectionalLight::Clone() {
     auto copy = MAKE_RC_OBJ_PTR(DirectionalLight);
     copy->color = color;
     copy->irradiance = irradiance;
@@ -172,8 +173,9 @@ bool DirectionalLight::SetProperty(const std::string& name, const dm::float4& va
 
 inline float square(const float x) { return x * x; }
 
-donut::AutoPtr<SceneGraphLeaf> SpotLight::Clone()
-{
+SpotLight::SpotLight() {}
+
+donut::AutoPtr<SceneGraphLeaf> SpotLight::Clone() {
     auto copy = MAKE_RC_OBJ_PTR(SpotLight);
     copy->color = color;
     copy->intensity = intensity;
@@ -255,8 +257,9 @@ bool SpotLight::SetProperty(const std::string& name, const dm::float4& value)
     return Light::SetProperty(name, value);
 }
 
-donut::AutoPtr<SceneGraphLeaf> PointLight::Clone()
-{
+PointLight::PointLight() {}
+
+donut::AutoPtr<SceneGraphLeaf> PointLight::Clone() {
     auto copy = MAKE_RC_OBJ_PTR(PointLight);
     copy->color = color;
     copy->intensity = intensity;

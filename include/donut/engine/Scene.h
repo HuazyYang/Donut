@@ -48,8 +48,8 @@ namespace donut::engine
     class TextureCache;
     class ThreadPool;
     class DescriptorTableManager;
-    class GltfImporter;
-    
+    struct ISceneImporter;
+
     class Scene: public ObjectImpl<IObject>
     {
     protected:
@@ -58,7 +58,7 @@ namespace donut::engine
         AutoPtr<TextureCache> m_TextureCache;
         AutoPtr<DescriptorTableManager> m_DescriptorTable;
         AutoPtr<SceneGraph> m_SceneGraph;
-        AutoPtr<GltfImporter> m_GltfImporter;
+        AutoPtr<ISceneImporter> m_SceneImporter;
         std::vector<SceneImportResult> m_Models;
         bool m_EnableBindlessResources = false;
         bool m_UseResourceDescriptorHeapBindless = false;

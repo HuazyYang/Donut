@@ -44,6 +44,19 @@ donut::engine::DescriptorHandle::~DescriptorHandle()
     }
 }
 
+donut::engine::DescriptorHandle& donut::engine::DescriptorHandle::operator=(DescriptorHandle&& rhs) noexcept {
+    std::swap(m_Manager, rhs.m_Manager);
+    std::swap(m_DescriptorIndex, rhs.m_DescriptorIndex);
+    return *this;
+}
+
+donut::engine::DescriptorHandle::DescriptorHandle(
+    DescriptorHandle &&rhs) noexcept
+    : m_Manager(std::move(rhs.m_Manager)),
+      m_DescriptorIndex(rhs.m_DescriptorIndex) {
+  rhs.m_DescriptorIndex = -1;
+}
+
 donut::engine::DescriptorIndex donut::engine::DescriptorHandle::GetIndexInHeap() const
 {
     if (m_DescriptorIndex >= 0)
@@ -57,9 +70,8 @@ donut::engine::DescriptorIndex donut::engine::DescriptorHandle::GetIndexInHeap()
     return -1;
 }
 
-donut::engine::DescriptorTableManager::DescriptorTableManager(
-    IWeakReference* pReference, nvrhi::IDevice* device, nvrhi::IBindingLayout* layout)
-    : WeakableImpl<IWeakable>(pReference), m_Device(device) {
+donut::engine::DescriptorTableManager::DescriptorTableManager(nvrhi::IDevice* device, nvrhi::IBindingLayout* layout)
+    : m_Device(device) {
     m_DescriptorTable = m_Device->createDescriptorTable(layout);
 
     size_t capacity = m_DescriptorTable->getCapacity();
@@ -113,10 +125,10 @@ donut::engine::DescriptorIndex donut::engine::DescriptorTableManager::CreateDesc
     return index;
 }
 
-donut::AutoPtr<donut::engine::DescriptorHandle> donut::engine::DescriptorTableManager::CreateDescriptorHandle(nvrhi::BindingSetItem item)
+donut::engine::DescriptorHandle donut::engine::DescriptorTableManager::CreateDescriptorHandle(nvrhi::BindingSetItem item)
 {
     DescriptorIndex index = CreateDescriptor(item);
-    return MAKE_RC_OBJ_PTR(DescriptorHandle, this, index);
+    return DescriptorHandle(this, index);
 }
 
 nvrhi::BindingSetItem donut::engine::DescriptorTableManager::GetDescriptor(DescriptorIndex index)

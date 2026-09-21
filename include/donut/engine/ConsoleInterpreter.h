@@ -71,6 +71,7 @@ namespace donut::engine
 		public:
 
 			Interpreter();
+			~Interpreter();
 
 			struct Result
 			{

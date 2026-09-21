@@ -75,7 +75,7 @@ namespace donut::render
 
         struct CreateParameters
         {
-            AutoPtr<engine::MaterialBindingCache> materialBindings;
+            engine::MaterialBindingCache *materialBindings = nullptr;
             bool enableSinglePassCubemap = false;
             bool enableDepthWrite = true;
             bool enableMotionVectors = false;
@@ -128,6 +128,7 @@ namespace donut::render
         
     public:
         GBufferFillPass(nvrhi::IDevice* device, engine::CommonRenderPasses* commonPasses);
+        ~GBufferFillPass();
 
         virtual void Init(
             engine::ShaderFactory& shaderFactory,

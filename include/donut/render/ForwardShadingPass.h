@@ -113,7 +113,7 @@ namespace donut::render
 
         struct CreateParameters
         {
-            AutoPtr<engine::MaterialBindingCache> materialBindings;
+            engine::MaterialBindingCache *materialBindings = nullptr;
             bool singlePassCubemap = false;
             bool trackLiveness = true;
 

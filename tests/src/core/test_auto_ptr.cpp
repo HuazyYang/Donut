@@ -3,10 +3,9 @@
 #include <mutex>
 #include <condition_variable>
 #include <algorithm>
-#include <donut/core/object/MemoryAllocators.h>
+#include <vld.h>
+#include <donut/core/object/Foundation.h>
 #include <donut/core/object/AutoPtr.h>
-#include <donut/core/object/ObjectBase.h>
-#include <donut/core/object/Threading.h>
 
 #include "gtest/gtest.h"
 
@@ -19,17 +18,16 @@ Type* MakeNewObj() {
 
 namespace Test {
 // {82AA31B6-F0DF-4C11-864B-FC1643660D0B}
-DONUT_CLSID(Object, "82aa31b6-f0df-4c11-864b-fc1643660d0b")
-class Object : public ObjectImpl<IWeakable> {
+DONUT_SCLSID(Object, "82aa31b6-f0df-4c11-864b-fc1643660d0b")
+class Object : public WeakableImpl<IWeakable> {
     DONUT_DECLARE_UUID_TRAITS(Object)
  public:
     static void Create(Object** ppObj) { *ppObj = MakeNewObj<Object>(); }
 
     virtual FRESULT QueryInterface(const FIID& iid, void** ppInterface) override;
 
-    Object(IWeakReference* pRefCounters)
-        : ObjectImpl{ pRefCounters },
-          m_Value(0) {}
+    Object()
+        : m_Value(0) {}
 
     ~Object() {}
     std::atomic_int m_Value;
@@ -42,7 +40,7 @@ public:
     std::atomic_int m_Value;
 };
 
-DONUT_CLSID(DelegatingObj, "139d4e04-fb74-4070-b642-a2e6e2d1709b")
+DONUT_SCLSID(DelegatingObj, "139d4e04-fb74-4070-b642-a2e6e2d1709b")
 class DelegatingObj : public DelegatingObjectImpl<IObject> {
     DONUT_DECLARE_UUID_TRAITS(DelegatingObj)
  public:
@@ -56,17 +54,15 @@ class DelegatingObj : public DelegatingObjectImpl<IObject> {
 
 DONUT_BEGIN_INTERFACE_TABLE(Object)
 DONUT_IMPLEMENTS_INTERFACE(Object)
-DONUT_IMPLEMENTS_ROUTE_PARENT(ObjectImpl<IWeakable>)
+DONUT_IMPLEMENTS_ROUTE_PARENT(WeakableImpl<IWeakable>)
 DONUT_END_INTERFACE_TABLE()
 
 // {0CBC582D-66A2-452B-BAC4-CDACABA2D9A8}
-DONUT_CLSID(DerivedObject, "0cbc582d-66a2-452b-bac4-cdacaba2d9a8")
+DONUT_SCLSID(DerivedObject, "0cbc582d-66a2-452b-bac4-cdacaba2d9a8")
 class DerivedObject : public Object {
     DONUT_DECLARE_UUID_TRAITS(DerivedObject)
  public:
-    DerivedObject(IWeakReference* pRefCounters)
-        : Object{ pRefCounters },
-          m_Value2{ 1 } {}
+    DerivedObject() : m_Value2{1} {}
 
     FRESULT QueryInterface(FREFIID riid, void** ppInterface) override;
 
@@ -347,16 +343,14 @@ TEST(Common_RefCntWeakPtr, Lock) {
 TEST(Common_RefCntAutoPtr, Misc) {
 
     {
-        class OwnerTest : public ObjectImpl<IWeakable> {
+        class OwnerTest : public WeakableImpl<IWeakable> {
         public:
-            OwnerTest(IWeakReference* pRefCounters, int* pFlag)
-                : ObjectImpl<IWeakable>(pRefCounters),
-                  m_pFlag{ pFlag } {
-                Obj = MakeNewRCDelegating<DelegatingObj>(this)();
-                // Retain a weak reference
-                GetWeakReference()->AddRef();
-                *pFlag = 0;
-            }
+           OwnerTest(int* pFlag) : m_pFlag{pFlag} {
+               Obj = MAKE_RC_DELEGATING(DelegatingObj, this);
+               // Retain a weak reference
+               GetWeakReference()->AddRef();
+               *pFlag = 0;
+           }
 
             DONUT_BEGIN_INTERFACE_TABLE_INLINE(OwnerTest)
             DONUT_IMPLEMENTS_ROUTE_MEMBER(Obj)
@@ -384,11 +378,10 @@ TEST(Common_RefCntAutoPtr, Misc) {
     }
 
     {
-        class SelfRefTest : public ObjectImpl<IWeakable> {
+        class SelfRefTest : public WeakableImpl<IWeakable> {
         public:
-            SelfRefTest(IWeakReference* pRefCounters, int* pFlag)
-                : ObjectImpl<IWeakable>(pRefCounters),
-                  wpSelf(this),
+            SelfRefTest(int* pFlag)
+                : wpSelf(this),
                   m_pFlag{ pFlag } {
                 *m_pFlag = 0;
             }
@@ -412,15 +405,13 @@ TEST(Common_RefCntAutoPtr, Misc) {
     }
 
     {
-        class ExceptionTest1 : public ObjectImpl<IWeakable> {
+        class ExceptionTest1 : public WeakableImpl<IWeakable> {
         public:
-            ExceptionTest1(IWeakReference* pRefCounters)
-                : ObjectImpl<IWeakable>(pRefCounters),
-                  wpSelf(this) {
-                throw std::runtime_error("test exception");
-            }
+           ExceptionTest1() : wpSelf(this) { throw std::runtime_error("test exception"); }
 
-            virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) { return FS_OK; }
+           virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) {
+               return FS_OK;
+           }
 
         private:
             donut::WeakPtr<ExceptionTest1> wpSelf;
@@ -434,13 +425,11 @@ TEST(Common_RefCntAutoPtr, Misc) {
     }
 
     {
-        class ExceptionTest2 : public ObjectImpl<IWeakable> {
+        class ExceptionTest2 : public WeakableImpl<IWeakable> {
         public:
-            ExceptionTest2(IWeakReference* pRefCounters)
-                : ObjectImpl<IWeakable>(pRefCounters),
-                  wpSelf(this) {
-                throw std::runtime_error("test exception");
-            }
+           ExceptionTest2() : wpSelf(this) {
+               throw std::runtime_error("test exception");
+           }
 
             virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) { return FS_OK; }
 
@@ -457,13 +446,11 @@ TEST(Common_RefCntAutoPtr, Misc) {
     }
 
     {
-        class ExceptionTest3 : public ObjectImpl<IWeakable> {
+        class ExceptionTest3 : public WeakableImpl<IWeakable> {
         public:
-            ExceptionTest3(IWeakReference* pRefCounters)
-                : ObjectImpl<IWeakable>(pRefCounters),
-                  m_Member(*this) {}
+           ExceptionTest3() : m_Member(*this) {}
 
-            class Subclass {
+           class Subclass {
             public:
                 Subclass(ExceptionTest3& parent)
                     : wpSelf(&parent) {
@@ -488,27 +475,23 @@ TEST(Common_RefCntAutoPtr, Misc) {
     }
 
     {
-        class OwnerObject : public ObjectImpl<IWeakable> {
+        class OwnerObject : public WeakableImpl<IWeakable> {
         public:
-            OwnerObject(IWeakReference* pRefCounters)
-                : ObjectImpl<IWeakable>(pRefCounters) {}
+           OwnerObject() {}
 
-            void CreateMember() {
-                try {
-                    m_pMember =
-                        MAKE_RC_OBJ(ExceptionTest4, *this);
-                } catch (...) {
-                }
+           void CreateMember() {
+               try {
+                   m_pMember = MAKE_RC_OBJ_PTR(ExceptionTest4, *this);
+               } catch (...) {
+               }
             }
             virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) { return FS_OK; }
 
-            class ExceptionTest4 : public ObjectImpl<IWeakable> {
+            class ExceptionTest4 : public WeakableImpl<IWeakable> {
             public:
-                ExceptionTest4(IWeakReference* pRefCounters, OwnerObject& owner)
-                    : ObjectImpl<IWeakable>(pRefCounters),
-                      m_Member(owner, *this) {}
+               ExceptionTest4(OwnerObject& owner) : m_Member(owner, *this) {}
 
-                class Subclass {
+               class Subclass {
                 public:
                     Subclass(OwnerObject& owner, ExceptionTest4& parent)
                         : wpParent(&parent),
@@ -535,22 +518,19 @@ TEST(Common_RefCntAutoPtr, Misc) {
     }
 
     {
-        class OwnerObject : public ObjectImpl<IWeakable> {
+        class OwnerObject : public WeakableImpl<IWeakable> {
         public:
-            OwnerObject(IWeakReference* pRefCounters)
-                : ObjectImpl<IWeakable>(pRefCounters) {
-                m_pMember = MAKE_RC_OBJ(ExceptionTest4, *this);
+            OwnerObject() {
+                m_pMember = MAKE_RC_OBJ_PTR(ExceptionTest4, *this);
             }
 
             virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) { return FS_OK; }
 
-            class ExceptionTest4 : public ObjectImpl<IWeakable> {
+            class ExceptionTest4 : public WeakableImpl<IWeakable> {
             public:
-                ExceptionTest4(IWeakReference* pRefCounters, OwnerObject& owner)
-                    : ObjectImpl<IWeakable>(pRefCounters),
-                      m_Member(owner, *this) {}
+               ExceptionTest4(OwnerObject& owner) : m_Member(owner, *this) {}
 
-                class Subclass {
+               class Subclass {
                 public:
                     Subclass(OwnerObject& owner, ExceptionTest4& parent)
                         : wpParent(&parent),
@@ -579,15 +559,17 @@ TEST(Common_RefCntAutoPtr, Misc) {
     }
 
     {
-        class TestObject : public ObjectImpl<IWeakable> {
+        class TestObject : public WeakableImpl<IWeakable> {
         public:
-            TestObject(IWeakReference* pRefCounters)
-                : ObjectImpl<IWeakable>(pRefCounters) {}
+           TestObject() {}
 
-            virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) override final { return FS_OK; }
+           virtual FRESULT QueryInterface(const FIID& IID,
+                                          void** ppInterface) override final {
+               return FS_OK;
+           }
 
             inline virtual FLONG Release() override final {
-                return ObjectImpl<IWeakable>::Release([&]()                    //
+                return WeakableImpl<IWeakable>::Release([&]()                    //
                                                                  { ppWeakPtr->Reset(); }  //
                 );
             }

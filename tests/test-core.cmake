@@ -38,3 +38,20 @@ foreach(test_src ${donut_core_tests})
 
 endforeach()
 
+
+if(1)
+
+find_package(GTest CONFIG REQUIRED)
+target_link_libraries(test_auto_ptr GTest::gtest GTest::gtest_main)
+
+add_library(VLD SHARED IMPORTED)
+set_target_properties(
+    VLD
+    PROPERTIES
+    IMPORTED_LOCATION "$ENV{VLD_INSTALL_DIR}/bin/Win64/vld_x64.dll"
+    IMPORTED_IMPLIB "$ENV{VLD_INSTALL_DIR}/lib/Win64/vld.lib"
+    INTERFACE_INCLUDE_DIRECTORIES "$ENV{VLD_INSTALL_DIR}/include"
+)
+
+target_link_libraries(test_auto_ptr VLD)
+endif()

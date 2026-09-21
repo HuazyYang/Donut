@@ -322,7 +322,12 @@ bool DeviceManager_VK::pickPhysicalDevice()
     for (int deviceIndex = firstDevice; deviceIndex <= lastDevice; ++deviceIndex)
     {
         vk::PhysicalDevice const& dev = devices[deviceIndex];
-        vk::PhysicalDeviceProperties prop = dev.getProperties();
+
+        vk::PhysicalDeviceProperties2 prop2;
+        const auto& prop = prop2.properties;
+        vk::PhysicalDeviceMultiviewProperties multiViewProp;
+        prop2.pNext = &multiViewProp;
+        dev.getProperties2(&prop2);
 
         errorStream << std::endl << prop.deviceName.data() << ":";
 
@@ -351,6 +356,20 @@ bool DeviceManager_VK::pickPhysicalDevice()
             errorStream << std::endl << "  - does not support Vulkan " <<
                 VK_API_VERSION_MAJOR(kMinimumVulkanVersion) << "." << VK_API_VERSION_MINOR(kMinimumVulkanVersion);
             deviceIsGood = false;
+        }
+
+        if(m_DeviceParams.multiViewFeature.enabled) {
+            if(multiViewProp.maxMultiviewViewCount < m_DeviceParams.multiViewFeature.maxMultiviewViewCount ||
+                multiViewProp.maxMultiviewInstanceIndex < m_DeviceParams.multiViewFeature.maxMultiviewInstanceIndex) {
+                errorStream
+                    << std::endl
+                    << " -  does not support required multi-view properties, required (maxMultiviewViewCount = "
+                    << m_DeviceParams.multiViewFeature.maxMultiviewViewCount << ", maxMultiviewInstanceIndex = "
+                    << m_DeviceParams.multiViewFeature.maxMultiviewInstanceIndex
+                    << "), candidate (maxMultiviewViewCount = " << multiViewProp.maxMultiviewViewCount
+                    << ", maxMultiviewInstanceIndex = " << multiViewProp.maxMultiviewInstanceIndex << ")";
+                deviceIsGood = false;
+            }
         }
 
         vk::PhysicalDeviceFeatures2 deviceFeatures2{};
@@ -739,7 +758,8 @@ bool DeviceManager_VK::createDevice()
         .setVertexPipelineStoresAndAtomics(true)
         .setShaderInt64(true)
         .setShaderStorageImageWriteWithoutFormat(true)
-        .setShaderStorageImageReadWithoutFormat(true);
+        .setShaderStorageImageReadWithoutFormat(true)
+        .setMultiViewport(m_DeviceParams.multiViewFeature.enabled);
 
     // Add a Vulkan 1.1 structure with default settings to make it easier for apps to modify them
     auto vulkan11features = vk::PhysicalDeviceVulkan11Features()

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DONUT_CORE_OBJECT_TYPES_H
+#define DONUT_CORE_OBJECT_TYPES_H
 #include <cstdint>
 #include <string.h>
 
@@ -61,7 +62,7 @@ using FREFIID = const FIID&;
 using FCLSID = GUID;
 using FBOOL = int32_t;
 using FLONG = int32_t;
-using FRESULT = uint32_t;
+using FRESULT = int32_t;
 
 #define FSUCCEEDED(hr) (((donut::FRESULT)(hr)) >= 0)
 #define FFAILED(hr) (((donut::FRESULT)(hr)) < 0)
@@ -212,3 +213,6 @@ FRESULT CreateProxyBlobFromSource(IDataBlob* pSource, size_t Offset, size_t Size
 
 // Use donut_guid literals
 using namespace donut::literals;
+
+
+#endif /* DONUT_CORE_OBJECT_TYPES_H */

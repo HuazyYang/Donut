@@ -180,6 +180,10 @@ namespace donut::engine::console
 	{
 		initializeDefaultCommands();
 	}
+
+	Interpreter::~Interpreter()
+	{
+	}
 		
 	Interpreter::Result Interpreter::Execute(std::string_view const cmdline)
 	{

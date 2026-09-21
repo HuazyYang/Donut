@@ -574,4 +574,24 @@ namespace donut::math
     template<> float2 snorm8ToVector<2>(uint v);
     template<> float3 snorm8ToVector<3>(uint v);
     template<> float4 snorm8ToVector<4>(uint v);
+
+    template<typename T>
+    vector<T, 3> vfloor(vector<T, 3> v) {
+        return vector<T, 3>{ std::floor(v.x), std::floor(v.y), std::floor(v.z) };
+    }
+
+    template <typename T>
+    vector<T, 4> vfloor(vector<T, 4> v) {
+        return vector<T, 4>{std::floor(v.x), std::floor(v.y), std::floor(v.z), std::floor(v.w)};
+    }
+
+    template <typename T>
+    vector<T, 3> vceil(vector<T, 3> v) {
+        return vector<T, 3>{std::ceil(v.x), std::ceil(v.y), std::ceil(v.z)};
+    }
+
+    template <typename T>
+    vector<T, 4> vceil(vector<T, 4> v) {
+        return vector<T, 4>{std::ceil(v.x), std::ceil(v.y), std::ceil(v.z), std::ceil(v.w)};
+    }
 }

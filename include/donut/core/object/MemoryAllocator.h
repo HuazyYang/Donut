@@ -1,5 +1,5 @@
-#ifndef MEMORYALLOCATOR_H
-#define MEMORYALLOCATOR_H
+#ifndef DONUT_CORE_OBJECT_MEMORYALLOCATOR_H
+#define DONUT_CORE_OBJECT_MEMORYALLOCATOR_H
 #include <type_traits>
 #include <limits>
 #include <cassert>
@@ -7,9 +7,11 @@
 #if defined(_MSC_VER)
 #define donut_likely(x) (x)
 #define donut_unlikely(x) (x)
+#define DONUT_DEBUG_BREAK() __debugbreak()
 #else
 #define donut_likely(x) __builtin_expect(!!(x), 1)
 #define donut_unlikely(x) __builtin_expect(!!(x), 0)
+#define DONUT_DEBUG_BREAK() ((void)0)
 #endif
 
 #ifdef _DEBUG
@@ -20,6 +22,7 @@
 
 #define DONUT_ASSERTION_FAILED(...) \
     do {                            \
+        DONUT_DEBUG_BREAK();        \
         assert(0);                  \
     } while (false)
 
@@ -220,4 +223,4 @@ bool operator!=(const STDAllocator<T, A>& left, const STDAllocator<U, A>& right)
 // #define DONUT_DELETE0(p) donut::DeleteObject(donut::GetDefaultMemAllocator(), p)
 
 
-#endif /* MEMORYALLOCATOR_H */
+#endif /* DONUT_CORE_OBJECT_MEMORYALLOCATOR_H */

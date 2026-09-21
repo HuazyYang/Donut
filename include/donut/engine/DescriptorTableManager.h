@@ -36,16 +36,21 @@ namespace donut::engine
     class DescriptorHandle: public ObjectImpl<IObject>
     {
     private:
-        WeakPtr<DescriptorTableManager> m_Manager;
-        DescriptorIndex m_DescriptorIndex;
+      friend class DescriptorTableManager;
+      DescriptorHandle(DescriptorTableManager *managerPtr,
+                       DescriptorIndex index);
+      WeakPtr<DescriptorTableManager> m_Manager;
+      DescriptorIndex m_DescriptorIndex;
 
     public:
         DescriptorHandle();
-        DescriptorHandle(DescriptorTableManager* managerPtr, DescriptorIndex index);
         ~DescriptorHandle();
         
         [[nodiscard]] bool IsValid() const { return m_DescriptorIndex >= 0 && m_Manager.IsValid(); }
         [[nodiscard]] DescriptorIndex Get() const { if (m_DescriptorIndex >= 0) assert(m_Manager.IsValid()); return m_DescriptorIndex; }
+
+        DescriptorHandle &operator=(DescriptorHandle &&rhs) noexcept;
+        DescriptorHandle(DescriptorHandle &&rhs) noexcept;
         
         // For ResourceDescriptorHeap Index instead of a table relative index
         // This value is volatile if the descriptor table resizes and needs to be refetched
@@ -94,13 +99,13 @@ namespace donut::engine
         int m_SearchStart = 0;
         
     public:
-        DescriptorTableManager(IWeakReference *pReference, nvrhi::IDevice* device, nvrhi::IBindingLayout* layout);
+        DescriptorTableManager(nvrhi::IDevice* device, nvrhi::IBindingLayout* layout);
         ~DescriptorTableManager();
         
         nvrhi::IDescriptorTable* GetDescriptorTable() const { return m_DescriptorTable; }
 
         DescriptorIndex CreateDescriptor(nvrhi::BindingSetItem item);
-        AutoPtr<DescriptorHandle> CreateDescriptorHandle(nvrhi::BindingSetItem item);
+        DescriptorHandle CreateDescriptorHandle(nvrhi::BindingSetItem item);
         nvrhi::BindingSetItem GetDescriptor(DescriptorIndex index);
         void ReleaseDescriptor(DescriptorIndex index);
     };

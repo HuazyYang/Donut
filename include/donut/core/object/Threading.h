@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DONUT_CORE_OBJECT_THREADING_H
+#define DONUT_CORE_OBJECT_THREADING_H
 
 #include <atomic>
 #include <mutex>
@@ -200,3 +201,6 @@ struct SharedSpinLock {
 };
 
 } // namespace donut
+
+
+#endif /* DONUT_CORE_OBJECT_THREADING_H */

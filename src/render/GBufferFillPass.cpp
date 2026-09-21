@@ -69,6 +69,8 @@ GBufferFillPass::GBufferFillPass(nvrhi::IDevice* device, CommonRenderPasses *com
     m_IsDX11 = m_Device->getGraphicsAPI() == nvrhi::GraphicsAPI::D3D11;
 }
 
+GBufferFillPass::~GBufferFillPass() {}
+
 void GBufferFillPass::Init(ShaderFactory& shaderFactory, const CreateParameters& params)
 {
     m_EnableMotionVectors = params.enableMotionVectors;

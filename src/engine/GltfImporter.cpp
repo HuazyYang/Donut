@@ -23,7 +23,7 @@
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
 
-#include <donut/engine/GltfImporter.h>
+#include "SceneImporterImpl.h"
 #include <donut/engine/TextureCache.h>
 #include <donut/engine/SceneGraph.h>
 #include <donut/core/vfs/VFS.h>
@@ -33,14 +33,16 @@
 
 using namespace donut::math;
 using namespace donut::vfs;
-using namespace donut::engine;
 
+namespace donut::engine {
 
 GltfImporter::GltfImporter(vfs::IFileSystem* fs, SceneTypeFactory* sceneTypeFactory)
     : m_fs(fs)
     , m_SceneTypeFactory(sceneTypeFactory)
 {
 }
+
+GltfImporter::~GltfImporter() {}
 
 struct cgltf_vfs_context
 {
@@ -609,12 +611,12 @@ static std::pair<const uint8_t*, size_t> cgltf_buffer_iterator(const cgltf_acces
     return std::make_pair(data, stride);
 }
 
-bool GltfImporter::Load(
+FRESULT GltfImporter::Load(
     const std::filesystem::path& fileName,
     TextureCache& textureCache,
     SceneLoadingStats& stats,
     ThreadPool* threadPool,
-    SceneImportResult& result) const
+    SceneImportResult& result)
 {
     // Set this to 'true' if you need to fix broken tangents in a model.
     // Patched buffers will be saved alongside the gltf file, named like "<scene-name>.buffer<N>.bin"
@@ -641,14 +643,14 @@ bool GltfImporter::Load(
     if (res != cgltf_result_success)
     {
         log::error("Couldn't load glTF file '%s': %s", normalizedFileName.c_str(), cgltf_error_to_string(res));
-        return false;
+        return FE_GENERIC_ERROR;
     }
 
     res = cgltf_load_buffers(&options, objects, normalizedFileName.c_str());
     if (res != cgltf_result_success)
     {
         log::error("Failed to load buffers for glTF file '%s': ", normalizedFileName.c_str(), cgltf_error_to_string(res));
-        return false;
+        return FE_GENERIC_ERROR;
     }
 
     std::unordered_map<const cgltf_image*, AutoPtr<GltfInlineData>> inlineImageDataCache;
@@ -2010,5 +2012,7 @@ bool GltfImporter::Load(
 
     cgltf_free(objects);
 
-    return true;
+    return FS_OK;
 }
+
+}  // namespace donut::engine
