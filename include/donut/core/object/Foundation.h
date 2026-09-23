@@ -307,91 +307,36 @@ class WeakReferenceImpl final : public IWeakReference, public UserAllocated {
     }
 
     FLONG ReleaseWeakRef() {
-        // The method must be serialized!
-        std::unique_lock<SpinLock> Guard{m_Lock};
-
-        // It is essentially important to check the number of weak references
-        // while holding the lock. Otherwise reference counters object
-        // may be destroyed twice if ReleaseStrongRef() is executed by other
-        // thread.
-        const auto NumWeakReferences = m_NumWeakReferences.fetch_add(-1) - 1;
+        // Lock-free. m_NumWeakReferences includes one implicit reference owned by all
+        // strong references together (see m_NumWeakReferences), so it can only reach zero
+        // after TryDestroyObject() has destroyed the object and released that reference.
+        //
+        // Whoever decrements the counter to zero destroys the control block. For every
+        // other caller the decrement is the last access to <this>, so no thread can touch
+        // the control block after it is freed. acq_rel: the release half publishes this
+        // thread's prior writes (e.g. object destruction), the acquire half makes all of
+        // them visible to the thread that destroys the control block.
+        //
+        // Weak references created and released while the object is being constructed
+        // (A ==sp==> B ---wp---> A, B.ctor throws) never drive the counter to zero either,
+        // because the implicit reference is held from the very beginning.
+        const auto NumWeakReferences =
+            m_NumWeakReferences.fetch_add(-1, std::memory_order_acq_rel) - 1;
         DONUT_VERIFY(NumWeakReferences >= 0, "Inconsistent call to ReleaseWeakRef()");
 
-        // clang-format off
-        // There are two special case when we must not destroy the ref counters object even
-        // when NumWeakReferences == 0 && m_NumStrongReferences == 0 :
-        //
-        //             This thread             |    Another thread - ReleaseStrongRef()
-        //                                     |
-        // 1. Lock the object                  |
-        //                                     |
-        // 2. Decrement m_NumWeakReferences,   |   1. Decrement m_NumStrongReferences,
-        //    m_NumWeakReferences==0           |      RefCount == 0
-        //                                     |
-        //                                     |   2. Start waiting for the lock to destroy
-        //                                     |      the object, m_ObjectState != ObjectState::Destroyed
-        // 3. Do not destroy reference         |
-        //    counters, unlock                 |
-        //                                     |   3. Acquire the lock,
-        //                                     |      destroy the object,
-        //                                     |      read m_NumWeakReferences==0
-        //                                     |      destroy the reference counters
-        //
-
-        // If an exception is thrown during the object construction and there is a weak pointer to the object itself,
-        // we may get to this point, but should not destroy the reference counters, because it will be destroyed by MakeNewRCObj
-        // Consider this example:
-        //
-        //   A ==sp==> B ---wp---> A
-        //
-        //   MakeNewRCObj::operator()
-        //    try
-        //    {
-        //     A.ctor()
-        //       B.ctor()
-        //        wp.ctor m_NumWeakReferences==1
-        //        throw
-        //        wp.dtor m_NumWeakReferences==0, destroy this
-        //    }
-        //    catch(...)
-        //    {
-        //       Destroy ref counters second time
-        //    }
-        //
-        // clang-format on
-        if (NumWeakReferences == 0 &&
-            /*m_NumStrongReferences == 0 &&*/ m_ObjectState.load() ==
-                ObjectState::Destroyed) {
-            DONUT_VERIFY(m_NumStrongReferences.load() == 0);
+        if (NumWeakReferences == 0) {
+            DONUT_VERIFY(m_NumStrongReferences.load() == 0 &&
+                             m_ObjectState.load() == ObjectState::Destroyed,
+                         "The implicit weak reference must only be released after the "
+                         "object is destroyed");
 #if !DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
             DONUT_VERIFY(
                 m_ObjectWrapperBuffer.val[0] == 0 && m_ObjectWrapperBuffer.val[1] == 0,
                 "Object wrapper must be null");
 #endif
-            // m_ObjectState is set to ObjectState::Destroyed under the lock. If the state
-            // is not Destroyed, ReleaseStrongRef() will take care of it. Access to Object
-            // wrapper and decrementing m_NumWeakReferences is atomic. Since we acquired the
-            // lock, no other thread can access either of them. Access to
-            // m_NumStrongReferences is NOT PROTECTED by lock.
-
-            // There are no more references to the ref counters object and the object itself
-            // is already destroyed.
-            // We can safely unlock it and destroy.
-            // If we do not unlock it, this->m_LockFlag will expire,
-            // which will cause Lock.~LockHelper() to crash.
-            Guard.unlock();
             SelfDestroy();
         }
         return NumWeakReferences;
-    }
-
-    void ReleaseWeakRefLockFree() {
-        const auto NumWeakReferences = m_NumWeakReferences.fetch_add(-1) - 1;
-        DONUT_VERIFY(NumWeakReferences >= 0, "Inconsistent call to ReleaseWeakRef()");
-
-        if (NumWeakReferences == 0) {
-            SelfDestroy();
-        }
     }
 
     FRESULT
@@ -448,8 +393,8 @@ class WeakReferenceImpl final : public IWeakReference, public UserAllocated {
                 m_ObjectWrapperBuffer.val[0] != 0 && m_ObjectWrapperBuffer.val[1] != 0,
                 "Object wrapper is not initialized");
             // QueryInterface() must not lock the object, or a deadlock happens.
-            // The only other two methods that lock the object are ReleaseStrongRef()
-            // and ReleaseWeakRef(), which are never called by QueryInterface()
+            // The only other method that locks the object is ReleaseStrongRef()
+            // (via TryDestroyObject()), which is never called by QueryInterface()
             auto* pWrapper =
                 reinterpret_cast<details::ObjectWrapperBase*>(&m_ObjectWrapperBuffer);
             hr = pWrapper->QueryInterface(riid, ppv);
@@ -617,7 +562,7 @@ class WeakReferenceImpl final : public IWeakReference, public UserAllocated {
             //    delete A{
             //      A.~dtor(){
             //          B.~dtor(){
-            //              wpA.ReleaseWeakRef(){
+            //              wpA.Lock() -> QueryObject(){
             //                  RefCounters_A.Lock(); // Deadlock
             //
 
@@ -636,68 +581,36 @@ class WeakReferenceImpl final : public IWeakReference, public UserAllocated {
                 reinterpret_cast<details::ObjectWrapperBase*>(&ObjectWrapperBufferCopy);
 #endif
 
-            // In a multithreaded environment, reference counters object may
-            // be destroyed at any time while m_pObject->~dtor() is running.
-            // NOTE: m_pObject may not be the only object referencing m_pWeakRef.
-            //       All objects that are owned by m_pObject will point to the same
-            //       reference counters object.
-
             // Note that this is the only place where m_ObjectState is
-            // modified after the ref counters object has been created
+            // modified after the ref counters object has been created.
+            // QueryObject() checks the state under the lock, so after this store no
+            // new strong reference can be handed out.
             m_ObjectState.store(ObjectState::Destroyed);
 
-            // The object is now detached from the reference counters, and it is if
-            // it was destroyed since no one can obtain access to it.
-
-            // It is essentially important to check the number of weak references
-            // while the object is locked. Otherwise reference counters object
-            // may be destroyed twice if ReleaseWeakRef() is executed by other thread:
-            //
-            //             This thread             |    Another thread - ReleaseWeakRef()
-            //                                     |
-            // 1. Decrement m_NumStrongReferences, |
-            //    m_NumStrongReferences==0,        |
-            //    acquire the lock, destroy        |
-            //    the obj, release the lock        |
-            //    m_NumWeakReferences == 1         |
-            //                                     |   1. Acquire the lock,
-            //                                     |      decrement m_NumWeakReferences,
-            //                                     |      m_NumWeakReferences == 0,
-            //                                     |      m_ObjectState ==
-            //                                     ObjectState::Destroyed
-            //                                     |
-            // 2. Read m_NumWeakReferences == 0    |
-            // 3. Destroy the ref counters obj     |   2. Destroy the ref counters obj
-            //
-            const auto bMayDestroyThis = m_NumWeakReferences.load() == 0;
-            // ReleaseWeakRef() decrements m_NumWeakReferences, and checks it for
-            // zero only after acquiring the lock. So if m_NumWeakReferences==0, no
-            // weak reference-related code may be running
-
-            // There may be scenario that object dtor decrement weak reference, so we
-            // increment weak reference for this
-            // Another reason we add weak reference here is for implement of packing
-            // reference control block(WeakReferenceImpl) and object memory together
-            // so as to optimize memory allocation and cache missing.
-            if (donut_unlikely(!bMayDestroyThis)) AddWeakRef();
-
-            // We must explicitly unlock the object now to avoid deadlocks. Also,
-            // if this is deleted, this->m_LockFlag will expire, which will cause
-            // Lock.~LockHelper() to crash
+            // We must explicitly unlock the object now to avoid deadlocks: the object
+            // dtor may resolve weak references to this very object (QueryObject()).
             Guard.unlock();
 
-            // Destroy referenced object
-            // Note: Object dtor may release weak reference, so we need to re-evaluate weak
-            // reference
-            //      count
+            // <this> stays alive while the object is being destroyed: this thread still
+            // owns the implicit weak reference, so m_NumWeakReferences >= 1 no matter
+            // which weak references the dtor (or other threads) release meanwhile.
             pWrapper->DestroyObject();
 
-            // // Note that <this> may be destroyed here already,
-            // // see comments in ~ControlledObjectType()
-            if (donut_likely(bMayDestroyThis))
+            // Release the implicit weak reference. This is the last access to <this> on
+            // this path.
+            //
+            // Fast path (as in libstdc++'s shared_ptr): if only the implicit reference
+            // is left, nobody else can hold or obtain a reference any more (strong == 0,
+            // state == Destroyed, no external weak references), so the atomic RMW can be
+            // skipped. The acquire load pairs with the release half of a concurrent
+            // ReleaseWeakRef() that took the counter from 2 to 1; that thread no longer
+            // touches <this> after its decrement.
+            if (m_NumWeakReferences.load(std::memory_order_acquire) == 1) {
+                m_NumWeakReferences.store(0, std::memory_order_relaxed);
                 SelfDestroy();
-            else
-                ReleaseWeakRefLockFree();
+            } else {
+                ReleaseWeakRef();
+            }
         }
     }
 
@@ -727,8 +640,13 @@ class WeakReferenceImpl final : public IWeakReference, public UserAllocated {
     // clang-format on
 
     std::atomic<FLONG> m_NumStrongReferences{1};
-    std::atomic<FLONG> m_NumWeakReferences{0};
+    // External weak references + 1. The extra (implicit) reference is owned collectively
+    // by all strong references and is released by TryDestroyObject() after the object
+    // is destroyed. Whoever decrements this counter to zero destroys the control block.
+    std::atomic<FLONG> m_NumWeakReferences{1};
 
+    // Serializes QueryObject() against TryDestroyObject() only. It is never used to
+    // decide the lifetime of the control block.
     SpinLock m_Lock;
 
     enum class ObjectState : uint32_t { NotInitialized = 0, Alive = 1, Destroyed = 2 };
@@ -764,26 +682,9 @@ class RefCountedObject : public BaseItf, public UserAllocated {
     // Virtual destructor makes sure all derived classes can be destroyed
     // through the pointer to the base class
     virtual ~RefCountedObject() {
-        // WARNING! m_pWeakRef may be expired in scenarios like this:
-        //
-        //    A ==sp==> B ---wp---> A
-        //
-        //    RefCounters_A.ReleaseStrongRef(){ // NumStrongRef == 0, NumWeakRef == 1
-        //      bMayDestroyThis = (m_NumWeakReferences == 0) == false;
-        //      delete A{
-        //        A.~dtor(){
-        //            B.~dtor(){
-        //                wpA.ReleaseWeakRef(){ // NumStrongRef == 0, NumWeakRef == 0,
-        //                m_pObject==nullptr
-        //                    delete RefCounters_A;
-        //        ...
-        //        DONUT_VERIFY( m_pWeakRef->GetNumStrongRefs() == 0 // Access violation!
-
-        // This also may happen if one thread is executing ReleaseStrongRef(), while
-        // another one is simultaneously running ReleaseWeakRef().
-
-        // DONUT_VERIFY( m_pWeakRef->GetNumStrongRefs() == 0,
-        //         "There remain strong references to the object being destroyed" );
+        // m_pWeakRef stays valid while the dtor runs when the object is destroyed via
+        // ReleaseStrongRef(): TryDestroyObject() holds the implicit weak reference until
+        // the dtor returns.
     }
 
     inline virtual FLONG AddRef() override final {
@@ -1024,6 +925,7 @@ class MakeNewRCObj {
         } catch (...) {
             if (pWeakRef) {
                 pWeakRef->m_NumStrongReferences = 0;
+                pWeakRef->m_NumWeakReferences = 0;  // drop the implicit weak reference
                 // Obviously, control block is initialized.
                 if (m_pAllocator) {
                     pWeakRef->~WeakReferenceImpl();
@@ -1057,6 +959,7 @@ class MakeNewRCObj {
         } catch (...) {
             if(pWeakRef) {
                 pWeakRef->m_NumStrongReferences = 0;
+                pWeakRef->m_NumWeakReferences = 0;  // drop the implicit weak reference
                 pWeakRef->SelfDestroy();
             }
 
