@@ -149,6 +149,12 @@ static void WindowPosCallback_GLFW(GLFWwindow *window, int xpos, int ypos)
     manager->WindowPosCallback(xpos, ypos);
 }
 
+static void WindowContentScaleCallback_GLFW(GLFWwindow *window, float scaleX, float scaleY)
+{
+    DeviceManager *manager = reinterpret_cast<DeviceManager *>(glfwGetWindowUserPointer(window));
+    manager->WindowContentScaleCallback(scaleX, scaleY);
+}
+
 static void KeyCallback_GLFW(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
     DeviceManager *manager = reinterpret_cast<DeviceManager *>(glfwGetWindowUserPointer(window));
@@ -271,11 +277,27 @@ bool DeviceManager::CreateHeadlessDevice(const DeviceCreationParameters& params)
     return CreateDevice();
 }
 
+// Clear HWND_TOPMOST that GLFW applies to fullscreen windows on Win32. Called
+// after every glfwSetWindowMonitor() that puts the window into fullscreen.
+// See DeviceCreationParameters::fullscreenAlwaysOnTop.
+static void ClearFullscreenTopmost(GLFWwindow* window)
+{
+#if _WIN32
+    if (HWND hwnd = glfwGetWin32Window(window))
+    {
+        SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+#else
+    (void)window;
+#endif
+}
+
 bool DeviceManager::CreateWindowDeviceAndSwapChain(const DeviceCreationParameters& params, const char *windowTitle)
 {
     m_DeviceParams = params;
     m_DeviceParams.headlessDevice = false;
-    m_RequestedVSync = params.vsyncEnabled;
+    m_RequestedVSync = m_DeviceParams.vsyncEnabled;
 
 #ifndef _WINDOWS
     // This is necessary to get correct window decorations on Wayland
@@ -285,6 +307,58 @@ bool DeviceManager::CreateWindowDeviceAndSwapChain(const DeviceCreationParameter
     if (!CreateInstance(m_DeviceParams))
         return false;
 
+    m_PrevWindowWidth  = static_cast<int>(m_DeviceParams.backBufferWidth);
+    m_PrevWindowHeight = static_cast<int>(m_DeviceParams.backBufferHeight);
+
+    // Target monitor for fullscreen startup (resolved below, used again for glfwSetWindowMonitor).
+    GLFWmonitor* startMonitor = nullptr;
+
+    if (m_DeviceParams.startFullscreen)
+    {
+        // Determine which monitor to use. If windowPosX/Y are set, pick the monitor
+        // that contains that point; otherwise fall back to the primary monitor.
+        startMonitor = glfwGetPrimaryMonitor();
+        if (m_DeviceParams.windowPosX != -1 && m_DeviceParams.windowPosY != -1)
+        {
+            int monitorCount = 0;
+            GLFWmonitor** monitors = glfwGetMonitors(&monitorCount);
+            for (int i = 0; i < monitorCount; ++i)
+            {
+                int mx, my;
+                glfwGetMonitorPos(monitors[i], &mx, &my);
+                const GLFWvidmode* vm = glfwGetVideoMode(monitors[i]);
+                if (m_DeviceParams.windowPosX >= mx && m_DeviceParams.windowPosX < mx + vm->width &&
+                    m_DeviceParams.windowPosY >= my && m_DeviceParams.windowPosY < my + vm->height)
+                {
+                    startMonitor = monitors[i];
+                    break;
+                }
+            }
+        }
+
+        const GLFWvidmode* mode = glfwGetVideoMode(startMonitor);
+        int monX = 0, monY = 0;
+        glfwGetMonitorPos(startMonitor, &monX, &monY);
+
+        // Must make sure all these match otherwise GLFW will trigger a mode change.
+        m_DeviceParams.backBufferWidth  = static_cast<uint32_t>(mode->width);
+        m_DeviceParams.backBufferHeight = static_cast<uint32_t>(mode->height);
+        m_DeviceParams.refreshRate      = mode->refreshRate;
+
+        // Initialize previous window position for Alt+Enter restore.
+        // Use the explicit position if provided, otherwise center on the monitor.
+        if (m_DeviceParams.windowPosX != -1 && m_DeviceParams.windowPosY != -1)
+        {
+            m_PrevWindowX = m_DeviceParams.windowPosX;
+            m_PrevWindowY = m_DeviceParams.windowPosY;
+        }
+        else
+        {
+            m_PrevWindowX = monX + (mode->width  - m_PrevWindowWidth)  / 2;
+            m_PrevWindowY = monY + (mode->height - m_PrevWindowHeight) / 2;
+        }
+    }
+
     glfwSetErrorCallback(ErrorCallback_GLFW);
 
     glfwDefaultWindowHints();
@@ -292,7 +366,7 @@ bool DeviceManager::CreateWindowDeviceAndSwapChain(const DeviceCreationParameter
     bool foundFormat = false;
     for (const auto& info : formatInfo)
     {
-        if (info.format == params.swapChainFormat)
+        if (info.format == m_DeviceParams.swapChainFormat)
         {
             glfwWindowHint(GLFW_RED_BITS, info.redBits);
             glfwWindowHint(GLFW_GREEN_BITS, info.greenBits);
@@ -312,22 +386,22 @@ bool DeviceManager::CreateWindowDeviceAndSwapChain(const DeviceCreationParameter
             int(params.swapChainFormat));
     }
 
-    glfwWindowHint(GLFW_SAMPLES, params.swapChainSampleCount);
-    glfwWindowHint(GLFW_REFRESH_RATE, params.refreshRate);
-    glfwWindowHint(GLFW_SCALE_TO_MONITOR, params.resizeWindowWithDisplayScale);
+    glfwWindowHint(GLFW_SAMPLES, m_DeviceParams.swapChainSampleCount);
+    glfwWindowHint(GLFW_REFRESH_RATE, m_DeviceParams.refreshRate);
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, m_DeviceParams.resizeWindowWithDisplayScale);
 
+    glfwWindowHint(GLFW_AUTO_ICONIFY, GLFW_FALSE);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);   // Ignored for fullscreen
 
-    if (params.startBorderless)
+    if (m_DeviceParams.startBorderless)
     {
         glfwWindowHint(GLFW_DECORATED, GLFW_FALSE); // Borderless window
     }
 
-    m_Window = glfwCreateWindow(params.backBufferWidth, params.backBufferHeight,
+    m_Window = glfwCreateWindow(m_DeviceParams.backBufferWidth, m_DeviceParams.backBufferHeight,
                                 windowTitle ? windowTitle : "",
-                                params.startFullscreen ? glfwGetPrimaryMonitor() : nullptr,
+                                nullptr,
                                 nullptr);
 
     if (m_Window == nullptr)
@@ -335,10 +409,13 @@ bool DeviceManager::CreateWindowDeviceAndSwapChain(const DeviceCreationParameter
         return false;
     }
 
-    if (params.startFullscreen)
+    if (m_DeviceParams.startFullscreen)
     {
-        glfwSetWindowMonitor(m_Window, glfwGetPrimaryMonitor(), 0, 0,
+        glfwSetWindowMonitor(m_Window, startMonitor, 0, 0,
             m_DeviceParams.backBufferWidth, m_DeviceParams.backBufferHeight, m_DeviceParams.refreshRate);
+
+        if (!m_DeviceParams.fullscreenAlwaysOnTop)
+            ClearFullscreenTopmost(m_Window);
     }
     else
     {
@@ -346,6 +423,9 @@ bool DeviceManager::CreateWindowDeviceAndSwapChain(const DeviceCreationParameter
         glfwGetFramebufferSize(m_Window, &fbWidth, &fbHeight);
         m_DeviceParams.backBufferWidth = fbWidth;
         m_DeviceParams.backBufferHeight = fbHeight;
+
+        if (m_DeviceParams.windowPosX != -1 && m_DeviceParams.windowPosY != -1)
+            glfwSetWindowPos(m_Window, m_DeviceParams.windowPosX, m_DeviceParams.windowPosY);
     }
 
     if (windowTitle)
@@ -353,22 +433,27 @@ bool DeviceManager::CreateWindowDeviceAndSwapChain(const DeviceCreationParameter
 
     glfwSetWindowUserPointer(m_Window, this);
 
-    if (params.windowPosX != -1 && params.windowPosY != -1)
-    {
-        glfwSetWindowPos(m_Window, params.windowPosX, params.windowPosY);
-    }
-    
     glfwSetWindowPosCallback(m_Window, WindowPosCallback_GLFW);
     glfwSetWindowCloseCallback(m_Window, WindowCloseCallback_GLFW);
     glfwSetWindowRefreshCallback(m_Window, WindowRefreshCallback_GLFW);
     glfwSetWindowFocusCallback(m_Window, WindowFocusCallback_GLFW);
     glfwSetWindowIconifyCallback(m_Window, WindowIconifyCallback_GLFW);
+    glfwSetWindowContentScaleCallback(m_Window, WindowContentScaleCallback_GLFW);
     glfwSetKeyCallback(m_Window, KeyCallback_GLFW);
     glfwSetCharModsCallback(m_Window, CharModsCallback_GLFW);
     glfwSetCursorPosCallback(m_Window, MousePosCallback_GLFW);
     glfwSetMouseButtonCallback(m_Window, MouseButtonCallback_GLFW);
     glfwSetScrollCallback(m_Window, MouseScrollCallback_GLFW);
     glfwSetJoystickCallback(JoystickConnectionCallback_GLFW);
+
+    // Explicitly initialize the per-monitor DPI scale factor for the window's current
+    // position. The content scale callback may not fire on startup if the scale hasn't
+    // changed, so we query it directly here.
+    {
+        float scaleX, scaleY;
+        glfwGetWindowContentScale(m_Window, &scaleX, &scaleY);
+        WindowContentScaleCallback(scaleX, scaleY);
+    }
 
     // If there are multiple device managers, then this would be called by each one which isn't necessary
     // but should not hurt.
@@ -381,7 +466,8 @@ bool DeviceManager::CreateWindowDeviceAndSwapChain(const DeviceCreationParameter
         return false;
 
     glfwShowWindow(m_Window);
-    
+    glfwFocusWindow(m_Window);
+
     if (m_DeviceParams.startMaximized)
     {
         glfwMaximizeWindow(m_Window);
@@ -744,40 +830,20 @@ void DeviceManager::UpdateWindowSize()
     m_DeviceParams.vsyncEnabled = m_RequestedVSync;
 }
 
-void DeviceManager::WindowPosCallback(int x, int y)
+void DeviceManager::WindowContentScaleCallback(float scaleX, float scaleY)
 {
     if (m_DeviceParams.enablePerMonitorDPI)
     {
-#ifdef _WINDOWS
-        // Use Windows-specific implementation of DPI query because GLFW has issues:
-        // glfwGetWindowMonitor(window) returns NULL for non-fullscreen applications.
-        // This custom code allows us to adjust DPI scaling when a window is moved
-        // between monitors with different scales.
-        
-        HWND hwnd = glfwGetWin32Window(m_Window);
-        auto monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        m_DPIScaleFactorX = scaleX;
+        m_DPIScaleFactorY = scaleY;
+    }
+}
 
-        unsigned int dpiX;
-        unsigned int dpiY;
-        GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-
-        m_DPIScaleFactorX = dpiX / 96.f;
-        m_DPIScaleFactorY = dpiY / 96.f;
-#else
-        // Linux support for display scaling using GLFW.
-        // This has limited utility due to the issue described above (NULL monitor),
-        // and because GLFW doesn't support fractional scaling properly.
-        // For example, on a system with 150% scaling it will report scale = 2.0
-        // but the window will be either too small or too big, depending on 'resizeWindowWithDisplayScale'
-
-        GLFWmonitor* monitor = glfwGetWindowMonitor(m_Window);
-
-        // Non-fullscreen windows have NULL monitor, let's use the primary monitor in this case
-        if (!monitor)
-            monitor = glfwGetPrimaryMonitor();
-
-        glfwGetMonitorContentScale(monitor, &m_DPIScaleFactorX, &m_DPIScaleFactorY);
-#endif
+void DeviceManager::WindowPosCallback(int x, int y)
+{
+    for (auto it : m_vRenderPasses)
+    {
+        it->WindowPosUpdate(x, y);
     }
 
     if (m_EnableRenderDuringWindowMovement && m_SwapChainFramebuffers.size() > 0)
@@ -787,11 +853,86 @@ void DeviceManager::WindowPosCallback(int x, int y)
     }
 }
 
+GLFWmonitor* DeviceManager::GetCurrentMonitor() const
+{
+    int winX, winY, winW, winH;
+    glfwGetWindowPos(m_Window, &winX, &winY);
+    glfwGetWindowSize(m_Window, &winW, &winH);
+    int winCenterX = winX + winW / 2;
+    int winCenterY = winY + winH / 2;
+
+    int monitorCount = 0;
+    GLFWmonitor** monitors = glfwGetMonitors(&monitorCount);
+    for (int i = 0; i < monitorCount; ++i)
+    {
+        int monX, monY;
+        glfwGetMonitorPos(monitors[i], &monX, &monY);
+        const GLFWvidmode* mode = glfwGetVideoMode(monitors[i]);
+        if (winCenterX >= monX && winCenterX < monX + mode->width &&
+            winCenterY >= monY && winCenterY < monY + mode->height)
+        {
+            return monitors[i];
+        }
+    }
+    return glfwGetPrimaryMonitor();
+}
+
+void DeviceManager::SetFullscreen(GLFWmonitor* targetMonitor)
+{
+    GLFWmonitor* const currentMonitor = glfwGetWindowMonitor(m_Window);
+
+    // Exiting fullscreen
+    if (!targetMonitor)
+    {
+        if (!currentMonitor)
+            return;
+
+        // WS_MAXIMIZE and the OS restore rect survive the round trip untouched, so a
+        // maximized window comes back maximized without being tracked here.
+        glfwSetWindowMonitor(m_Window, nullptr, m_PrevWindowX, m_PrevWindowY,
+            m_PrevWindowWidth, m_PrevWindowHeight, 0);
+
+        return;
+    }
+
+    // Entering fullscreen / switching monitors
+    if (currentMonitor == targetMonitor)
+        return;
+
+    // Only snapshot on the way in, so moving between monitors keeps the geometry
+    // the window had before any of this started.
+    if (!currentMonitor)
+    {
+        glfwGetWindowPos(m_Window, &m_PrevWindowX, &m_PrevWindowY);
+        glfwGetWindowSize(m_Window, &m_PrevWindowWidth, &m_PrevWindowHeight);
+    }
+
+    const GLFWvidmode* mode = glfwGetVideoMode(targetMonitor);
+    int monX, monY;
+    glfwGetMonitorPos(targetMonitor, &monX, &monY);
+
+    glfwSetWindowMonitor(m_Window, targetMonitor, monX, monY, mode->width, mode->height, mode->refreshRate);
+
+    if (!m_DeviceParams.fullscreenAlwaysOnTop)
+        ClearFullscreenTopmost(m_Window);
+}
+
+void DeviceManager::ToggleFullscreen()
+{
+    SetFullscreen(glfwGetWindowMonitor(m_Window) ? nullptr : GetCurrentMonitor());
+}
+
 void DeviceManager::KeyboardUpdate(int key, int scancode, int action, int mods)
 {
     if (key == -1)
     {
         // filter unknown keys
+        return;
+    }
+
+    if (key == GLFW_KEY_ENTER && action == GLFW_PRESS && (mods & GLFW_MOD_ALT))
+    {
+        ToggleFullscreen();
         return;
     }
 

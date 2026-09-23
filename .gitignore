@@ -23,3 +23,4 @@ media
 **/Release/*
 thirdparty/streamline
 thirdparty/DLSS
+thirdparty/zstd

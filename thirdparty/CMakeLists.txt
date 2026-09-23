@@ -38,6 +38,26 @@ if (NOT TARGET jsoncpp_static)
     set_target_properties(jsoncpp_static PROPERTIES FOLDER ${third_party_folder})
 endif()
 
+if (DONUT_WITH_KTX AND NOT TARGET libzstd_static)
+    message(STATUS "Updating Zstandard from " ${DONUT_ZSTD_FETCH_URL} ", tag " ${DONUT_ZSTD_FETCH_TAG} ", into folder " ${DONUT_ZSTD_FETCH_DIR} " - please wait!" )
+    # Leave ZSTD_USE_STATIC_RUNTIME off: it rewrites /MD to /MT in CMAKE_*_FLAGS,
+    # while the CRT actually comes from CMAKE_MSVC_RUNTIME_LIBRARY, which zstd inherits.
+    set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+    set(ZSTD_BUILD_SHARED   OFF CACHE BOOL "" FORCE)
+    set(ZSTD_BUILD_STATIC   ON  CACHE BOOL "" FORCE)
+    set(ZSTD_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
+    set(ZSTD_LEGACY_SUPPORT OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        zstd
+        GIT_REPOSITORY ${DONUT_ZSTD_FETCH_URL}
+        GIT_TAG ${DONUT_ZSTD_FETCH_TAG}
+        SOURCE_DIR ${DONUT_ZSTD_FETCH_DIR}
+        SOURCE_SUBDIR build/cmake
+    )
+    FetchContent_MakeAvailable(zstd)
+    set_target_properties(libzstd_static PROPERTIES FOLDER ${third_party_folder})
+endif()
+
 if (NOT TARGET stb)
     add_library(stb INTERFACE)
     target_include_directories(stb INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/stb)

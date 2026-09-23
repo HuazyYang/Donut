@@ -52,6 +52,12 @@ if (DONUT_WITH_TINYEXR)
     target_compile_definitions(donut_engine PUBLIC DONUT_WITH_TINYEXR)
 endif()
 
+# KTX2 texture loading (BCn + Zstandard supercompression).
+if (DONUT_WITH_KTX)
+    target_link_libraries(donut_engine libzstd_static)
+    target_compile_definitions(donut_engine PUBLIC DONUT_WITH_KTX=1)
+endif()
+
 set_target_properties(donut_engine PROPERTIES FOLDER Donut)
 
 target_compile_definitions(donut_engine PUBLIC DONUT_WITH_DX11=$<BOOL:${DONUT_WITH_DX11}>)

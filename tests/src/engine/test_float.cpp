@@ -534,7 +534,11 @@ donut::AutoPtr<donut::app::DeviceManager> InitializeGraphicsDevice(nvrhi::Graphi
 #if DONUT_WITH_DX12
     if (graphicsApi == nvrhi::GraphicsAPI::D3D12)
     {
+#if D3D12_PREVIEW_SDK_VERSION >= 720
+        UUID Features[] = { D3D12ExperimentalShaderModels };
+#else
         UUID Features[] = { D3D12ExperimentalShaderModels, D3D12CooperativeVectorExperiment };
+#endif
         HRESULT hr = D3D12EnableExperimentalFeatures(_countof(Features), Features, nullptr, nullptr);
         if (FAILED(hr))
         {

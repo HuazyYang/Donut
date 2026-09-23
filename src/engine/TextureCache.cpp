@@ -50,6 +50,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <donut/engine/CommonRenderPasses.h>
 #include <donut/engine/ConsoleObjects.h>
 #include <donut/engine/DDSFile.h>
+#include <donut/engine/KTX2File.h>
 #include <donut/engine/ThreadPool.h>
 #include <donut/core/vfs/VFS.h>
 #include <donut/core/log.h>
@@ -141,14 +142,16 @@ void TextureCache::SetGenerateMipmaps(bool generateMipmaps)
     m_GenerateMipmaps = generateMipmaps;
 }
 
-bool TextureCache::FindTextureInCache(const std::filesystem::path& path, TextureData** ppTexture)
+bool TextureCache::FindTextureInCache(const std::filesystem::path& path, const TextureLoadOptions& options, TextureData** ppTexture)
 {
     std::lock_guard<std::shared_mutex> guard(m_LoadedTexturesMutex);
 
     // First see if this texture is already loaded (or being loaded).
     AutoPtr<TextureData> texture;
 
-    texture = m_LoadedTextures[path.generic_string()];
+    const TextureCacheKey key{ path.generic_string(), options };
+
+    texture = m_LoadedTextures[key];
     if (texture)
     {
         *ppTexture = texture;
@@ -161,7 +164,7 @@ bool TextureCache::FindTextureInCache(const std::filesystem::path& path, Texture
     // chance of loading the same texture twice.
 
     texture = CreateTextureData();
-    m_LoadedTextures[path.generic_string()] = texture;
+    m_LoadedTextures[key] = texture;
     *ppTexture = texture;
     texture->AddRef();
 
@@ -200,6 +203,18 @@ bool TextureCache::FillTextureData(
             return false;
         }
     }
+#if DONUT_WITH_KTX
+    else if (extension == ".ktx2" || extension == ".KTX2" || mimeType == "image/ktx2")
+    {
+        texture->data = fileData;
+        if (!LoadKTX2TextureFromMemory(*texture))
+        {
+            texture->data = nullptr;
+            log::message(m_ErrorLogSeverity, "Couldn't load KTX2 texture '%s'", texture->path.c_str());
+            return false;
+        }
+    }
+#endif
 #ifdef DONUT_WITH_TINYEXR
     else if (extension == ".exr" || extension == ".EXR" || mimeType == "image/aces")
     {
@@ -319,8 +334,11 @@ bool TextureCache::FillTextureData(
             texture->format = is_hdr ? nvrhi::Format::RG32_FLOAT : nvrhi::Format::RG8_UNORM;
             break;
         case 4:
+            // stb drops PNG's gAMA/iCCP/sRGB chunks, so FromFile has nothing to
+            // defer to here and falls back to linear.
             texture->format = is_hdr ? nvrhi::Format::RGBA32_FLOAT :
-                (texture->forceSRGB ? nvrhi::Format::SRGBA8_UNORM : nvrhi::Format::RGBA8_UNORM);
+                (texture->loadOptions.sRGBMode == SRGBMode::ForceSRGB ? nvrhi::Format::SRGBA8_UNORM
+                                                          : nvrhi::Format::RGBA8_UNORM);
             break;
         default:
             texture->data.Reset(); // release the bitmap data
@@ -407,6 +425,7 @@ void TextureCache::FinalizeTexture(
     textureDesc.debugName = texture->path;
     textureDesc.isRenderTarget = texture->isRenderTarget;
     textureDesc.isTypeless = texture->format == nvrhi::Format::D24S8 ? true : false;
+    textureDesc.defaultComponentMapping = texture->ResolveComponentMapping();
     texture->texture = m_Device->createTexture(textureDesc);
 
     commandList->beginTrackingTextureState(texture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
@@ -493,16 +512,16 @@ void TextureCache::TextureLoaded(TextureData* texture)
 
 donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFile(
     const std::filesystem::path& path,
-    bool sRGB,
+    const TextureLoadOptions& options,
     CommonRenderPasses* passes,
     nvrhi::ICommandList* commandList)
 {
     AutoPtr<TextureData> texture;
 
-    if (FindTextureInCache(path, &texture))
+    if (FindTextureInCache(path, options, &texture))
         return texture;
 
-    texture->forceSRGB = sRGB;
+    texture->loadOptions = options;
     texture->path = path.generic_string();
 
     auto fileData = ReadTextureFile(path);
@@ -523,14 +542,14 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFile(
 
 donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFileDeferred(
     const std::filesystem::path& path,
-    bool sRGB)
+    const TextureLoadOptions& options)
 {
     AutoPtr<TextureData> texture;
 
-    if (FindTextureInCache(path, &texture))
+    if (FindTextureInCache(path, options, &texture))
         return texture;
 
-    texture->forceSRGB = sRGB;
+    texture->loadOptions = options;
     texture->path = path.generic_string();
 
     auto fileData = ReadTextureFile(path);
@@ -553,15 +572,15 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFileDeferred(
 
 donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFileAsync(
     const std::filesystem::path& path,
-    bool sRGB,
+    const TextureLoadOptions& options,
     ThreadPool& threadPool)
 {
     AutoPtr<TextureData> texture;
 
-    if (FindTextureInCache(path, &texture))
+    if (FindTextureInCache(path, options, &texture))
         return texture;
 
-    texture->forceSRGB = sRGB;
+    texture->loadOptions = options;
     texture->path = path.generic_string();
 
     threadPool.AddTask([this, texture, path]()
@@ -589,12 +608,12 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemoryAsync(
     IDataBlob *data,
     const std::string& name,
     const std::string& mimeType,
-    bool sRGB,
+    const TextureLoadOptions& options,
     ThreadPool& threadPool)
 {
     AutoPtr<TextureData> texture = CreateTextureData();
     
-    texture->forceSRGB = sRGB;
+    texture->loadOptions = options;
     texture->path = name;
     texture->mimeType = mimeType;
 
@@ -623,13 +642,13 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemory(
     IDataBlob *data,
     const std::string& name,
     const std::string& mimeType,
-    bool sRGB,
+    const TextureLoadOptions& options,
     CommonRenderPasses* passes,
     nvrhi::ICommandList* commandList)
 {
     AutoPtr<TextureData> texture = CreateTextureData();
     
-    texture->forceSRGB = sRGB;
+    texture->loadOptions = options;
     texture->path = name;
     texture->mimeType = mimeType;
 
@@ -649,11 +668,11 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemoryDeferred(
     IDataBlob *data,
     const std::string& name,
     const std::string& mimeType,
-    bool sRGB)
+    const TextureLoadOptions& options)
 {
     AutoPtr<TextureData> texture = CreateTextureData();
     
-    texture->forceSRGB = sRGB;
+    texture->loadOptions = options;
     texture->path = name;
     texture->mimeType = mimeType;
 
@@ -674,11 +693,11 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemoryDeferred(
 donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromRawImageMemory(IDataBlob* data, const char* name,
                                                                             uint32_t width, uint32_t height,
                                                                             nvrhi::Format format,
-                                                                            bool sRGB,
+                                                                            const TextureLoadOptions& options,
                                                                             uint32_t imageBitsPerPixel,
                                                                             uint32_t imagePixelStride) {
     AutoPtr<TextureData> texture = CreateTextureData();
-    texture->forceSRGB = false;
+    texture->loadOptions = options;
     texture->path = name;
 
     uint32_t imageBytesPerPixel = div_ceil(imageBitsPerPixel, 8u);
@@ -698,23 +717,7 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromRawImageMemory(IDataB
         texture->dataLayout[0][0].rowPitch = static_cast<size_t>(width * imageBytesPerPixel);
         texture->dataLayout[0][0].dataSize = static_cast<size_t>(width * height * imageBytesPerPixel);
 
-        if (sRGB) {
-            switch (format) {
-                case nvrhi::Format::RGBA8_UNORM:
-                    format = nvrhi::Format::SRGBA8_UNORM;
-                    break;
-                case nvrhi::Format::BGRA8_UNORM:
-                    format = nvrhi::Format::SBGRA8_UNORM;
-                    break;
-                case nvrhi::Format::BGRX8_UNORM:
-                    format = nvrhi::Format::SBGRX8_UNORM;
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        texture->format = format;
+        texture->format = ApplySRGBOverride(format, options.sRGBMode);
 
         if(imagePixelStride == 0 || imageBytesPerPixel == imagePixelStride) {
             texture->data = data;
@@ -754,10 +757,10 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromRawImageMemory(IDataB
     return texture;
 }
 
-donut::AutoPtr<TextureData> TextureCache::GetLoadedTexture(std::filesystem::path const& path)
+donut::AutoPtr<TextureData> TextureCache::GetLoadedTexture(std::filesystem::path const& path, const TextureLoadOptions& options)
 {
 	std::lock_guard<std::shared_mutex> guard(m_LoadedTexturesMutex);
-	return m_LoadedTextures[path.generic_string()];
+	return m_LoadedTextures[TextureCacheKey{ path.generic_string(), options }];
 }
 
 bool TextureCache::ProcessRenderingThreadCommands(CommonRenderPasses& passes, float timeLimitMilliseconds)
@@ -991,7 +994,7 @@ namespace donut::engine
 
     bool TextureCache::UnloadTexture(LoadedTexture *texture)
     {
-        const auto& it = m_LoadedTextures.find(texture->path);
+        const auto& it = m_LoadedTextures.find(TextureCacheKey{ texture->path, texture->loadOptions });
 
         if (it == m_LoadedTextures.end())
             return false;

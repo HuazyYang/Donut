@@ -177,6 +177,7 @@ FRESULT AssimpSceneImporter::Load(const std::filesystem::path& fileName, Texture
         AutoPtr<LoadedTexture> loadedTexture;
 
         // Textures embedded in the container (GLB, FBX) are named "*<index>".
+        const TextureLoadOptions loadOptions{ SRGBModeFromBool(sRGB) };
         const aiTexture* pAiTexture = pAiScene->GetEmbeddedTexture(inlinePath.C_Str());
         if (pAiTexture) {
             // mHeight == 0 means the payload is a compressed file image, not raw texels.
@@ -192,9 +193,9 @@ FRESULT AssimpSceneImporter::Load(const std::filesystem::path& fileName, Texture
 
                     if (threadPool)
                         loadedTexture =
-                            textureCache.LoadTextureFromMemoryAsync(textureData, name, mimeType, sRGB, *threadPool);
+                            textureCache.LoadTextureFromMemoryAsync(textureData, name, mimeType, loadOptions, *threadPool);
                     else
-                        loadedTexture = textureCache.LoadTextureFromMemoryDeferred(textureData, name, mimeType, sRGB);
+                        loadedTexture = textureCache.LoadTextureFromMemoryDeferred(textureData, name, mimeType, loadOptions);
                 }
             } else {
                 log::warning("Uncompressed embedded texture '%s' is not supported.", inlinePath.C_Str());
@@ -208,9 +209,9 @@ FRESULT AssimpSceneImporter::Load(const std::filesystem::path& fileName, Texture
             const std::filesystem::path texturePath = (fileParentPath / relativePath).lexically_normal();
 
             if (threadPool)
-                loadedTexture = textureCache.LoadTextureFromFileAsync(texturePath, sRGB, *threadPool);
+                loadedTexture = textureCache.LoadTextureFromFileAsync(texturePath, loadOptions, *threadPool);
             else
-                loadedTexture = textureCache.LoadTextureFromFileDeferred(texturePath, sRGB);
+                loadedTexture = textureCache.LoadTextureFromFileDeferred(texturePath, loadOptions);
         }
 
         imageCache[cacheKey] = loadedTexture;

@@ -35,6 +35,30 @@ donut::engine::DescriptorHandle::DescriptorHandle(DescriptorTableManager* manage
 
 donut::engine::DescriptorHandle::~DescriptorHandle()
 {
+    Reset();
+}
+
+donut::engine::DescriptorHandle::DescriptorHandle(DescriptorHandle&& other) noexcept
+    : m_Manager(std::move(other.m_Manager))
+    , m_DescriptorIndex(other.m_DescriptorIndex)
+{
+    other.m_DescriptorIndex = -1;
+}
+
+donut::engine::DescriptorHandle& donut::engine::DescriptorHandle::operator=(DescriptorHandle&& other) noexcept
+{
+    if (this != &other)
+    {
+        Reset();
+        m_Manager = std::move(other.m_Manager);
+        m_DescriptorIndex = other.m_DescriptorIndex;
+        other.m_DescriptorIndex = -1;
+    }
+    return *this;
+}
+
+void donut::engine::DescriptorHandle::Reset()
+{
     if (m_DescriptorIndex >= 0)
     {
         auto managerPtr = m_Manager.Lock();
@@ -42,19 +66,7 @@ donut::engine::DescriptorHandle::~DescriptorHandle()
             managerPtr->ReleaseDescriptor(m_DescriptorIndex);
         m_DescriptorIndex = -1;
     }
-}
-
-donut::engine::DescriptorHandle& donut::engine::DescriptorHandle::operator=(DescriptorHandle&& rhs) noexcept {
-    std::swap(m_Manager, rhs.m_Manager);
-    std::swap(m_DescriptorIndex, rhs.m_DescriptorIndex);
-    return *this;
-}
-
-donut::engine::DescriptorHandle::DescriptorHandle(
-    DescriptorHandle &&rhs) noexcept
-    : m_Manager(std::move(rhs.m_Manager)),
-      m_DescriptorIndex(rhs.m_DescriptorIndex) {
-  rhs.m_DescriptorIndex = -1;
+    m_Manager.Reset();
 }
 
 donut::engine::DescriptorIndex donut::engine::DescriptorHandle::GetIndexInHeap() const
@@ -75,23 +87,54 @@ donut::engine::DescriptorTableManager::DescriptorTableManager(nvrhi::IDevice* de
     m_DescriptorTable = m_Device->createDescriptorTable(layout);
 
     size_t capacity = m_DescriptorTable->getCapacity();
-    m_AllocatedDescriptors.resize(capacity);
+    m_DescriptorRefCounts.resize(capacity);
     m_Descriptors.resize(capacity);
     memset(m_Descriptors.data(), 0, sizeof(nvrhi::BindingSetItem) * capacity);
 }
 
+void donut::engine::DescriptorTableManager::ReserveCapacity(uint32_t capacity)
+{
+    std::lock_guard<std::mutex> lock(m_Mutex);
+
+    uint32_t currentCapacity = m_DescriptorTable->getCapacity();
+    if (capacity <= currentCapacity)
+        return;
+
+    // Grow once to the requested capacity (keepContents preserves existing
+    // descriptors). Keep the bookkeeping vectors in lockstep with the table,
+    // exactly as the on-demand grow path in CreateDescriptor does.
+    m_Device->resizeDescriptorTable(m_DescriptorTable, capacity);
+    m_DescriptorRefCounts.resize(capacity);
+    m_Descriptors.resize(capacity);
+    for (uint32_t index = currentCapacity; index < capacity; index++)
+        m_Descriptors[index] = nvrhi::BindingSetItem::None(index);
+}
+
+donut::engine::DescriptorTableManager::Usage donut::engine::DescriptorTableManager::GetUsage() const
+{
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    return { m_AllocatedCount, m_DescriptorTable->getCapacity() };
+}
+
 donut::engine::DescriptorIndex donut::engine::DescriptorTableManager::CreateDescriptor(nvrhi::BindingSetItem item)
 {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+
     const auto& found = m_DescriptorIndexMap.find(item);
     if (found != m_DescriptorIndexMap.end())
+    {
+        m_DescriptorRefCounts[found->second]++;
+        if (item.resourceHandle)
+            item.resourceHandle->AddRef();
         return found->second;
+    }
 
     uint32_t capacity = m_DescriptorTable->getCapacity();
     bool foundFreeSlot = false;
     uint32_t index = 0;
     for (index = m_SearchStart; index < capacity; index++)
     {
-        if (!m_AllocatedDescriptors[index])
+        if (m_DescriptorRefCounts[index] == 0)
         {
             foundFreeSlot = true;
             break;
@@ -100,9 +143,11 @@ donut::engine::DescriptorIndex donut::engine::DescriptorTableManager::CreateDesc
 
     if (!foundFreeSlot)
     {
+        // Growing relocates the table, staling any cached GetIndexInHeap() index.
+        // Apps that cache those must pin the table with ReserveCapacity() instead.
         uint32_t newCapacity = std::max(64u, capacity * 2); // handle the initial case when capacity == 0
         m_Device->resizeDescriptorTable(m_DescriptorTable, newCapacity);
-        m_AllocatedDescriptors.resize(newCapacity);
+        m_DescriptorRefCounts.resize(newCapacity);
         m_Descriptors.resize(newCapacity);
 
         // zero-fill the new descriptors
@@ -114,7 +159,8 @@ donut::engine::DescriptorIndex donut::engine::DescriptorTableManager::CreateDesc
 
     item.slot = index;
     m_SearchStart = index + 1;
-    m_AllocatedDescriptors[index] = true;
+    m_DescriptorRefCounts[index] = 1;
+    m_AllocatedCount++;
     m_Descriptors[index] = item;
     m_DescriptorIndexMap[item] = index;
     m_Device->writeDescriptorTable(m_DescriptorTable, item);
@@ -133,6 +179,8 @@ donut::engine::DescriptorHandle donut::engine::DescriptorTableManager::CreateDes
 
 nvrhi::BindingSetItem donut::engine::DescriptorTableManager::GetDescriptor(DescriptorIndex index)
 {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+
     if (size_t(index) >= m_Descriptors.size())
         return nvrhi::BindingSetItem::None(0);
 
@@ -141,10 +189,19 @@ nvrhi::BindingSetItem donut::engine::DescriptorTableManager::GetDescriptor(Descr
 
 void donut::engine::DescriptorTableManager::ReleaseDescriptor(DescriptorIndex index)
 {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+
     nvrhi::BindingSetItem& descriptor = m_Descriptors[index];
+
+    assert(m_DescriptorRefCounts[index] > 0);
+    if (m_DescriptorRefCounts[index] == 0)
+        return;
 
     if (descriptor.resourceHandle)
         descriptor.resourceHandle->Release();
+
+    if (--m_DescriptorRefCounts[index] > 0)
+        return;
 
     // Erase the existing descriptor from the index map to prevent its "reuse" later
     const auto indexMapEntry = m_DescriptorIndexMap.find(m_Descriptors[index]);
@@ -155,7 +212,8 @@ void donut::engine::DescriptorTableManager::ReleaseDescriptor(DescriptorIndex in
 
     m_Device->writeDescriptorTable(m_DescriptorTable, descriptor);
 
-    m_AllocatedDescriptors[index] = false;
+    assert(m_AllocatedCount > 0);
+    m_AllocatedCount--;
     m_SearchStart = std::min(m_SearchStart, index);
 }
 

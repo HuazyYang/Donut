@@ -26,6 +26,7 @@
 #include <nvrhi/nvrhi.h>
 #include <unordered_map>
 #include <memory>
+#include <mutex>
 
 namespace donut::engine
 {
@@ -52,10 +53,15 @@ namespace donut::engine
         DescriptorHandle &operator=(DescriptorHandle &&rhs) noexcept;
         DescriptorHandle(DescriptorHandle &&rhs) noexcept;
         
-        // For ResourceDescriptorHeap Index instead of a table relative index
-        // This value is volatile if the descriptor table resizes and needs to be refetched
+        // For ResourceDescriptorHeap Index instead of a table relative index. Call only
+        // once all allocation is done: growing the table stales every index returned.
         [[nodiscard]] DescriptorIndex GetIndexInHeap() const;
-        void Reset() { m_DescriptorIndex = -1; m_Manager = nullptr; }
+        // Releases the descriptor and returns to the empty state.
+        void Reset();
+
+        // Movable but non-copyable
+        DescriptorHandle(const DescriptorHandle&) = delete;
+        DescriptorHandle& operator=(const DescriptorHandle&) = delete;
     };
 
     class DescriptorTableManager : public WeakableImpl<IWeakable>
@@ -71,6 +77,7 @@ namespace donut::engine
                 nvrhi::hash_combine(hash, item.type);
                 nvrhi::hash_combine(hash, item.format);
                 nvrhi::hash_combine(hash, item.dimension);
+                nvrhi::hash_combine(hash, item.overrideComponentMapping);
                 nvrhi::hash_combine(hash, item.rawData[0]);
                 nvrhi::hash_combine(hash, item.rawData[1]);
                 return hash;
@@ -86,6 +93,7 @@ namespace donut::engine
                     && a.type == b.type
                     && a.format == b.format
                     && a.dimension == b.dimension
+                    && a.overrideComponentMapping == b.overrideComponentMapping
                     && a.subresources == b.subresources;
             }
         };
@@ -93,16 +101,31 @@ namespace donut::engine
         nvrhi::DeviceHandle m_Device;
         nvrhi::DescriptorTableHandle m_DescriptorTable;
 
+        // Guards the allocation bookkeeping below and the m_DescriptorTable resizes
+        // that grow it; descriptors are created and released from multiple threads.
+        mutable std::mutex m_Mutex;
+
         std::vector<nvrhi::BindingSetItem> m_Descriptors;
         std::unordered_map<nvrhi::BindingSetItem, DescriptorIndex, BindingSetItemHasher, BindingSetItemsEqual> m_DescriptorIndexMap;
-        std::vector<bool> m_AllocatedDescriptors;
+        // Doubles as the allocation bitmap: a slot is free exactly when its count is
+        // zero. CreateDescriptor hands out an existing index for an equal item, so a
+        // slot is torn down only once every handle sharing it has been released.
+        std::vector<uint32_t> m_DescriptorRefCounts;
         int m_SearchStart = 0;
+        uint32_t m_AllocatedCount = 0;
         
     public:
         DescriptorTableManager(nvrhi::IDevice* device, nvrhi::IBindingLayout* layout);
         ~DescriptorTableManager();
         
         nvrhi::IDescriptorTable* GetDescriptorTable() const { return m_DescriptorTable; }
+
+        void ReserveCapacity(uint32_t capacity);
+
+        // Coherent snapshot of table fullness, both fields read under one lock. Only
+        // meaningful once allocation has quiesced; a concurrent create/release stales it.
+        struct Usage { uint32_t allocated; uint32_t capacity; };
+        Usage GetUsage() const;
 
         DescriptorIndex CreateDescriptor(nvrhi::BindingSetItem item);
         DescriptorHandle CreateDescriptorHandle(nvrhi::BindingSetItem item);

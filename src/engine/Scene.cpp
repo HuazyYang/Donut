@@ -136,7 +136,7 @@ bool Scene::LoadWithThreadPool(const std::filesystem::path& sceneFileName, Threa
     g_LoadingStats.ObjectsLoaded = 0;
     g_LoadingStats.ObjectsTotal = 0;
     
-    m_SceneGraph = MAKE_RC_OBJ_PTR(SceneGraph);
+    m_SceneGraph = m_SceneTypeFactory->CreateGraph();
 
     std::string sceneFileName2 = sceneFileName.generic_string();
     int len = static_cast<int>(sceneFileName2.length());
@@ -167,7 +167,7 @@ bool Scene::LoadWithThreadPool(const std::filesystem::path& sceneFileName, Threa
 
         if (documentRoot.isObject())
         {
-            if (!LoadCustomData(documentRoot, threadPool))
+            if (!LoadCustomData(documentRoot, scenePath, threadPool))
                 return false;
 
             LoadModels(documentRoot["models"], scenePath, threadPool);
@@ -588,13 +588,18 @@ void Scene::LoadAnimations(const Json::Value& nodeList)
     }
 }
 
-bool Scene::LoadCustomData(Json::Value& rootNode, ThreadPool* threadPool)
+bool Scene::LoadCustomData(Json::Value& rootNode, const std::filesystem::path& scenePath, ThreadPool* threadPool)
 {
     // Reserved for derived classes
     return true;
 }
 
 Scene::~Scene() {}
+
+donut::AutoPtr<SceneGraph> Scene::CreateSceneGraph()
+{
+    return m_SceneGraph = m_SceneTypeFactory->CreateGraph();
+}
 
 void Scene::FinishedLoading(uint32_t frameIndex)
 {

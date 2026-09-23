@@ -31,6 +31,28 @@ using namespace donut::math;
 
 using namespace donut::engine;
 
+nvrhi::Format donut::engine::ApplySRGBOverride(nvrhi::Format format, SRGBMode mode)
+{
+    static constexpr std::pair<nvrhi::Format, nvrhi::Format> kPairs[] = {
+        { nvrhi::Format::RGBA8_UNORM, nvrhi::Format::SRGBA8_UNORM },
+        { nvrhi::Format::BGRA8_UNORM, nvrhi::Format::SBGRA8_UNORM },
+        { nvrhi::Format::BGRX8_UNORM, nvrhi::Format::SBGRX8_UNORM },
+        { nvrhi::Format::BC1_UNORM,   nvrhi::Format::BC1_UNORM_SRGB },
+        { nvrhi::Format::BC2_UNORM,   nvrhi::Format::BC2_UNORM_SRGB },
+        { nvrhi::Format::BC3_UNORM,   nvrhi::Format::BC3_UNORM_SRGB },
+        { nvrhi::Format::BC7_UNORM,   nvrhi::Format::BC7_UNORM_SRGB },
+    };
+
+    for (const auto& [linear, srgb] : kPairs)
+    {
+        if (mode == SRGBMode::ForceSRGB && format == linear)
+            return srgb;
+        if (mode == SRGBMode::ForceLinear && format == srgb)
+            return linear;
+    }
+    return format;
+}
+
 void Light::FillLightConstants(LightConstants& lightConstants) const
 {
     lightConstants.color = color;

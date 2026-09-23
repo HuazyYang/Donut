@@ -59,7 +59,12 @@ ThreadPool::~ThreadPool()
 {
     WaitForTasks();
 
-    m_terminate.store(true);
+    // Set the flag under m_mutex: an atomic store alone can land between a
+    // worker's predicate check and its block, losing the notify_all forever.
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_terminate.store(true);
+    }
 
     m_forward.notify_all();
 

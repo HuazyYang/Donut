@@ -1164,39 +1164,6 @@ void StreamlineIntegration::ReleaseResourceCallback(sl::Resource* resource, void
     }
 };
 
-#if DONUT_WITH_DX12
-D3D12_RESOURCE_STATES D3D12convertResourceStates(nvrhi::ResourceStates stateBits)
-{
-    if (stateBits == nvrhi::ResourceStates::Common)
-        return D3D12_RESOURCE_STATE_COMMON;
-
-    D3D12_RESOURCE_STATES result = D3D12_RESOURCE_STATE_COMMON; // also 0
-
-    if ((stateBits & nvrhi::ResourceStates::ConstantBuffer) != 0) result |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-    if ((stateBits & nvrhi::ResourceStates::VertexBuffer) != 0) result |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-    if ((stateBits & nvrhi::ResourceStates::IndexBuffer) != 0) result |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
-    if ((stateBits & nvrhi::ResourceStates::IndirectArgument) != 0) result |= D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
-    if ((stateBits & nvrhi::ResourceStates::ShaderResource) != 0) result |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-    if ((stateBits & nvrhi::ResourceStates::UnorderedAccess) != 0) result |= D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    if ((stateBits & nvrhi::ResourceStates::RenderTarget) != 0) result |= D3D12_RESOURCE_STATE_RENDER_TARGET;
-    if ((stateBits & nvrhi::ResourceStates::DepthWrite) != 0) result |= D3D12_RESOURCE_STATE_DEPTH_WRITE;
-    if ((stateBits & nvrhi::ResourceStates::DepthRead) != 0) result |= D3D12_RESOURCE_STATE_DEPTH_READ;
-    if ((stateBits & nvrhi::ResourceStates::StreamOut) != 0) result |= D3D12_RESOURCE_STATE_STREAM_OUT;
-    if ((stateBits & nvrhi::ResourceStates::CopyDest) != 0) result |= D3D12_RESOURCE_STATE_COPY_DEST;
-    if ((stateBits & nvrhi::ResourceStates::CopySource) != 0) result |= D3D12_RESOURCE_STATE_COPY_SOURCE;
-    if ((stateBits & nvrhi::ResourceStates::ResolveDest) != 0) result |= D3D12_RESOURCE_STATE_RESOLVE_DEST;
-    if ((stateBits & nvrhi::ResourceStates::ResolveSource) != 0) result |= D3D12_RESOURCE_STATE_RESOLVE_SOURCE;
-    if ((stateBits & nvrhi::ResourceStates::Present) != 0) result |= D3D12_RESOURCE_STATE_PRESENT;
-    if ((stateBits & nvrhi::ResourceStates::AccelStructRead) != 0) result |= D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
-    if ((stateBits & nvrhi::ResourceStates::AccelStructWrite) != 0) result |= D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
-    if ((stateBits & nvrhi::ResourceStates::AccelStructBuildInput) != 0) result |= D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-    if ((stateBits & nvrhi::ResourceStates::AccelStructBuildBlas) != 0) result |= D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
-    if ((stateBits & nvrhi::ResourceStates::ShadingRateSurface) != 0) result |= D3D12_RESOURCE_STATE_SHADING_RATE_SOURCE;
-
-    return result;
-}
-#endif
-
 nvrhi::Object StreamlineIntegration::GetNativeCommandList(nvrhi::ICommandList* commandList)
 {
 #if DONUT_WITH_DX11
@@ -1277,8 +1244,11 @@ static void GetSLResource(
 #if DONUT_WITH_DX12
     case nvrhi::GraphicsAPI::D3D12:
     {
-        uint32_t resourceState = static_cast<uint32_t>(D3D12convertResourceStates(commandList->getTextureSubresourceState(inputTex, 0, 0)));
-        slResource = sl::Resource{ sl::ResourceType::eTex2d, inputTex->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource), nullptr, nullptr, resourceState };
+        // Streamline issues legacy ResourceBarriers on its own command list, which
+        // enhanced barriers only permit on a COMMON-layout resource.
+        commandList->setTextureState(inputTex, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
+        commandList->commitBarriers();
+        slResource = sl::Resource{ sl::ResourceType::eTex2d, inputTex->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource), nullptr, nullptr, D3D12_RESOURCE_STATE_COMMON };
         break;
     }
 #endif
@@ -1290,10 +1260,15 @@ static void GetSLResource(
         auto const& desc = inputTex->getDesc();
         auto const vkDesc = static_cast<vk::ImageCreateInfo *>(inputTex->getNativeObject(nvrhi::ObjectTypes::VK_ImageCreateInfo));
 
+        // Streamline records barriers on its own command buffer, so commit a known
+        // layout rather than reporting desc.initialState; Common maps to eUndefined.
+        commandList->setTextureState(inputTex, nvrhi::AllSubresources, nvrhi::ResourceStates::UnorderedAccess);
+        commandList->commitBarriers();
+
         slResource = sl::Resource{ sl::ResourceType::eTex2d, inputTex->getNativeObject(nvrhi::ObjectTypes::VK_Image),
             inputTex->getNativeObject(nvrhi::ObjectTypes::VK_DeviceMemory),
             inputTex->getNativeView(nvrhi::ObjectTypes::VK_ImageView, desc.format, subresources),
-            static_cast<uint32_t>(toVkImageLayout(desc.initialState)) };
+            static_cast<uint32_t>(toVkImageLayout(nvrhi::ResourceStates::UnorderedAccess)) };
         slResource.width = desc.width;
         slResource.height = desc.height;
         slResource.nativeFormat = static_cast<uint32_t>(nvrhi::vulkan::convertFormat(desc.format));

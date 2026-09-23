@@ -74,6 +74,11 @@ set(DONUT_DLSS_FETCH_URL "https://github.com/NVIDIA/DLSS.git" CACHE STRING "URL 
 set(DONUT_DLSS_FETCH_TAG "a8ed84e2d1cc1efa7bef63fb9394be6cb06c0d74" CACHE STRING "Git commit hash or tag for DLSS")
 set(DONUT_DLSS_FETCH_DIR "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/DLSS" CACHE STRING "Directory to fetch DLSS to, empty uses build directory default")
 
+option(DONUT_WITH_KTX "Build KTX2 (BCn + Zstandard) texture loading support" ON)
+set(DONUT_ZSTD_FETCH_URL "https://github.com/facebook/zstd.git" CACHE STRING "URL of the Zstandard Git repository to fetch from")
+set(DONUT_ZSTD_FETCH_TAG "v1.5.6" CACHE STRING "Git commit hash or tag for Zstandard")
+set(DONUT_ZSTD_FETCH_DIR "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/zstd" CACHE STRING "Directory to fetch Zstandard to, empty uses build directory default")
+
 if (WIN32)
     option(DONUT_FORCE_DISCRETE_GPU "Declare symbols to make the OS run the app on discrete GPU on laptops" OFF)
 endif()

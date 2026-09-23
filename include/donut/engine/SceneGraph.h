@@ -606,6 +606,7 @@ namespace donut::engine
     {
     public:
         virtual ~SceneTypeFactory() = default;
+        virtual AutoPtr<SceneGraph> CreateGraph();
         virtual AutoPtr<SceneGraphLeaf> CreateLeaf(const std::string& type);
         virtual AutoPtr<Material> CreateMaterial();
         virtual AutoPtr<MeshInfo> CreateMesh();

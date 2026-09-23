@@ -340,7 +340,7 @@ namespace donut::engine::console
 	{
 		char buff[2048];
 		snprintf(buff, 2048, "%s (%d x %d x %d)\n",
-			it->first.c_str(), it->second->width, it->second->height, it->second->arraySize);
+			it->first.path.c_str(), it->second->width, it->second->height, it->second->arraySize);
 		++count;
 		return buff;
 	}
@@ -386,7 +386,7 @@ namespace donut::engine::console
 					{
 						if (rxMatch)
 						{
-							if (std::regex_match(it->first, rx))
+							if (std::regex_match(it->first.path, rx))
 								r.output += getTextureInfo(it, count);
 						}
 						else

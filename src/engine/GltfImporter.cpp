@@ -789,7 +789,7 @@ FRESULT GltfImporter::Load(
     std::unordered_map<const cgltf_image*, AutoPtr<LoadedTexture>> imageCache;
 
     auto load_image = [&imageCache, &textureCache, threadPool, &load_image_data]
-        (const cgltf_image* image, bool sRGB, bool searchForDDS)
+        (const cgltf_image* image, SRGBMode sRGBMode, bool searchForDDS)
     {
         auto it = imageCache.find(image);
         if (it != imageCache.end())
@@ -797,22 +797,23 @@ FRESULT GltfImporter::Load(
 
         AutoPtr<LoadedTexture> loadedTexture;
         FilePathOrInlineData textureSource = load_image_data(image, searchForDDS);
+        const TextureLoadOptions loadOptions{ sRGBMode };
 
         if (textureSource.data)
         {
             if (threadPool)
                 loadedTexture = textureCache.LoadTextureFromMemoryAsync(textureSource.data->buffer,
-                    textureSource.data->name, textureSource.data->mimeType, sRGB, *threadPool);
+                    textureSource.data->name, textureSource.data->mimeType, loadOptions, *threadPool);
             else
                 loadedTexture = textureCache.LoadTextureFromMemoryDeferred(textureSource.data->buffer,
-                    textureSource.data->name, textureSource.data->mimeType, sRGB);
+                    textureSource.data->name, textureSource.data->mimeType, loadOptions);
         }
         else if (!textureSource.path.empty())
         {
             if (threadPool)
-                loadedTexture = textureCache.LoadTextureFromFileAsync(textureSource.path, sRGB, *threadPool);
+                loadedTexture = textureCache.LoadTextureFromFileAsync(textureSource.path, loadOptions, *threadPool);
             else
-                loadedTexture = textureCache.LoadTextureFromFileDeferred(textureSource.path, sRGB);
+                loadedTexture = textureCache.LoadTextureFromFileDeferred(textureSource.path, loadOptions);
         }
 
         imageCache[image] = loadedTexture;
@@ -822,7 +823,7 @@ FRESULT GltfImporter::Load(
     std::unordered_map<const cgltf_texture*, AutoPtr<LoadedTexture>> gltfTextureCache;
 
     auto load_texture = [objects, c_SearchForDds, &gltfTextureCache, &load_image, &load_image_data]
-        (const cgltf_texture* texture, bool sRGB) -> AutoPtr<LoadedTexture>
+        (const cgltf_texture* texture, SRGBMode sRGBMode) -> AutoPtr<LoadedTexture>
     {
         if (!texture)
             return nullptr;
@@ -839,9 +840,9 @@ FRESULT GltfImporter::Load(
         // Try loading the DDS first if it's specified, fall back to the regular image.
         cgltf_image const* ddsImage = extensions.ddsImage;
         if (ddsImage)
-            loadedTexture = load_image(ddsImage, sRGB, false);
+            loadedTexture = load_image(ddsImage, sRGBMode, false);
         if (!loadedTexture && texture->image)
-            loadedTexture = load_image(texture->image, sRGB, c_SearchForDds);
+            loadedTexture = load_image(texture->image, sRGBMode, c_SearchForDds);
 
         // If the texture swizzle extension is present, load the source images and transfer the swizzle data
         if (!extensions.swizzleOptions.empty())
@@ -905,8 +906,8 @@ FRESULT GltfImporter::Load(
         if (material.has_pbr_specular_glossiness)
         {
             matinfo->useSpecularGlossModel = true;
-            matinfo->baseOrDiffuseTexture = load_texture(material.pbr_specular_glossiness.diffuse_texture.texture, false);
-            matinfo->metalRoughOrSpecularTexture = load_texture(material.pbr_specular_glossiness.specular_glossiness_texture.texture, true);
+            matinfo->baseOrDiffuseTexture = load_texture(material.pbr_specular_glossiness.diffuse_texture.texture, SRGBMode::ForceSRGB);
+            matinfo->metalRoughOrSpecularTexture = load_texture(material.pbr_specular_glossiness.specular_glossiness_texture.texture, SRGBMode::ForceSRGB);
             matinfo->baseOrDiffuseColor = material.pbr_specular_glossiness.diffuse_factor;
             matinfo->specularColor = material.pbr_specular_glossiness.specular_factor;
             matinfo->roughness = 1.f - material.pbr_specular_glossiness.glossiness_factor;
@@ -915,8 +916,8 @@ FRESULT GltfImporter::Load(
         else if (material.has_pbr_metallic_roughness)
         {
             matinfo->useSpecularGlossModel = false;
-            matinfo->baseOrDiffuseTexture = load_texture(material.pbr_metallic_roughness.base_color_texture.texture, false);
-            matinfo->metalRoughOrSpecularTexture = load_texture(material.pbr_metallic_roughness.metallic_roughness_texture.texture, false);
+            matinfo->baseOrDiffuseTexture = load_texture(material.pbr_metallic_roughness.base_color_texture.texture, SRGBMode::ForceSRGB);
+            matinfo->metalRoughOrSpecularTexture = load_texture(material.pbr_metallic_roughness.metallic_roughness_texture.texture, SRGBMode::ForceLinear);
             matinfo->baseOrDiffuseColor = material.pbr_metallic_roughness.base_color_factor;
             matinfo->metalness = material.pbr_metallic_roughness.metallic_factor;
             matinfo->roughness = material.pbr_metallic_roughness.roughness_factor;
@@ -931,21 +932,32 @@ FRESULT GltfImporter::Load(
                     "KHR_materials_pbrSpecularGlossiness extension model.", material.name ? material.name : "<Unnamed>");
             }
 
-            matinfo->transmissionTexture = load_texture(material.transmission.transmission_texture.texture, false);
+            matinfo->transmissionTexture = load_texture(material.transmission.transmission_texture.texture, SRGBMode::ForceLinear);
             matinfo->transmissionFactor = material.transmission.transmission_factor;
             useTransmission = true;
         }
 
-        matinfo->emissiveTexture = load_texture(material.emissive_texture.texture, true);
+        matinfo->emissiveTexture = load_texture(material.emissive_texture.texture, SRGBMode::ForceSRGB);
         matinfo->emissiveColor = material.emissive_factor;
-        matinfo->emissiveIntensity = dm::maxComponent(matinfo->emissiveColor);
-        if (matinfo->emissiveIntensity > 0.f)
-            matinfo->emissiveColor /= matinfo->emissiveIntensity;
+        
+        // emissive_strength is available via the KHR_materials_emissive_strength extension
+        if (material.has_emissive_strength)
+        {
+            matinfo->emissiveIntensity = material.emissive_strength.emissive_strength;
+            // No need to compute (emissive_factor * emissive_strength) here. It's accounted for in FillConstantBuffer.
+        }
         else
-            matinfo->emissiveIntensity = 1.f;
-        matinfo->normalTexture = load_texture(material.normal_texture.texture, false);
+        {
+            matinfo->emissiveIntensity = dm::maxComponent(matinfo->emissiveColor);
+            if (matinfo->emissiveIntensity > 0.0f)
+                matinfo->emissiveColor /= matinfo->emissiveIntensity;
+            else
+                matinfo->emissiveIntensity = 1.0f;
+        }
+
+        matinfo->normalTexture = load_texture(material.normal_texture.texture, SRGBMode::ForceLinear);
         matinfo->normalTextureScale = material.normal_texture.scale;
-        matinfo->occlusionTexture = load_texture(material.occlusion_texture.texture, false);
+        matinfo->occlusionTexture = load_texture(material.occlusion_texture.texture, SRGBMode::ForceLinear);
         matinfo->occlusionStrength = material.occlusion_texture.scale;
         matinfo->alphaCutoff = material.alpha_cutoff;
         matinfo->doubleSided = material.double_sided;

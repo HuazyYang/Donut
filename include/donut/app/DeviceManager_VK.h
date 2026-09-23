@@ -160,6 +160,7 @@ protected:
     bool createInstance();
     bool createWindowSurface();
     void installDebugCallback();
+    void installDebugUtilsMessenger();
     bool pickPhysicalDevice();
     bool findQueueFamilies(vk::PhysicalDevice physicalDevice);
     bool createDevice();
@@ -216,6 +217,7 @@ protected:
         VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
         VK_KHR_RAY_QUERY_EXTENSION_NAME,
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+        VK_KHR_RAY_TRACING_POSITION_FETCH_EXTENSION_NAME,
         VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME
     };
 
@@ -223,6 +225,7 @@ protected:
 
     vk::Instance m_VulkanInstance;
     vk::DebugReportCallbackEXT m_DebugReportCallback;
+    vk::DebugUtilsMessengerEXT m_DebugUtilsMessenger;
 
     vk::PhysicalDevice m_VulkanPhysicalDevice;
     int m_GraphicsQueueFamily = -1;
@@ -262,6 +265,7 @@ protected:
     std::vector<nvrhi::EventQueryHandle> m_QueryPool;
 
     bool m_BufferDeviceAddressSupported = false;
+    bool m_DescriptorBindingUniformBufferUpdateAfterBind = false;
 
 #if VK_HEADER_VERSION >= 301
     typedef vk::detail::DynamicLoader VulkanDynamicLoader;

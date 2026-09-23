@@ -455,7 +455,8 @@ void ImGui_ImplNVRHI_RenderDrawData(ImDrawData *draw_data, nvrhi::IFramebuffer *
                                 (draw_cmd->ClipRect.y - clip_off.y) * clip_scale.y);
                 ImVec2 clip_max((draw_cmd->ClipRect.z - clip_off.x) * clip_scale.x,
                                 (draw_cmd->ClipRect.w - clip_off.y) * clip_scale.y);
-                if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y) continue;
+                // Test the integer rect: a sub-pixel clip truncates to an empty scissor.
+                if ((int)clip_max.x <= (int)clip_min.x || (int)clip_max.y <= (int)clip_min.y) continue;
 
                 // Apply scissor/clipping rectangle
                 state.viewport.scissorRects[0] = nvrhi::Rect{

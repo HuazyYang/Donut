@@ -65,9 +65,11 @@
 
 #include "dds.h"
 
+#include <algorithm>
 #include <iterator>
 
 #include <donut/engine/TextureCache.h>
+#include <donut/core/log.h>
 #include <donut/core/vfs/VFS.h>
 
 #define D3D11_RESOURCE_MISC_TEXTURECUBE 0x4
@@ -161,28 +163,30 @@ namespace donut::engine
 #define ISBITMASK(r, g, b, a) \
         (ddpf.RBitMask == r && ddpf.GBitMask == g && ddpf.BBitMask == b && ddpf.ABitMask == a)
 
-    static nvrhi::Format ConvertDDSFormat(const DDS_PIXELFORMAT& ddpf, bool forceSRGB)
+    // The legacy (non-DX10) DDS_PIXELFORMAT cannot express a transfer function, so
+    // FromFile has nothing to defer to and falls back to linear.
+    static nvrhi::Format ConvertDDSFormat(const DDS_PIXELFORMAT& ddpf, SRGBMode sRGBMode)
     {
+        const bool forceSRGB = (sRGBMode == SRGBMode::ForceSRGB);
+
         if (ddpf.flags & DDS_RGB)
         {
-            // Note that sRGB formats are written using the "DX10" extended header
-
             switch (ddpf.RGBBitCount)
             {
             case 32:
                 if (ISBITMASK(0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000))
                 {
-                    return forceSRGB ? nvrhi::Format::RGBA8_UNORM : nvrhi::Format::SRGBA8_UNORM;
+                    return forceSRGB ? nvrhi::Format::SRGBA8_UNORM : nvrhi::Format::RGBA8_UNORM;
                 }
 
                 if (ISBITMASK(0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000))
                 {
-                    return forceSRGB ? nvrhi::Format::BGRA8_UNORM : nvrhi::Format::SBGRA8_UNORM;
+                    return forceSRGB ? nvrhi::Format::SBGRA8_UNORM : nvrhi::Format::BGRA8_UNORM;
                 }
 
                 if (ISBITMASK(0x00ff0000, 0x0000ff00, 0x000000ff, 0x00000000))
                 {
-                    return forceSRGB ? nvrhi::Format::BGRA8_UNORM : nvrhi::Format::SBGRA8_UNORM; // actually BGRX8, but there's no such format in NVRHI
+                    return forceSRGB ? nvrhi::Format::SBGRA8_UNORM : nvrhi::Format::BGRA8_UNORM; // actually BGRX8, but there's no such format in NVRHI
                 }
 
                 // No DXGI format maps to ISBITMASK(0x000000ff,0x0000ff00,0x00ff0000,0x00000000) aka D3DFMT_X8B8G8R8
@@ -565,20 +569,25 @@ namespace donut::engine
         return dataOffset;
     }
 
-    bool LoadDDSTextureFromMemory(TextureData& textureInfo)
+    // Parse the magic + DDS_HEADER (+ DX10 header) into the descriptive fields of a
+    // TextureData, and report where the pixel data starts.  Shared by the loader
+    // and by ReadDDSHeader, which needs the same fields without the pixel walk, so
+    // `size` may cover only the header region.
+    static bool ParseDDSHeader(const void* data, size_t size, SRGBMode sRGBMode,
+                               TextureData& textureInfo, ptrdiff_t& outDataOffset)
     {
-        if (textureInfo.data->GetSize() < sizeof(uint32_t) + sizeof(DDS_HEADER))
+        if (size < sizeof(uint32_t) + sizeof(DDS_HEADER))
         {
             return false;
         }
 
-        auto dwMagicNumber = *reinterpret_cast<const uint32_t*>(textureInfo.data->GetDataPtr());
+        auto dwMagicNumber = *reinterpret_cast<const uint32_t*>(data);
         if (dwMagicNumber != DDS_MAGIC)
         {
             return false;
         }
 
-        auto header = reinterpret_cast<const DDS_HEADER*>(static_cast<const char*>(textureInfo.data->GetDataPtr()) + sizeof(uint32_t));
+        auto header = reinterpret_cast<const DDS_HEADER*>(static_cast<const char*>(data) + sizeof(uint32_t));
 
         // Verify header to validate DDS file
         if (header->size != sizeof(DDS_HEADER) ||
@@ -593,7 +602,7 @@ namespace donut::engine
             (MAKEFOURCC('D', 'X', '1', '0') == header->ddspf.fourCC))
         {
             // Must be long enough for both headers and magic value
-            if (textureInfo.data->GetSize() < (sizeof(DDS_HEADER) + sizeof(uint32_t) + sizeof(DDS_HEADER_DXT10)))
+            if (size < (sizeof(DDS_HEADER) + sizeof(uint32_t) + sizeof(DDS_HEADER_DXT10)))
             {
                 return false;
             }
@@ -604,6 +613,7 @@ namespace donut::engine
         ptrdiff_t dataOffset = sizeof(uint32_t)
             + sizeof(DDS_HEADER)
             + (bDXT10Header ? sizeof(DDS_HEADER_DXT10) : 0);
+        outDataOffset = dataOffset;
 
         textureInfo.width = header->width;
         textureInfo.height = header->height;
@@ -640,43 +650,9 @@ namespace donut::engine
                 return false;
             }
 
-            // Apply the forceSRGB flag and promote various compatible formats to sRGB
-            if (textureInfo.forceSRGB)
-            {
-                switch (textureInfo.format)  // NOLINT(clang-diagnostic-switch-enum)
-                {
-                case(nvrhi::Format::RGBA8_UNORM):
-                    textureInfo.format = nvrhi::Format::SRGBA8_UNORM;
-                    break;
-
-                case(nvrhi::Format::BGRA8_UNORM):
-                    textureInfo.format = nvrhi::Format::SBGRA8_UNORM;
-                    break;
-
-                case(nvrhi::Format::BGRX8_UNORM):
-                    textureInfo.format = nvrhi::Format::SBGRX8_UNORM;
-                    break;
-
-                case(nvrhi::Format::BC1_UNORM):
-                    textureInfo.format = nvrhi::Format::BC1_UNORM_SRGB;
-                    break;
-
-                case(nvrhi::Format::BC2_UNORM):
-                    textureInfo.format = nvrhi::Format::BC2_UNORM_SRGB;
-                    break;
-
-                case(nvrhi::Format::BC3_UNORM):
-                    textureInfo.format = nvrhi::Format::BC3_UNORM_SRGB;
-                    break;
-
-                case(nvrhi::Format::BC7_UNORM):
-                    textureInfo.format = nvrhi::Format::BC7_UNORM_SRGB;
-                    break;
-
-                default:
-                    break;
-                }
-            }
+            // g_FormatMappings above already resolved the DX10 header's declared
+            // transfer function, so FromFile needs no further work here.
+            textureInfo.format = ApplySRGBOverride(textureInfo.format, sRGBMode);
 
             switch (d3d10ext->resourceDimension)
             {
@@ -719,7 +695,7 @@ namespace donut::engine
         }
         else
         {
-            textureInfo.format = ConvertDDSFormat(header->ddspf, textureInfo.forceSRGB);
+            textureInfo.format = ConvertDDSFormat(header->ddspf, sRGBMode);
 
             if (textureInfo.format == nvrhi::Format::UNKNOWN)
             {
@@ -751,8 +727,73 @@ namespace donut::engine
             }
         }
 
+        return true;
+    }
+
+    bool ReadDDSHeader(const void* data, size_t size, const char* debugName, DDSHeaderInfo& out)
+    {
+        out = DDSHeaderInfo();
+
+        TextureData textureInfo;
+        ptrdiff_t dataOffset = 0;
+        // SRGBMode::FromFile: a budget only needs the footprint, and the sRGB view
+        // of a format never changes its block size.
+        if (!ParseDDSHeader(data, size, SRGBMode::FromFile, textureInfo, dataOffset))
+        {
+            log::warning("DDS '%s' has a malformed or unsupported header",
+                         debugName ? debugName : "<unnamed>");
+            return false;
+        }
+
+        out.format     = textureInfo.format;
+        out.width      = textureInfo.width;
+        out.height     = textureInfo.height;
+        out.depth      = textureInfo.depth;
+        out.arraySize  = textureInfo.arraySize;
+        out.levelCount = textureInfo.mipLevels;
+        out.dimension  = textureInfo.dimension;
+
+        const uint32_t bitsPerPixel = BitsPerPixel(textureInfo.format);
+        out.levels.resize(textureInfo.mipLevels);
+        for (uint32_t mip = 0; mip < textureInfo.mipLevels; ++mip)
+        {
+            const uint32_t w = std::max(textureInfo.width >> mip, 1u);
+            const uint32_t h = std::max(textureInfo.height >> mip, 1u);
+            const uint32_t d = std::max(textureInfo.depth >> mip, 1u);
+
+            size_t numBytes = 0, rowBytes = 0, numRows = 0;
+            GetSurfaceInfo(w, h, textureInfo.format, bitsPerPixel, &numBytes, &rowBytes, &numRows);
+
+            out.levels[mip] = { w, h, uint64_t(numBytes) * d };
+        }
+
+        out.supported = true;
+        return true;
+    }
+
+    bool LoadDDSTextureFromMemory(TextureData& textureInfo)
+    {
+        ptrdiff_t dataOffset = 0;
+        if (!ParseDDSHeader(textureInfo.data->GetDataPtr(), textureInfo.data->GetSize(),
+                            textureInfo.loadOptions.sRGBMode, textureInfo, dataOffset))
+            return false;
+
         if (FillTextureInfoOffsets(textureInfo, textureInfo.data->GetSize(), dataOffset) == 0)
             return false;
+
+        // Drop the highest-resolution mips the caller asked to skip. The walk above
+        // still has to visit them, because each level's offset follows the previous.
+        const uint32_t baseMip = std::min(textureInfo.loadOptions.baseMip, textureInfo.mipLevels - 1u);
+        if (baseMip > 0)
+        {
+            for (std::vector<TextureSubresourceData>& sliceData : textureInfo.dataLayout)
+                sliceData.erase(sliceData.begin(), sliceData.begin() + baseMip);
+
+            textureInfo.mipLevels -= baseMip;
+            textureInfo.width = std::max(textureInfo.width >> baseMip, 1u);
+            textureInfo.height = std::max(textureInfo.height >> baseMip, 1u);
+            textureInfo.depth = std::max(textureInfo.depth >> baseMip, 1u);
+        }
 
         return true;
     }
@@ -771,6 +812,7 @@ namespace donut::engine
         desc.mipLevels = info.mipLevels;
         desc.format = info.format;
         desc.debugName = debugName;
+        desc.defaultComponentMapping = info.ResolveComponentMapping();
 
         nvrhi::TextureHandle texture = device->createTexture(desc);
 
@@ -795,14 +837,14 @@ namespace donut::engine
         return texture;
     }
 
-    nvrhi::TextureHandle CreateDDSTextureFromMemory(nvrhi::IDevice* device, nvrhi::ICommandList* commandList, IDataBlob *data, const char* debugName /*= nullptr*/, bool forceSRGB /*= false*/)
+    nvrhi::TextureHandle CreateDDSTextureFromMemory(nvrhi::IDevice* device, nvrhi::ICommandList* commandList, IDataBlob* data, const char* debugName /*= nullptr*/, const TextureLoadOptions& loadOptions /*= TextureLoadOptions()*/)
     {
         if (!data)
             return nullptr;
 
         TextureData info;
         info.data = data;
-        info.forceSRGB = forceSRGB;
+        info.loadOptions = loadOptions;
 
         return CreateDDSTextureInternal(device, commandList, info, debugName);
     }

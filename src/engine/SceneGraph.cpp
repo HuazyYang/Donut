@@ -1133,6 +1133,11 @@ void SceneGraph::Refresh(uint32_t frameIndex)
     }
 }
 
+donut::AutoPtr<SceneGraph> SceneTypeFactory::CreateGraph()
+{
+    return MAKE_RC_OBJ_PTR(SceneGraph);
+}
+
 donut::AutoPtr<SceneGraphLeaf> SceneTypeFactory::CreateLeaf(const std::string& type)
 {
     if (type == "DirectionalLight")

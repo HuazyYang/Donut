@@ -108,7 +108,7 @@ namespace donut::engine
         virtual nvrhi::BufferHandle CreateInstanceBuffer();
         virtual nvrhi::BufferHandle CreateMaterialConstantBuffer(const std::string& debugName);
 
-        virtual bool LoadCustomData(Json::Value& rootNode, ThreadPool* threadPool);
+        virtual bool LoadCustomData(Json::Value& rootNode, const std::filesystem::path& scenePath, ThreadPool* threadPool);
     public:
         ~Scene();
 
@@ -136,6 +136,9 @@ namespace donut::engine
         virtual bool LoadWithThreadPool(const std::filesystem::path& sceneFileName, ThreadPool* threadPool);
 
         static const SceneLoadingStats& GetLoadingStats();
+
+        // Creates an empty scene graph for hand-built scenes
+        AutoPtr<SceneGraph> CreateSceneGraph();
 
         [[nodiscard]] SceneGraph* GetSceneGraph() const { return m_SceneGraph; }
         [[nodiscard]] nvrhi::IDescriptorTable* GetDescriptorTable() const { return m_DescriptorTable ? m_DescriptorTable->GetDescriptorTable() : nullptr; }

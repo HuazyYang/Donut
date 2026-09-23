@@ -50,6 +50,26 @@ namespace donut::engine
         size_t dataSize = 0;
     };
 
+    struct TextureCacheKey
+    {
+        std::string path;
+        TextureLoadOptions options;
+
+        bool operator==(const TextureCacheKey& o) const { return path == o.path && options == o.options; }
+    };
+
+    struct TextureCacheKeyHash
+    {
+        size_t operator()(const TextureCacheKey& key) const
+        {
+            size_t hash = std::hash<std::string>()(key.path);
+            hash ^= size_t(nvrhi::packComponentMapping(key.options.overrideComponentMapping)) << 1;
+            hash ^= size_t(key.options.sRGBMode) << 17;
+            hash ^= size_t(key.options.baseMip) << 20;
+            return hash;
+        }
+    };
+
     struct TextureData : public LoadedTexture
     {
         AutoPtr<IDataBlob> data;
@@ -62,10 +82,20 @@ namespace donut::engine
         uint32_t mipLevels = 1;
         nvrhi::TextureDimension dimension = nvrhi::TextureDimension::Unknown;
         bool isRenderTarget = false;
-        bool forceSRGB = false;
+
+        // What the file itself declares (KTX2 KTXswizzle); containers that cannot
+        // carry a mapping leave it unset.
+        std::optional<nvrhi::ComponentMapping> fileComponentMapping;
 
         // ArraySlice -> MipLevel -> TextureSubresourceData
         std::vector<std::vector<TextureSubresourceData>> dataLayout;
+
+        // The caller's override if it set one, else the file's, else identity.
+        nvrhi::ComponentMapping ResolveComponentMapping() const
+        {
+            return loadOptions.overrideComponentMapping.value_or(
+                fileComponentMapping.value_or(nvrhi::ComponentMapping{}));
+        }
     };
 
     class TextureCache: public ObjectImpl<IObject>
@@ -73,7 +103,7 @@ namespace donut::engine
     protected:
         nvrhi::DeviceHandle m_Device;
         nvrhi::CommandListHandle m_CommandList;
-        std::unordered_map<std::string, AutoPtr<TextureData>> m_LoadedTextures;
+        std::unordered_map<TextureCacheKey, AutoPtr<TextureData>, TextureCacheKeyHash> m_LoadedTextures;
         mutable std::shared_mutex m_LoadedTexturesMutex;
 
         std::queue<AutoPtr<TextureData>> m_TexturesToFinalize;
@@ -93,7 +123,7 @@ namespace donut::engine
         std::atomic<uint32_t> m_TexturesLoaded = 0;
         uint32_t m_TexturesFinalized = 0;
 
-        bool FindTextureInCache(const std::filesystem::path& path, TextureData **texture);
+        bool FindTextureInCache(const std::filesystem::path& path, const TextureLoadOptions& options, TextureData** texture);
         AutoPtr<IDataBlob> ReadTextureFile(const std::filesystem::path& path) const;
 
         bool FillTextureData(
@@ -124,19 +154,19 @@ namespace donut::engine
         // The `passes` argument is optional, and mip generation is disabled if it's NULL.
         virtual AutoPtr<LoadedTexture> LoadTextureFromFile(
             const std::filesystem::path& path,
-            bool sRGB,
+            const TextureLoadOptions& options,
             CommonRenderPasses* passes,
             nvrhi::ICommandList* commandList);
 
         // Synchronous read and decode, deferred upload and mip generation (in the ProcessRenderingThreadCommands queue).
         virtual AutoPtr<LoadedTexture> LoadTextureFromFileDeferred(
             const std::filesystem::path& path,
-            bool sRGB);
+            const TextureLoadOptions& options);
 
         // Asynchronous read and decode, deferred upload and mip generation (in the ProcessRenderingThreadCommands queue).
         virtual AutoPtr<LoadedTexture> LoadTextureFromFileAsync(
             const std::filesystem::path& path,
-            bool sRGB,
+            const TextureLoadOptions& options,
             ThreadPool& threadPool);
 
         // Same as LoadTextureFromFileAsync, but using a memory blob and MIME type instead of file name, and uncached.
@@ -144,7 +174,7 @@ namespace donut::engine
             IDataBlob *data,
             const std::string& name,
             const std::string& mimeType,
-            bool sRGB,
+            const TextureLoadOptions& options,
             ThreadPool& threadPool);
 
         // Same as LoadTextureFromFile, but using a memory blob and MIME type instead of file name, and uncached.
@@ -152,7 +182,7 @@ namespace donut::engine
             IDataBlob *data,
             const std::string& name,
             const std::string& mimeType,
-            bool sRGB,
+            const TextureLoadOptions& options,
             CommonRenderPasses* passes,
             nvrhi::ICommandList* commandList);
 
@@ -161,13 +191,52 @@ namespace donut::engine
             IDataBlob *data,
             const std::string& name,
             const std::string& mimeType,
-            bool sRGB);
+            const TextureLoadOptions& options);
 
         virtual AutoPtr<LoadedTexture> LoadTextureFromRawImageMemory(IDataBlob* data, const char* name,
                                                                      uint32_t width, uint32_t height,
-                                                                     nvrhi::Format format, bool sRGB,
+                                                                     nvrhi::Format format,
+                                                                     const TextureLoadOptions& options,
                                                                      uint32_t imageBitsPerPixel,
                                                                      uint32_t imagePixelStride);
+
+        // Back-compat overloads for callers written against the older `bool sRGB`.
+        // They forward through TextureLoadOptions, so an override of the form above
+        // still takes effect.
+        [[deprecated("Pass a TextureLoadOptions instead")]]
+        AutoPtr<LoadedTexture> LoadTextureFromFile(
+            const std::filesystem::path& path, bool sRGB,
+            CommonRenderPasses* passes, nvrhi::ICommandList* commandList)
+        { return LoadTextureFromFile(path, TextureLoadOptions{ SRGBModeFromBool(sRGB) }, passes, commandList); }
+
+        [[deprecated("Pass a TextureLoadOptions instead")]]
+        AutoPtr<LoadedTexture> LoadTextureFromFileDeferred(
+            const std::filesystem::path& path, bool sRGB)
+        { return LoadTextureFromFileDeferred(path, TextureLoadOptions{ SRGBModeFromBool(sRGB) }); }
+
+        [[deprecated("Pass a TextureLoadOptions instead")]]
+        AutoPtr<LoadedTexture> LoadTextureFromFileAsync(
+            const std::filesystem::path& path, bool sRGB, ThreadPool& threadPool)
+        { return LoadTextureFromFileAsync(path, TextureLoadOptions{ SRGBModeFromBool(sRGB) }, threadPool); }
+
+        [[deprecated("Pass a TextureLoadOptions instead")]]
+        AutoPtr<LoadedTexture> LoadTextureFromMemoryAsync(
+            IDataBlob* data, const std::string& name,
+            const std::string& mimeType, bool sRGB, ThreadPool& threadPool)
+        { return LoadTextureFromMemoryAsync(data, name, mimeType, TextureLoadOptions{ SRGBModeFromBool(sRGB) }, threadPool); }
+
+        [[deprecated("Pass a TextureLoadOptions instead")]]
+        AutoPtr<LoadedTexture> LoadTextureFromMemory(
+            IDataBlob* data, const std::string& name,
+            const std::string& mimeType, bool sRGB,
+            CommonRenderPasses* passes, nvrhi::ICommandList* commandList)
+        { return LoadTextureFromMemory(data, name, mimeType, TextureLoadOptions{ SRGBModeFromBool(sRGB) }, passes, commandList); }
+
+        [[deprecated("Pass a TextureLoadOptions instead")]]
+        AutoPtr<LoadedTexture> LoadTextureFromMemoryDeferred(
+            IDataBlob* data, const std::string& name,
+            const std::string& mimeType, bool sRGB)
+        { return LoadTextureFromMemoryDeferred(data, name, mimeType, TextureLoadOptions{ SRGBModeFromBool(sRGB) }); }
 
         // Tells if the texture has been loaded from file successfully and its data is available in the texture object.
         // After the texture is finalized and uploaded to the GPU, the data is no longer available on the CPU,
@@ -208,14 +277,14 @@ namespace donut::engine
         uint32_t GetNumberOfRequestedTextures() { return m_TexturesRequested.load(); }
         uint32_t GetNumberOfFinalizedTextures() { return m_TexturesFinalized; }
 
-		AutoPtr<TextureData> GetLoadedTexture(std::filesystem::path const& path);
+		AutoPtr<TextureData> GetLoadedTexture(std::filesystem::path const& path, const TextureLoadOptions& options = {});
 
 		// Texture cache traversal
 		// Note: the iterator locks all cache write-accesses for the duration its lifespan !
 		class Iterator
 		{
 		public:
-			typedef std::unordered_map<std::string, AutoPtr<TextureData>>::iterator CacheIter;
+			typedef std::unordered_map<TextureCacheKey, AutoPtr<TextureData>, TextureCacheKeyHash>::iterator CacheIter;
 
 			Iterator& operator++() { ++m_Iterator; return *this; }
 			

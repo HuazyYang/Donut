@@ -26,6 +26,7 @@
 #include <donut/engine/DescriptorTableManager.h>
 #include <donut/shaders/light_types.h>
 #include <nvrhi/nvrhi.h>
+#include <optional>
 
 struct MaterialConstants;
 struct LightConstants;
@@ -117,6 +118,45 @@ namespace donut::engine
         }
     };
 
+    // Selects the UNORM vs UNORM_SRGB view of a texture.  FromFile takes it from
+    // the container (DX10-header DDS dxgiFormat, KTX2 vkFormat) and falls back to
+    // linear where none is declared; Force* override that, and are ignored for
+    // formats with no counterpart view (BC4/BC5/BC6H, non-RGBA8 uncompressed).
+    enum class SRGBMode : uint8_t { FromFile, ForceSRGB, ForceLinear };
+
+    // Swap a format for its sRGB or linear counterpart; a no-op when there is none.
+    nvrhi::Format ApplySRGBOverride(nvrhi::Format format, SRGBMode mode);
+
+    // Back-compat for callers written against the older `bool forceSRGB`.
+    constexpr SRGBMode SRGBModeFromBool(bool forceSRGB)
+    {
+        return forceSRGB ? SRGBMode::ForceSRGB : SRGBMode::ForceLinear;
+    }
+
+    // Per-load settings that end up in the TextureDesc or in the decoded data, and
+    // therefore in the texture cache identity: loading the same path with different
+    // options must not return the texture built for the first one.
+    struct TextureLoadOptions
+    {
+        SRGBMode sRGBMode = SRGBMode::FromFile;
+
+        // Overrides whatever mapping the file declares (KTX2 KTXswizzle); unset means
+        // use the file's, or identity when it declares none or cannot carry one.
+        std::optional<nvrhi::ComponentMapping> overrideComponentMapping;
+
+        // Drops this many of the highest-resolution mips at load time, letting a
+        // budget pre-pass trade detail for memory. Clamped to the available levels.
+        uint32_t baseMip = 0;
+
+        bool operator==(const TextureLoadOptions& o) const
+        {
+            return sRGBMode == o.sRGBMode
+                && overrideComponentMapping == o.overrideComponentMapping
+                && baseMip == o.baseMip;
+        }
+        bool operator!=(const TextureLoadOptions& o) const { return !(*this == o); }
+    };
+
     struct LoadedTexture: ObjectImpl<IObject>
     {
         nvrhi::TextureHandle texture;
@@ -125,6 +165,9 @@ namespace donut::engine
         DescriptorHandle bindlessDescriptor;
         std::string path;
         std::string mimeType;
+
+        // The options this texture was loaded with; applied in FinalizeTexture.
+        TextureLoadOptions loadOptions;
 
         // Options to construct the texture from a multichannel image, as provided by the glTF asset
         // through the NV_texture_swizzle extension. Applications should choose one of the options that
