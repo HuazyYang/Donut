@@ -1,8 +1,14 @@
-#ifndef DONUT_CORE_OBJECT_MEMORYALLOCATOR_H
-#define DONUT_CORE_OBJECT_MEMORYALLOCATOR_H
+#ifndef DONUT_CORE_OBJECT_MEMORY_H
+#define DONUT_CORE_OBJECT_MEMORY_H
 #include <type_traits>
 #include <limits>
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+#include <malloc.h>
+#endif
 
 #if defined(_MSC_VER)
 #define donut_likely(x) (x)
@@ -20,32 +26,12 @@
 
 #define DONUT_ASSERT(expr) assert(expr)
 
-#define DONUT_ASSERTION_FAILED(...) \
-    do {                            \
-        DONUT_DEBUG_BREAK();        \
-        assert(0);                  \
-    } while (false)
-
-#define DONUT_VERIFY(Expr, ...)                  \
-    do {                                         \
-        if (!(Expr)) {                           \
-            DONUT_ASSERTION_FAILED(__VA_ARGS__); \
-        }                                        \
-    } while (false)
-
-#define DONUT_UNEXPECTED DONUT_ASSERTION_FAILED
-
-#define DONUT_LOG_WARNING_MESSAGE(Fmt, ...) ((void)0)
-
-template <typename DstType, typename SrcType>
-void CheckDynamicType(SrcType* pSrcPtr) {
-    DONUT_VERIFY(pSrcPtr == nullptr || dynamic_cast<DstType*>(pSrcPtr) != nullptr,
-                 "Dynamic type cast failed. Src typeid: \'", typeid(*pSrcPtr).name(),
-                 "\' Dst typeid: \'", typeid(DstType).name(), '\'');
-}
-#define DONUT_CHECK_DYNAMIC_TYPE(DstType, pSrcPtr) \
-    do {                                           \
-        CheckDynamicType<DstType>(pSrcPtr);        \
+#define DONUT_VERIFY(Expr, ...)  \
+    do {                         \
+        if (!(Expr)) {           \
+            DONUT_DEBUG_BREAK(); \
+            assert(0);           \
+        }                        \
     } while (false)
 
 #else
@@ -55,33 +41,10 @@ void CheckDynamicType(SrcType* pSrcPtr) {
 #define DONUT_ASSERT(expr) ((void)0)
 
 // clang-format off
-#    define DONUT_CHECK_DYNAMIC_TYPE(...) do{}while(false)
 #    define DONUT_VERIFY(...)do{}while(false)
-#    define DONUT_UNEXPECTED(...)do{}while(false)
 // clang-format on
 
 #endif
-
-template <typename DstType, typename SrcType>
-[[nodiscard]] DstType* ClassPtrCast(
-    SrcType* Ptr, typename std::enable_if<!std::is_same<DstType, SrcType>::value &&
-                                              !std::is_base_of<DstType, SrcType>::value,
-                                          void*>::type = 0) {
-#ifdef _DEBUG
-    if (Ptr != nullptr) {
-        DONUT_CHECK_DYNAMIC_TYPE(DstType, Ptr);
-    }
-#endif
-    return static_cast<DstType*>(Ptr);
-}
-
-template <typename DstType, typename SrcType>
-[[nodiscard]] DstType* ClassPtrCast(
-    SrcType* Ptr, typename std::enable_if<std::is_same<DstType, SrcType>::value ||
-                                              std::is_base_of<DstType, SrcType>::value,
-                                          void*>::type = 0) {
-    return static_cast<DstType*>(Ptr);
-}
 
 namespace donut {
 struct IMemoryAllocator {
@@ -98,21 +61,61 @@ struct IMemoryAllocator {
     virtual void FreeAligned(void* Ptr) = 0;
 };
 
-class DefaultMemoryAllocator final: public IMemoryAllocator {
+namespace details {
+#if defined(__ANDROID__) && __ANDROID_API__ < 28
+// No aligned_alloc: over-allocate and keep the malloc pointer just below the aligned block.
+inline void* AlignedMalloc(size_t Size, size_t Alignment) {
+    constexpr size_t PointerSize = sizeof(void*);
+    const size_t AdjustedAlignment = Alignment > PointerSize ? Alignment : PointerSize;
+
+    void* Pointer = std::malloc(Size + AdjustedAlignment + PointerSize);
+    if (!Pointer) return nullptr;
+    const uintptr_t Aligned = (reinterpret_cast<uintptr_t>(Pointer) + PointerSize + AdjustedAlignment - 1) &
+                              ~uintptr_t(AdjustedAlignment - 1);
+    reinterpret_cast<void**>(Aligned)[-1] = Pointer;
+    return reinterpret_cast<void*>(Aligned);
+}
+
+inline void AlignedFree(void* Ptr) {
+    if (Ptr) std::free(reinterpret_cast<void**>(Ptr)[-1]);
+}
+#elif defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+inline void* AlignedMalloc(size_t Size, size_t Alignment) { return _aligned_malloc(Size, Alignment); }
+inline void AlignedFree(void* Ptr) { _aligned_free(Ptr); }
+#else
+inline void* AlignedMalloc(size_t Size, size_t Alignment) {
+    // aligned_alloc wants the size to be a multiple of the alignment
+    return std::aligned_alloc(Alignment, (Size + Alignment - 1) & ~(Alignment - 1));
+}
+inline void AlignedFree(void* Ptr) { std::free(Ptr); }
+#endif
+}  // namespace details
+
+/// The allocator behind MAKE_RC_OBJ, header only and stateless: all instances are interchangeable, so each
+/// module (EXE, DLL, shared object) may own its own copy. Memory is always freed by code of the module that
+/// allocated it: an RC object is destroyed through its ObjectWrapper, whose vtable is instantiated where
+/// MakeNewRCObj created the object. So this holds even when every DLL links its own static CRT heap.
+class DefaultMemoryAllocator final : public IMemoryAllocator {
  public:
-    DefaultMemoryAllocator();
+    constexpr DefaultMemoryAllocator() noexcept = default;
 
     /// Allocates block of memory
-    virtual void* Allocate(size_t Size) override;
+    void* Allocate(size_t Size) override {
+        DONUT_VERIFY(Size > 0);
+        return std::malloc(Size);
+    }
 
     /// Releases memory
-    virtual void Free(void* Ptr) override;
+    void Free(void* Ptr) override { std::free(Ptr); }
 
     /// Allocates block of memory with specified alignment
-    virtual void* AllocateAligned(size_t Size, size_t Alignment) override;
+    void* AllocateAligned(size_t Size, size_t Alignment) override {
+        DONUT_VERIFY(Size > 0 && Alignment > 0 && (Alignment & (Alignment - 1)) == 0);
+        return details::AlignedMalloc(Size, Alignment);
+    }
 
     /// Releases memory allocated with AllocateAligned
-    virtual void FreeAligned(void* Ptr) override;
+    void FreeAligned(void* Ptr) override { details::AlignedFree(Ptr); }
 
  private:
     DefaultMemoryAllocator(const DefaultMemoryAllocator&) = delete;
@@ -121,7 +124,11 @@ class DefaultMemoryAllocator final: public IMemoryAllocator {
     DefaultMemoryAllocator& operator=(DefaultMemoryAllocator&&) = delete;
 };
 
-DefaultMemoryAllocator* GetDefaultMemAllocator() noexcept;
+/// One instance per module on Windows (one per process on ELF); either is fine for a stateless allocator.
+inline DefaultMemoryAllocator* GetDefaultMemAllocator() noexcept {
+    static DefaultMemoryAllocator Allocator;  // constexpr ctor: constant-initialized, no guard
+    return &Allocator;
+}
 
 struct DonutNewOverload {};
 
@@ -153,6 +160,10 @@ struct STDAllocator {
     using size_type = std::size_t;
     using difference_type = std::ptrdiff_t;
 
+    // The default allocator is stateless: any instance frees blocks of any other. A container shared
+    // between modules should use IMemoryAllocator instead, so that it frees through the owner's vtable.
+    using is_always_equal = std::is_same<AllocatorType, DefaultMemoryAllocator>;
+
     STDAllocator(AllocatorType& Allocator) noexcept : m_Allocator{Allocator} {}
 
     template <class U>
@@ -176,7 +187,7 @@ struct STDAllocator {
 
     T* allocate(std::size_t count) {
         return reinterpret_cast<T*>(
-            m_Allocator.AllocateAligned(count * sizeof(T), alignof(T), nullptr, 0));
+            m_Allocator.AllocateAligned(count * sizeof(T), alignof(T)));
     }
 
     pointer address(reference r) { return &r; }
@@ -201,7 +212,7 @@ struct STDAllocator {
 
 template <class T, class U, class A>
 bool operator==(const STDAllocator<T, A>& left, const STDAllocator<U, A>& right) noexcept {
-    return &left.m_Allocator == &right.m_Allocator;
+    return STDAllocator<T, A>::is_always_equal::value || &left.m_Allocator == &right.m_Allocator;
 }
 
 template <class T, class U, class A>
@@ -223,4 +234,4 @@ bool operator!=(const STDAllocator<T, A>& left, const STDAllocator<U, A>& right)
 // #define DONUT_DELETE0(p) donut::DeleteObject(donut::GetDefaultMemAllocator(), p)
 
 
-#endif /* DONUT_CORE_OBJECT_MEMORYALLOCATOR_H */
+#endif /* DONUT_CORE_OBJECT_MEMORY_H */

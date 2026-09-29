@@ -1,7 +1,7 @@
 #ifndef DONUT_CORE_OBJECT_AUTOPTR_H
 #define DONUT_CORE_OBJECT_AUTOPTR_H
 #include <donut/core/object/Types.h>
-#include <donut/core/object/MemoryAllocator.h>
+#include <type_traits>
 
 namespace donut {
 
@@ -155,7 +155,7 @@ using BoolType = bool;
 
 template <typename T>
 struct WeakRefTypeTrait {
-    // SFINEA overload when implement of IWeakable is visible to compiling unit.
+    // SFINEA overload when implement of IWeakReferenceSource is visible to compiling unit.
     template <typename Tp>
     static typename Tp::WeakRefImplType* GetWeakRef(typename Tp::WeakRefImplType*);
     // SFINEA overload when only IWeakReference is used.
@@ -396,7 +396,7 @@ class AutoPtr {
     }
 
     FRESULT AsWeak(WeakPtr<T>* pWeakRef) const throw() {
-        return ::donut::AsWeak(ptr_, pWeakRef);
+        return donut::AsWeak(ptr_, pWeakRef);
     }
 };  // AutoPtr
 
@@ -409,10 +409,7 @@ class WeakPtr {
     WeakPtr() noexcept {}
 
     explicit WeakPtr(T* pObj) noexcept : m_pWeakRef{nullptr}, m_pObject{pObj} {
-        if (m_pObject) {
-            m_pWeakRef = WeakRefTypeCast(m_pObject->GetWeakReference());
-            m_pWeakRef->AddRef();
-        }
+        if (m_pObject) m_pWeakRef = AcquireWeakRef(m_pObject);
     }
 
     ~WeakPtr() { Reset(); }
@@ -429,10 +426,8 @@ class WeakPtr {
     }
 
     explicit WeakPtr(AutoPtr<T>& AutoPtr) noexcept
-        : m_pWeakRef{AutoPtr ? WeakRefTypeCast(AutoPtr->GetWeakReference()) : nullptr},
-          m_pObject{static_cast<T*>(AutoPtr.Get())} {
-        if (m_pWeakRef) m_pWeakRef->AddRef();
-    }
+        : m_pWeakRef{AutoPtr ? AcquireWeakRef(AutoPtr.Get()) : nullptr},
+          m_pObject{static_cast<T*>(AutoPtr.Get())} {}
 
     WeakPtr& operator=(const WeakPtr& WeakPtr) noexcept {
         if (*this == WeakPtr) return *this;
@@ -460,15 +455,8 @@ class WeakPtr {
     WeakPtr& operator=(AutoPtr<T>& AutoPtr) noexcept {
         Reset();
         m_pObject = AutoPtr.Get();
-        m_pWeakRef = m_pObject ? WeakRefTypeCast(m_pObject->GetWeakReference()) : nullptr;
-        if (m_pWeakRef) m_pWeakRef->AddRef();
+        m_pWeakRef = m_pObject ? AcquireWeakRef(m_pObject) : nullptr;
         return *this;
-    }
-
-    void Attach(T* pObj) noexcept {
-        Reset();
-        m_pObject = pObj;
-        m_pWeakRef = pObj ? WeakRefTypeCast(pObj->GetWeakReference()) : nullptr;
     }
 
     void Reset() noexcept {
@@ -526,6 +514,12 @@ class WeakPtr {
     static WeakRefType* WeakRefTypeCast(IWeakReference* p) {
         return static_cast<WeakRefType*>(p);
     }
+    // Returns the weak reference of pObj with its reference counter incremented.
+    static WeakRefType* AcquireWeakRef(T* pObj) {
+        IWeakReference* pWeakRef = nullptr;
+        pObj->GetWeakReference(&pWeakRef);
+        return WeakRefTypeCast(pWeakRef);
+    }
     WeakRefType* m_pWeakRef = nullptr;
     // We need to store raw pointer to object itself,
     // because if the object is owned by another object,
@@ -542,24 +536,18 @@ AutoPtr<T> TakeOver(T* p) noexcept {
 }
 
 template <typename T>
-WeakPtr<T> TakeOverRef(T* p) noexcept {
-    WeakPtr<T> ret;
-    ret.Attach(p);
-    return ret;
-}
-
-template <typename T>
 FRESULT AsWeak(T* p, WeakPtr<T>* pWeak) throw() {
     static_assert(!details::IsSame<IWeakReference, T>::value,
                   "Cannot get IWeakReference object to IWeakReference.");
-    AutoPtr<IWeakable> refSource;
+    AutoPtr<IWeakReferenceSource> refSource;
 
     FRESULT hr = p->QueryInterface(FIID_PPV_ARGS(refSource.GetAddressOf()));
     if (FFAILED(hr)) {
         return hr;
     }
 
-    auto weakref = refSource->GetWeakReference();
+    AutoPtr<IWeakReference> weakref;
+    refSource->GetWeakReference(weakref.GetAddressOf());
     if (!weakref) {
         return FE_NOT_IMPLEMENT;
     }

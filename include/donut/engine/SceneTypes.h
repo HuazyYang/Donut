@@ -224,7 +224,7 @@ namespace donut::engine
 
     const char* MaterialDomainToString(MaterialDomain domain);
 
-    struct Material: WeakableImpl<IWeakable>
+    struct Material: WeakReferenceSourceImpl<IWeakReferenceSource>
     {
         std::string name;
         std::string modelFileName;      // where this material originated from, e.g. GLTF file name
@@ -297,7 +297,7 @@ namespace donut::engine
         int materialID = 0;
         bool dirty = true; // set this to true to make Scene update the material data
 
-        using WeakableImpl::WeakableImpl;
+        using WeakReferenceSourceImpl::WeakReferenceSourceImpl;
         virtual ~Material() = default;
         void FillConstantBuffer(struct MaterialConstants& constants, bool useResourceDescriptorHeapBindless = false) const;
         bool SetProperty(const std::string& name, const dm::float4& value);

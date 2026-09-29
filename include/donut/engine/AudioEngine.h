@@ -32,7 +32,7 @@ class AudioData;
 
 // Effect : transient interface to manipulate active sound effects
 //
-struct Effect: WeakableImpl<IWeakable>
+struct Effect: WeakReferenceSourceImpl<IWeakReferenceSource>
 {
     // returns the audio sample associated with this effect
     virtual AudioData* getSample() const = 0;    
@@ -53,7 +53,7 @@ struct Effect: WeakableImpl<IWeakable>
     typedef std::function<void(Effect &)> EffectCallback;
     virtual void setEffectCallback(EffectCallback const & callback) = 0;
 
-    using WeakableImpl::WeakableImpl;
+    using WeakReferenceSourceImpl::WeakReferenceSourceImpl;
 };
 
 // Descriptor used to create effects

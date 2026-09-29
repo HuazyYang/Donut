@@ -43,6 +43,7 @@ if(1)
 
 find_package(GTest CONFIG REQUIRED)
 target_link_libraries(test_auto_ptr GTest::gtest GTest::gtest_main)
+target_link_libraries(test_qi_route GTest::gtest GTest::gtest_main)
 
 add_library(VLD SHARED IMPORTED)
 set_target_properties(

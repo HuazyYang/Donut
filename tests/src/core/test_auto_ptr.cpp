@@ -19,7 +19,7 @@ Type* MakeNewObj() {
 namespace Test {
 // {82AA31B6-F0DF-4C11-864B-FC1643660D0B}
 DONUT_SCLSID(Object, "82aa31b6-f0df-4c11-864b-fc1643660d0b")
-class Object : public WeakableImpl<IWeakable> {
+class Object : public WeakReferenceSourceImpl<IWeakReferenceSource> {
     DONUT_DECLARE_UUID_TRAITS(Object)
  public:
     static void Create(Object** ppObj) { *ppObj = MakeNewObj<Object>(); }
@@ -54,7 +54,7 @@ class DelegatingObj : public DelegatingObjectImpl<IObject> {
 
 DONUT_BEGIN_INTERFACE_TABLE(Object)
 DONUT_IMPLEMENTS_INTERFACE(Object)
-DONUT_IMPLEMENTS_ROUTE_PARENT(WeakableImpl<IWeakable>)
+DONUT_IMPLEMENTS_ROUTE_PARENT(WeakReferenceSourceImpl<IWeakReferenceSource>)
 DONUT_END_INTERFACE_TABLE()
 
 // {0CBC582D-66A2-452B-BAC4-CDACABA2D9A8}
@@ -77,7 +77,7 @@ DONUT_END_INTERFACE_TABLE()
 using SmartPtr = AutoPtr<Object>;
 using WeakPtr = donut::WeakPtr<Object>;
 static_assert(
-    std::is_same<WeakPtr::WeakRefType, donut::WeakReferenceImpl>::value,
+    std::is_same<WeakPtr::WeakRefType, donut::details::WeakReferenceImpl>::value,
     "Implement weak reference type is requrired for WeakPtr");
 
 TEST(Common, MakeNewRCObj) {
@@ -343,12 +343,13 @@ TEST(Common_RefCntWeakPtr, Lock) {
 TEST(Common_RefCntAutoPtr, Misc) {
 
     {
-        class OwnerTest : public WeakableImpl<IWeakable> {
+        class OwnerTest : public WeakReferenceSourceImpl<IWeakReferenceSource> {
         public:
            OwnerTest(int* pFlag) : m_pFlag{pFlag} {
                Obj = MAKE_RC_DELEGATING(DelegatingObj, this);
                // Retain a weak reference
-               GetWeakReference()->AddRef();
+               IWeakReference* pWeakRef = nullptr;
+               GetWeakReference(&pWeakRef);
                *pFlag = 0;
            }
 
@@ -359,7 +360,7 @@ TEST(Common_RefCntAutoPtr, Misc) {
             ~OwnerTest() {
                 *m_pFlag = 1;
                 Obj->DestroyObject();
-                GetWeakReference()->Release();  // Actually release weak reference
+                GetWeakReferenceImpl()->Release();  // Actually release weak reference
             }
 
         private:
@@ -378,7 +379,7 @@ TEST(Common_RefCntAutoPtr, Misc) {
     }
 
     {
-        class SelfRefTest : public WeakableImpl<IWeakable> {
+        class SelfRefTest : public WeakReferenceSourceImpl<IWeakReferenceSource> {
         public:
             SelfRefTest(int* pFlag)
                 : wpSelf(this),
@@ -405,7 +406,7 @@ TEST(Common_RefCntAutoPtr, Misc) {
     }
 
     {
-        class ExceptionTest1 : public WeakableImpl<IWeakable> {
+        class ExceptionTest1 : public WeakReferenceSourceImpl<IWeakReferenceSource> {
         public:
            ExceptionTest1() : wpSelf(this) { throw std::runtime_error("test exception"); }
 
@@ -425,7 +426,7 @@ TEST(Common_RefCntAutoPtr, Misc) {
     }
 
     {
-        class ExceptionTest2 : public WeakableImpl<IWeakable> {
+        class ExceptionTest2 : public WeakReferenceSourceImpl<IWeakReferenceSource> {
         public:
            ExceptionTest2() : wpSelf(this) {
                throw std::runtime_error("test exception");
@@ -446,7 +447,7 @@ TEST(Common_RefCntAutoPtr, Misc) {
     }
 
     {
-        class ExceptionTest3 : public WeakableImpl<IWeakable> {
+        class ExceptionTest3 : public WeakReferenceSourceImpl<IWeakReferenceSource> {
         public:
            ExceptionTest3() : m_Member(*this) {}
 
@@ -475,7 +476,7 @@ TEST(Common_RefCntAutoPtr, Misc) {
     }
 
     {
-        class OwnerObject : public WeakableImpl<IWeakable> {
+        class OwnerObject : public WeakReferenceSourceImpl<IWeakReferenceSource> {
         public:
            OwnerObject() {}
 
@@ -487,7 +488,7 @@ TEST(Common_RefCntAutoPtr, Misc) {
             }
             virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) { return FS_OK; }
 
-            class ExceptionTest4 : public WeakableImpl<IWeakable> {
+            class ExceptionTest4 : public WeakReferenceSourceImpl<IWeakReferenceSource> {
             public:
                ExceptionTest4(OwnerObject& owner) : m_Member(owner, *this) {}
 
@@ -518,7 +519,7 @@ TEST(Common_RefCntAutoPtr, Misc) {
     }
 
     {
-        class OwnerObject : public WeakableImpl<IWeakable> {
+        class OwnerObject : public WeakReferenceSourceImpl<IWeakReferenceSource> {
         public:
             OwnerObject() {
                 m_pMember = MAKE_RC_OBJ_PTR(ExceptionTest4, *this);
@@ -526,7 +527,7 @@ TEST(Common_RefCntAutoPtr, Misc) {
 
             virtual FRESULT QueryInterface(const FIID& IID, void** ppInterface) { return FS_OK; }
 
-            class ExceptionTest4 : public WeakableImpl<IWeakable> {
+            class ExceptionTest4 : public WeakReferenceSourceImpl<IWeakReferenceSource> {
             public:
                ExceptionTest4(OwnerObject& owner) : m_Member(owner, *this) {}
 
@@ -559,7 +560,7 @@ TEST(Common_RefCntAutoPtr, Misc) {
     }
 
     {
-        class TestObject : public WeakableImpl<IWeakable> {
+        class TestObject : public WeakReferenceSourceImpl<IWeakReferenceSource> {
         public:
            TestObject() {}
 
@@ -569,7 +570,7 @@ TEST(Common_RefCntAutoPtr, Misc) {
            }
 
             inline virtual FLONG Release() override final {
-                return WeakableImpl<IWeakable>::Release([&]()                    //
+                return WeakReferenceSourceImpl<IWeakReferenceSource>::Release([&]()                    //
                                                                  { ppWeakPtr->Reset(); }  //
                 );
             }
@@ -669,7 +670,7 @@ void RefCntAutoPtrThreadingTest::WorkerThreadFunc(RefCntAutoPtrThreadingTest* Th
             {
                 This->m_WorkerThreadSignal[0].Wait(true, NumThreads);
                 auto* pObject = This->m_pSharedObject;
-                auto* pRefCounters = pObject->GetWeakReference();
+                auto* pRefCounters = pObject->GetWeakReferenceImpl();
                 if (ThreadNum % 3 == 0) {
                     pObject->m_Value++;
                     pObject->AddRef();

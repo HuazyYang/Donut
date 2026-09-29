@@ -23,6 +23,7 @@
 #pragma once
 
 #include <donut/core/object/Foundation.h>
+#include <donut/core/object/DataBlob.h>
 #include <string>
 #include <filesystem>
 #include <functional>

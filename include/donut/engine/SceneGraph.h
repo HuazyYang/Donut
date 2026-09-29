@@ -49,7 +49,7 @@ namespace donut::engine
         Animations = 0x20
     };
 
-    class SceneGraphLeaf: public WeakableImpl<IWeakable>
+    class SceneGraphLeaf: public WeakReferenceSourceImpl<IWeakReferenceSource>
     {
     private:
         friend class SceneGraphNode;
@@ -58,7 +58,7 @@ namespace donut::engine
     protected:
 
     public:
-        using WeakableImpl::WeakableImpl;
+        using WeakReferenceSourceImpl::WeakReferenceSourceImpl;
         virtual ~SceneGraphLeaf() = default;
 
         [[nodiscard]] SceneGraphNode* GetNode() const { return m_Node.Lock(); }
@@ -257,7 +257,7 @@ namespace donut::engine
         bool SetProperty(const std::string& name, const dm::float4& value) override;
     };
     
-    class SceneGraphNode final : public WeakableImpl<IWeakable>
+    class SceneGraphNode final : public WeakReferenceSourceImpl<IWeakReferenceSource>
     {
     public:
         enum struct DirtyFlags : uint32_t
@@ -529,7 +529,7 @@ namespace donut::engine
     template<typename T>
     using SceneResourceCallback = std::function<void(const T*)>;
     
-    class SceneGraph : public WeakableImpl<IWeakable>
+    class SceneGraph : public WeakReferenceSourceImpl<IWeakReferenceSource>
     {
     private:
         friend class SceneGraphNode;

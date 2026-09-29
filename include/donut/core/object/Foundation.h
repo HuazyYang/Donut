@@ -2,10 +2,13 @@
 #define DONUT_CORE_OBJECT_FOUNDATION_H
 #include <donut/core/object/Threading.h>
 #include <donut/core/object/Types.h>
-#include <donut/core/object/MemoryAllocator.h>
+#include <donut/core/object/Memory.h>
 #include <cstddef>
 #include <cstdint>
 #include <atomic>
+#include <new>
+#include <type_traits>
+#include <utility>
 
 #if defined(_MSC_VER)
 #define donut_likely(x) (x)
@@ -60,24 +63,20 @@
         override {                                                                    \
         typedef ClassName _ITCls;                                                     \
         static const donut::details::INTERFACE_ENTRY inttable[] = {
-#define DONUT_IMPLEMENTS_ROUTE_PARENT(BaseClass)                       \
-    {                                                                     \
-        nullptr,                                                          \
-        &donut::details::RouteParentQueryInterface<_ITCls, BaseClass>, \
-        DONUT_BASE_OFFSET(_ITCls, BaseClass),                          \
-    },
+#define DONUT_IMPLEMENTS_ROUTE_PARENT(...) \
+    {nullptr, &donut::details::QIEntryFinder<__VA_ARGS__, false>, DONUT_BASE_OFFSET(_ITCls, __VA_ARGS__)},
 
 #define DONUT_IMPLEMENTS_ROUTE_MEMBER(Member)                                        \
     {nullptr,                                                                           \
-     &donut::details::RouteMemberQueryInterface<std::decay<decltype(Member)>::type>, \
-     uint32_t(size_t(std::addressof(this->Member)) -                                    \
+     &donut::details::RouteMemberQueryInterface<::std::decay<decltype(Member)>::type>, \
+     uint32_t(size_t(::std::addressof(this->Member)) -                                    \
               size_t(this))}, /* Note: we can not use offsetof here */
 
 #define DONUT_IMPLEMENTS_INTERFACE(Itf) \
-    {&__uuid_of<Itf>(), DONUT_ENTRY_IS_OFFSET, DONUT_BASE_OFFSET(_ITCls, Itf)},
+    {&donut::details::QIIIDOf<Itf>, DONUT_ENTRY_IS_OFFSET, DONUT_BASE_OFFSET(_ITCls, Itf)},
 
 #define DONUT_IMPLEMENTS_INTERFACE_AS(req, Itf) \
-    {&__uuid_of<req>(), DONUT_ENTRY_IS_OFFSET, DONUT_BASE_OFFSET(_ITCls, Itf)},
+    {&donut::details::QIIIDOf<req>, DONUT_ENTRY_IS_OFFSET, DONUT_BASE_OFFSET(_ITCls, Itf)},
 
 #define DONUT_END_INTERFACE_TABLE()                                                 \
     { 0, (donut::details::INTERFACE_FINDER)0, 0 }                                   \
@@ -86,13 +85,66 @@
     return donut::details::InterfaceTableQueryInterface(this, inttable, riid, ppv); \
     }
 
+// Ends a table of a class derived from ObjectImpl<...> (or WeakReferenceSourceImpl / DelegatingObjectImpl /
+// DelegatingWeakReferenceSourceImpl). What the table does not answer is routed to that base class: its
+// interfaces, then, in declaration order, every base that implements QueryInterface (direct, non-virtual
+// calls). IObject always goes to the base class, so identity is the base's.
+// A class derived from another implementation Foo derives from ObjectImpl<Foo> (not from Foo directly):
+// otherwise the route skips Foo's own table and goes straight to Foo's base class.
+#define DONUT_END_INTERFACE_TABLE_ROUTE_PARENT() DONUT_QI_END_ROUTE_TABLE_(false)
+
+// Non-delegating side of an aggregated object (DelegatingObjectImpl / DelegatingWeakReferenceSourceImpl):
+// bases are asked through their NonDelegatingQueryInterface; IObject stays with the owner.
+#define DONUT_END_NON_DELEGATING_INTERFACE_TABLE_ROUTE_PARENT() DONUT_QI_END_ROUTE_TABLE_(true)
+
+#define DONUT_QI_END_ROUTE_TABLE_(ND)                                                \
+    {nullptr, &donut::details::QIRouteToCore<_ITCls, ND>, 0},                      \
+    { 0, (donut::details::INTERFACE_FINDER)0, 0 }                                 \
+    }                                                                              \
+    ;                                                                              \
+    return donut::details::QIRouteTableQueryInterface(this, inttable, riid, ppv); \
+    }
+
 #define DONUT_DECLARE_INTERFACE_TABLE() \
-    donut::FRESULT QueryInterface(const FIID& riid, void** ppv) override;
+    donut::FRESULT QueryInterface(const donut::FIID& riid, void** ppv) override;
 
 namespace donut {
 
+template <class AllocatorType = IMemoryAllocator>
+class MakeNewRCObj;
+
+template <typename... Bases>
+class WeakReferenceSourceImpl;
+
 namespace details {
+// Which base class family owns an object's reference count. The delegating ones answer their own
+// interfaces through NonDelegatingQueryInterface.
+enum class QILifetime : unsigned char { Object, Weak, Delegating, DelegatingWeak };
+constexpr bool QIIsDelegating(QILifetime k) { return k >= QILifetime::Delegating; }
+
+// The four base classes: root layer (owns the reference count) or pass-through layer (its single base
+// already does). Defined further below.
+template <QILifetime K, typename... Bases> class QIRootLayer;
+template <QILifetime K, typename... Bases> class QIPassThroughLayer;
+
+// The only name the four base classes put in user classes (as QITraits): the family that owns the
+// reference count, and the layer itself.
+template <QILifetime K, typename C>
+struct QITraits {
+    static constexpr QILifetime Lifetime = K;
+    using Core = C;
+};
+
 typedef FRESULT (*INTERFACE_FINDER)(void* pThis, uint32_t data, FREFIID riid, void** ppv);
+
+// One copy of each IID with vague (COMDAT) linkage and constant initialization: the same address in
+// every translation unit, so interface tables in inline and template functions stay constant data.
+// (IID_X from DONUT_IID has internal linkage; MSVC guards a table that takes its address.)
+template <typename Itf>
+inline constexpr FIID QIIIDOf = __uuid_of<Itf>();
+// Key of an entry whose finder is asked for any IID (a mixin in a root table).
+template <>
+inline constexpr FIID QIIIDOf<void> = {};
 
 struct INTERFACE_ENTRY {
     const FIID* pIID;
@@ -100,40 +152,172 @@ struct INTERFACE_ENTRY {
     uint32_t data;
 };
 
-extern FRESULT InterfaceTableQueryInterface(void* pThis, const INTERFACE_ENTRY* pTable,
-                                            FREFIID riid, void** ppv);
+template <typename QIB, bool ND>
+FRESULT QIEntryFinder(void* pThis, uint32_t offset, FREFIID riid, void** ppv);
 
-#define DONUT_ENTRY_IS_OFFSET donut::details::INTERFACE_FINDER(-1)
+// An offset entry. A real finder (QIEntryFinder below), so every table entry is an address constant.
+#define DONUT_ENTRY_IS_OFFSET (&donut::details::QIEntryFinder<void, false>)
+
+inline FRESULT InterfaceTableQueryInterface(void* pThis, const INTERFACE_ENTRY* pTable, FREFIID riid, void** ppv) {
+    if (riid == IID_IObject) {
+        // first entry must be an offset
+        if (ppv) {
+            *ppv = static_cast<char*>(pThis) + pTable->data;
+            static_cast<IObject*>(*ppv)->AddRef();
+        }
+        return FS_OK;
+    }
+
+    FRESULT hr = FE_NOINTERFACE;
+    while (pTable->pfnFinder) {
+        if (!pTable->pIID || pTable->pIID == &QIIIDOf<void> || riid == *pTable->pIID) {
+            if (pTable->pfnFinder == DONUT_ENTRY_IS_OFFSET) {
+                if (ppv) {
+                    *ppv = static_cast<char*>(pThis) + pTable->data;
+                    static_cast<IObject*>(*ppv)->AddRef();
+                }
+                hr = FS_OK;
+                break;
+            }
+            hr = pTable->pfnFinder(pThis, pTable->data, riid, ppv);
+            if (hr == FS_OK) break;
+        }
+        pTable++;
+    }
+    if (hr != FS_OK && ppv) *ppv = nullptr;
+    return hr;
+}
+
+// The same walk for a table ended by ..._ROUTE_PARENT(); IObject goes to its last entry (the route).
+inline FRESULT QIRouteTableQueryInterface(void* pThis, const INTERFACE_ENTRY* pTable, FREFIID riid, void** ppv) {
+    if (riid == IID_IObject) {  // identity belongs to the base class: ask the route entry, the last one
+        while (pTable[1].pfnFinder) pTable++;
+        return pTable->pfnFinder(pThis, pTable->data, riid, ppv);
+    }
+    return details::InterfaceTableQueryInterface(pThis, pTable, riid, ppv);
+}
 #define DONUT_ENTRY_ROUTE_BASECLASS uint32_t(-1)
-#define DONUT_BASE_OFFSET(ClassName, BaseName)                    \
-    uint32_t(reinterpret_cast<char*>(static_cast<BaseName*>(         \
+// The base is variadic so that template bases with commas (ObjectImpl<Foo, IA>) pass through macros.
+#define DONUT_BASE_OFFSET(ClassName, ...)                            \
+    uint32_t(reinterpret_cast<char*>(static_cast<__VA_ARGS__*>(      \
                  reinterpret_cast<ClassName*>(sizeof(ClassName)))) - \
              reinterpret_cast<char*>(sizeof(ClassName)))
 
-template <typename T, typename TBase>
-FRESULT RouteParentQueryInterface(void* pThis, uint32_t data, FREFIID riid, void** ppv) {
-    static_assert(std::is_base_of<TBase, T>::value,
-                  "Can not route query interface implement");
-    return reinterpret_cast<TBase*>(static_cast<char*>(pThis) + data)
-        ->TBase::QueryInterface(riid, ppv);
+// ---- Routing to parent classes ----------------------------------------------------------------------
+// A qualified call Base::QueryInterface(...) does not dispatch: it binds to the declaration that name
+// lookup finds from Base. &Base::QueryInterface is a pointer to member *of the declaring class*, so the
+// deduced class tells what the call binds to:
+//   IObject          only the root pure virtual: an interface, nothing to call (would not link)
+//   any other class  an implementation (Base's own, or an ancestor's such as ObjectImpl<...>)
+//   not deducible    ambiguous (two implementing bases), not public, or an overload set with a template
+// This relies on Donut's rule that interfaces do not re-declare QueryInterface.
+template <typename C> C* QIDeclarer(FRESULT (C::*)(FREFIID, void**));
+
+enum : int { QINone, QIInterface, QIImpl, QIBad };
+template <typename B, typename = void>
+inline constexpr int QIKind = std::is_base_of_v<IObject, B> ? QIBad : QINone;
+template <typename B>
+inline constexpr int QIKind<B, std::void_t<decltype(details::QIDeclarer(&B::QueryInterface))>> =
+    std::is_same_v<decltype(details::QIDeclarer(&B::QueryInterface)), IObject*> ? QIInterface : QIImpl;
+
+template <typename B, typename = void> inline constexpr bool QIHasNonDelegating = false;
+template <typename B>
+inline constexpr bool QIHasNonDelegating<B, std::void_t<decltype(details::QIDeclarer(&B::NonDelegatingQueryInterface))>> = true;
+
+// Table finder for the base at `offset`, shared by every class that lists it: a direct (qualified,
+// non-virtual) call to its implementation, or nothing. B = void is the offset entry (the walker handles it
+// inline; a call does the same).
+template <typename QIB, bool ND>
+FRESULT QIEntryFinder(void* pThis, uint32_t offset, FREFIID riid, void** ppv) {
+    static_assert(ND || QIKind<QIB> != QIBad,
+                  "Route parent: this base's QueryInterface is ambiguous (two implementing bases), not "
+                  "public, or overloaded with a function template");
+    if constexpr (std::is_void_v<QIB>) {
+        if (ppv) {
+            *ppv = static_cast<char*>(pThis) + offset;
+            static_cast<IObject*>(*ppv)->AddRef();
+        }
+        return FS_OK;
+    } else if constexpr (ND && QIHasNonDelegating<QIB>)
+        return reinterpret_cast<QIB*>(static_cast<char*>(pThis) + offset)->QIB_::NonDelegatingQueryInterface(riid, ppv);
+    else if constexpr (!ND && QIKind<QIB> == QIImpl)
+        return reinterpret_cast<QIB*>(static_cast<char*>(pThis) + offset)->QIB_::QueryInterface(riid, ppv);
+    else
+        return FE_NOINTERFACE;
 }
 
-template <typename T, typename std::enable_if<!std::is_pointer<T>::value, int>::type = 0>
+// ---- Root layer: one table, the shared walker -------------------------------------------------------
+// Entry per base: an interface by offset, any other base (keyed on QIIIDOf<void>: any IID) through
+// QIEntryFinder<B>. Both are picked by type, not by ?: or constexpr pointer variables, which MSVC does not
+// always fold: the table must stay constant data (no thread-safe initialization guard).
+template <typename B> inline constexpr bool QIIsInterface = QIKind<B> == QIInterface;
+
+// Identity first (IObject through the first base), then the bases in declaration order.
+template <bool ND, typename Root, typename B0, typename... Bs>
+FRESULT QIQueryRoot(void* self, FREFIID riid, void** ppv) {
+#define DONUT_QI_ROOT_ENTRY_(B)                                                           \
+    {&QIIIDOf<std::conditional_t<QIIsInterface<B>, B, void>>,                              \
+     &QIEntryFinder<std::conditional_t<QIIsInterface<B>, void, B>, ND && !QIIsInterface<B>>, \
+     DONUT_BASE_OFFSET(Root, B)}
+    static const INTERFACE_ENTRY table[] = {
+        {&QIIIDOf<IObject>, DONUT_ENTRY_IS_OFFSET,
+         uint32_t(reinterpret_cast<char*>(static_cast<IObject*>(static_cast<B0*>(reinterpret_cast<Root*>(sizeof(Root))))) -
+                  reinterpret_cast<char*>(sizeof(Root)))},
+        DONUT_QI_ROOT_ENTRY_(B0), DONUT_QI_ROOT_ENTRY_(Bs)..., {nullptr, (INTERFACE_FINDER)0, 0}};
+#undef DONUT_QI_ROOT_ENTRY_
+    if constexpr (ND) {
+        if (riid == IID_IObject) {  // the owner's
+            if (ppv) *ppv = nullptr;
+            return FE_NOINTERFACE;
+        }
+    }
+    return details::InterfaceTableQueryInterface(self, table, riid, ppv);
+}
+
+template <typename B, typename = void> inline constexpr bool QIOwnsRefCount = false;
+template <typename B> inline constexpr bool QIOwnsRefCount<B, std::void_t<typename B::QITraits>> = true;
+
+template <QILifetime K, typename... Bases>
+constexpr bool QICheckRootBases() {
+    static_assert(sizeof...(Bases) > 0 && (std::is_base_of_v<IObject, Bases> && ...),
+                  "ObjectImpl<Bases...>: list interfaces and classes implementing QueryInterface; "
+                  "inherit helper classes directly");
+    static_assert(!(QIOwnsRefCount<Bases> || ...),
+                  "A base that already owns a reference count must be the only one: ObjectImpl<Base>");
+    static_assert(((QIKind<Bases> != QIBad) && ...),
+                  "Route parent: this base's QueryInterface is ambiguous (two implementing bases), not "
+                  "public, or overloaded with a function template");
+    static_assert(K == QILifetime::Object || K == QILifetime::Delegating ||
+                      (std::is_base_of_v<IWeakReferenceSource, Bases> || ...),
+                  "WeakReferenceSourceImpl<Bases...>: list IWeakReferenceSource (or an interface derived from it)");
+    return true;
+}
+
+// The route entry that ..._ROUTE_PARENT() appends: a qualified call into the layer the table's class
+// derives from (root: its table; pass-through: the base's QueryInterface).
+template <typename Cls, bool ND>
+FRESULT QIRouteToCore(void* pThis, uint32_t, FREFIID riid, void** ppv) {
+    using QIClsTraits = typename Cls::QITraits;
+    static_assert(ND || !details::QIIsDelegating(QIClsTraits::Lifetime),
+                  "ROUTE_PARENT(): a delegating class answers through NonDelegatingQueryInterface; use "
+                  "DONUT_BEGIN/END_NON_DELEGATING_INTERFACE_TABLE...");
+    static_assert(!ND || details::QIIsDelegating(QIClsTraits::Lifetime),
+                  "NON_DELEGATING_..._ROUTE_PARENT(): only for DelegatingObjectImpl / DelegatingWeakReferenceSourceImpl");
+    if constexpr (ND)
+        return static_cast<Cls*>(pThis)->QIClsTraits::Core::NonDelegatingQueryInterface(riid, ppv);
+    else
+        return static_cast<Cls*>(pThis)->QIClsTraits::Core::QueryInterface(riid, ppv);
+}
+
+// DONUT_IMPLEMENTS_ROUTE_MEMBER: the aggregated member (an object or a pointer to one).
+template <typename QIT>
 FRESULT RouteMemberQueryInterface(void* pThis, uint32_t data, FREFIID riid, void** ppv) {
-    return reinterpret_cast<T*>(static_cast<char*>(pThis) + data)
-        ->T::NonDelegatingQueryInterface(riid, ppv);
+    QIT& member = *reinterpret_cast<QIT*>(static_cast<char*>(pThis) + data);
+    if constexpr (std::is_pointer_v<QIT>)
+        return details::RouteMemberQueryInterface<std::remove_pointer_t<QIT>>(member, 0, riid, ppv);
+    else
+        return member.QIT_::NonDelegatingQueryInterface(riid, ppv);
 }
-
-template <typename T, typename std::enable_if<std::is_pointer<T>::value, int>::type = 0>
-FRESULT RouteMemberQueryInterface(void* pThis, uint32_t data, FREFIID riid, void** ppv) {
-    using Ty = typename std::remove_pointer<T>::type;
-    return (*reinterpret_cast<T*>(static_cast<char*>(pThis) + data))
-        ->Ty::NonDelegatingQueryInterface(riid, ppv);
-}
-
-extern void ObjectTrackerAddObject(IObject* pObj);
-
-extern bool ObjectTrackerRemoveObject(IObject* pObj);
 
 class ObjectWrapperBase {
  public:
@@ -191,34 +375,32 @@ class PackedObjectWrapper : public ObjectWrapperBase {
     AllocatorType* const m_pAllocator;
 };
 
-// MSVC starting with 19.25.28610.4 fails to compile sizeof(ObjectWrapper<IObject,
-// IMemoryAllocator>) because IObject does not have virtual destructor. The compiler is
-// technically right, so we use IObjectStub, which does have virtual destructor.
-struct IObjectStub : public IObject {
-    virtual ~IObjectStub() = 0;
-};
-
 struct ObjectWrapperStorage {
-    using ObjectWrapperStub = ObjectWrapper<IObjectStub, IMemoryAllocator>;
+    using ObjectWrapperStub = ObjectWrapper<IObject, IMemoryAllocator>;
     static constexpr size_t ObjectWrapperBufferSize =
         sizeof(ObjectWrapperStub) / sizeof(size_t);
     alignas(ObjectWrapperStub) size_t val[ObjectWrapperBufferSize];
 };
 
-template <typename ObjectType>
-struct IsWeakReferenceSource {
+template<typename ...Itfs>
+struct IsWeakReferenceSource;
+
+template <typename Itf>
+struct IsWeakReferenceSource<Itf> {
     static constexpr bool value =
-        std::is_base_of<IWeakable, ObjectType>::value ||
-        std::is_same<IWeakable, ObjectType>::value;
+        std::is_base_of<IWeakReferenceSource, Itf>::value ||
+        std::is_same<IWeakReferenceSource, Itf>::value;
+};
+
+template<typename ... Itfs>
+struct IsWeakReferenceSource {
+    static constexpr bool value = (IsWeakReferenceSource<Itfs>::value || ...);
 };
 
 template <typename TInterface>
 struct WeakRefTypeTrait;
 
 }  // namespace details
-
-template <class AllocatorType = IMemoryAllocator>
-class MakeNewRCObj;
 
 class UserAllocated {
  protected:
@@ -227,6 +409,8 @@ class UserAllocated {
 
     template <typename ObjectType, typename AllocatorType>
     friend class details::PackedObjectWrapper;
+    template <typename ObjectType, typename AllocatorType>
+    friend class details::ObjectWrapper;
 
     friend class DefaultMemoryAllocator;
     void operator delete(void* ptr) { GetDefaultMemAllocator()->Free(ptr); }
@@ -243,6 +427,8 @@ class UserAllocated {
         return Allocator->Allocate(Size);
     }
 };
+
+namespace details {
 
 // This class controls the lifetime of a refcounted object
 class WeakReferenceImpl final : public IWeakReference, public UserAllocated {
@@ -414,17 +600,17 @@ class WeakReferenceImpl final : public IWeakReference, public UserAllocated {
     // FLONG GetNumWeakRefs() const { return m_NumWeakReferences.load(); }
 
  private:
-    template <typename BaseItf>
-    friend class RefCountedObject;
+    template <QILifetime, typename...>
+    friend class QIRootLayer;
     template <typename ObjectType, typename AllocatorType>
     friend class details::PackedObjectWrapper;
     template <typename AllocatorType>
-    friend class MakeNewRCObj;
+    friend class donut::MakeNewRCObj;
 
     WeakReferenceImpl() noexcept {}
 
     template <typename ObjectType, typename AllocatorType>
-    void Attach(ObjectType* pObject, AllocatorType* pAllocator) throw() {
+    void Attach(ObjectType* pObject, AllocatorType* pAllocator) noexcept {
         DONUT_VERIFY(m_ObjectState.load() == ObjectState::NotInitialized,
                         "Object has already been attached");
 #if DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
@@ -652,132 +838,33 @@ class WeakReferenceImpl final : public IWeakReference, public UserAllocated {
     enum class ObjectState : uint32_t { NotInitialized = 0, Alive = 1, Destroyed = 2 };
     std::atomic<ObjectState> m_ObjectState{ObjectState::NotInitialized};
 
-    details::ObjectWrapperStorage m_ObjectWrapperBuffer{};
+    ObjectWrapperStorage m_ObjectWrapperBuffer{};
 };
 
 template<typename ObjectType, typename AllocatorType>
-void details::PackedObjectWrapper<ObjectType, AllocatorType>::DeletePackedStorage(void *pWeakRef) noexcept {
+void PackedObjectWrapper<ObjectType, AllocatorType>::DeletePackedStorage(void *pWeakRef) noexcept {
     reinterpret_cast<WeakReferenceImpl*>(pWeakRef)->~WeakReferenceImpl();
     if (m_pAllocator) {
         m_pAllocator->Free(m_pObject);
     } else
-        delete (const UserAllocated*)m_pObject;
+        delete (const ObjectType*)m_pObject;
 }
 
-/// Base class for all reference counting objects, must be one of IWeakable
-template <typename BaseItf>
-class RefCountedObject : public BaseItf, public UserAllocated {
+// ---- Root layers: the base class owns the reference count -------------------------------------------
+// Bases are the interfaces the class implements (IObject or interfaces derived from it) and mixins that
+// implement QueryInterface with their own table, answered in declaration order by one table (QIQueryRoot).
+
+template <typename... QIBases>
+class QIRootLayer<QILifetime::Object, QIBases...> : public QIBases..., protected UserAllocated {
+    static_assert(QICheckRootBases<QILifetime::Object, QIBases...>());
+
  public:
- #if DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
-    // Constructor with weak reference syntax
-    RefCountedObject() noexcept : m_pWeakRef(::new (&m_WeakRef) WeakReferenceImpl{}) {
-        // If object is allocated on stack, ref counters will be null
-        // DONUT_VERIFY(pRefCounters != nullptr, "Reference counters must not be null")
-    }
-#else
-    RefCountedObject() noexcept
-        : m_pWeakRef((WeakReferenceImpl*)(*(uintptr_t*)((uint8_t*)this + sizeof(void*)))) {}
-#endif
+    using QITraits = QITraits<QILifetime::Object, QIRootLayer>;
 
-    // Virtual destructor makes sure all derived classes can be destroyed
-    // through the pointer to the base class
-    virtual ~RefCountedObject() {
-        // m_pWeakRef stays valid while the dtor runs when the object is destroyed via
-        // ReleaseStrongRef(): TryDestroyObject() holds the implicit weak reference until
-        // the dtor returns.
-    }
-
-    inline virtual FLONG AddRef() override final {
-        // Since type of m_pWeakRef is WeakReference,
-        // this call will not be virtual and should be inlined
-        return m_pWeakRef->AddStrongRef();
-    }
-
-    inline virtual FLONG Release() override {
-        // Since type of m_pWeakRef is WeakReference,
-        // this call will not be virtual and should be inlined
-        return m_pWeakRef->ReleaseStrongRef();
-    }
-
-    template <class TPreObjectDestroy>
-    inline FLONG Release(TPreObjectDestroy&& PreObjectDestroy) {
-        return m_pWeakRef->ReleaseStrongRef(
-            std::forward<TPreObjectDestroy>(PreObjectDestroy));
-    }
-
-    IWeakReference* GetWeakReference() override final { return m_pWeakRef; }
-
-    WeakReferenceImpl* GetWeakReferenceImpl() { return m_pWeakRef; }
-
- protected:
-    template <typename ObjectType, typename AllocatorType>
-    friend class details::PackedObjectWrapper;
-    template <typename AllocatorType>
-    friend class MakeNewRCObj;
-
-    friend class WeakReferenceImpl;
-
-    template <typename ObjectType>
-    friend struct details::WeakRefTypeTrait;  // Used for get implement object type of
-                                              // IWeakReference.
-
-    using WeakRefImplType = WeakReferenceImpl;
-
- private:
-    using WeakReferenceImplStorage =
-        std::aligned_storage<sizeof(WeakReferenceImpl), alignof(WeakReferenceImpl)>::type;
-    // Note that the type of the reference counters is WeakReference,
-    // not IWeakReference. This avoids virtual calls from
-    // AddRef() and Release() methods
-#if DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
-    WeakReferenceImplStorage m_WeakRef;
-#endif
-    WeakReferenceImpl* const m_pWeakRef;
-};
-
-template <typename BaseItf>
-struct WeakableImpl : public RefCountedObject<BaseItf> {
- public:
-    WeakableImpl() : RefCountedObject<BaseItf>{} {}
+    QIRootLayer() {}
 
     FRESULT QueryInterface(FREFIID riid, void** ppv) override {
-        if (riid == IID_IObject) {
-            if (ppv) {
-                *ppv = static_cast<IObject*>(this);
-                this->AddRef();
-            }
-            return FS_OK;
-        } else {
-            if (ppv) *ppv = nullptr;
-
-            return FE_NOINTERFACE;
-        }
-    }
-
-private:
-   WeakableImpl(const WeakableImpl&) = delete;
-   WeakableImpl(WeakableImpl&&) = delete;
-   WeakableImpl& operator=(const WeakableImpl&) = delete;
-   WeakableImpl& operator=(WeakableImpl&&) = delete;
-};
-
-template <typename BaseItf>
-struct ObjectImpl: public BaseItf, public UserAllocated {
- public:
-    ObjectImpl() {}
-
-    FRESULT QueryInterface(FREFIID riid, void** ppv) override {
-        if (riid == IID_IObject) {
-            if (ppv) {
-                *ppv = static_cast<IObject*>(this);
-                this->AddRef();
-            }
-            return FS_OK;
-        } else {
-            if (ppv) *ppv = nullptr;
-
-            return FE_NOINTERFACE;
-        }
+        return QIQueryRoot<false, QIRootLayer, QIBases...>(static_cast<void*>(this), riid, ppv);
     }
 
     FLONG AddRef() override final {
@@ -793,86 +880,314 @@ struct ObjectImpl: public BaseItf, public UserAllocated {
 
     void DestroyObject() {
         auto ObjWrapperStorageCopy = m_ObjWrapperStorage;
-        auto pWrapper =
-            reinterpret_cast<details::ObjectWrapperBase*>(&ObjWrapperStorageCopy);
+        auto pWrapper = reinterpret_cast<ObjectWrapperBase*>(&ObjWrapperStorageCopy);
         pWrapper->DestroyObject();
     }
 
  private:
     template <typename AllocatorType>
-    friend class MakeNewRCObj;
+    friend class donut::MakeNewRCObj;
+    template <typename ObjectType, typename AllocatorType>
+    friend class ObjectWrapper;
 
     template <typename ObjectType, typename AllocatorType>
     void Attach(ObjectType* pObject, AllocatorType* pAllocator) throw() {
-        static_assert(sizeof(details::ObjectWrapper<ObjectType, AllocatorType>) ==
-                          sizeof(m_ObjWrapperStorage),
+        static_assert(sizeof(ObjectWrapper<ObjectType, AllocatorType>) == sizeof(m_ObjWrapperStorage),
                       "Unexpected object wrapper size");
-        new (&m_ObjWrapperStorage)
-            details::ObjectWrapper<ObjectType, AllocatorType>{pObject, pAllocator};
+        new (&m_ObjWrapperStorage) ObjectWrapper<ObjectType, AllocatorType>{pObject, pAllocator};
     }
 
-    ObjectImpl(const ObjectImpl&) = delete;
-    ObjectImpl(ObjectImpl&&) = delete;
-    ObjectImpl& operator=(const ObjectImpl&) = delete;
-    ObjectImpl& operator=(ObjectImpl&&) = delete;
+    QIRootLayer(const QIRootLayer&) = delete;
+    QIRootLayer(QIRootLayer&&) = delete;
+    QIRootLayer& operator=(const QIRootLayer&) = delete;
+    QIRootLayer& operator=(QIRootLayer&&) = delete;
 
     std::atomic<FLONG> m_NumStrongReferences{1};
-    details::ObjectWrapperStorage m_ObjWrapperStorage{};
+    ObjectWrapperStorage m_ObjWrapperStorage{};
 };
 
-template <
-    typename BaseItf,
-    typename std::enable_if<!details::IsWeakReferenceSource<BaseItf>::value, int>::type = 0>
-class DelegatingObjectImpl : public BaseItf, private UserAllocated {
+template <typename... QIBases>
+class QIRootLayer<QILifetime::Weak, QIBases...> : public QIBases..., protected UserAllocated {
+    static_assert(QICheckRootBases<QILifetime::Weak, QIBases...>());
+
  public:
-    DelegatingObjectImpl(IObject* pOwner) : m_pOwner(pOwner) {}
+    using QITraits = QITraits<QILifetime::Weak, QIRootLayer>;
+
+#if DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
+    // Constructor with weak reference syntax
+    QIRootLayer() noexcept { ::new (&m_Storage.WeakRef) WeakReferenceImpl{}; }
+#else
+    QIRootLayer() noexcept {
+        m_Storage.pWeakRef = (WeakReferenceImpl*)(*(uintptr_t*)((uint8_t*)this + offsetof(QIRootLayer, m_Storage)));
+    }
+#endif
+
+    // Virtual destructor makes sure all derived classes can be destroyed
+    // through the pointer to the base class
+    virtual ~QIRootLayer() {
+        // m_pWeakRef stays valid while the dtor runs when the object is destroyed via
+        // ReleaseStrongRef(): TryDestroyObject() holds the implicit weak reference until
+        // the dtor returns.
+    }
+
+    inline virtual FLONG AddRef() override final {
+        // Since type of m_pWeakRef is WeakReference,
+        // this call will not be virtual and should be inlined
+        return GetWeakReferenceImpl()->AddStrongRef();
+    }
+
+    // Not final: derived classes may override it to run code before destruction
+    // (see Release(TPreObjectDestroy&&) below).
+    inline virtual FLONG Release() override {
+        // Since type of m_pWeakRef is WeakReference,
+        // this call will not be virtual and should be inlined
+        return GetWeakReferenceImpl()->ReleaseStrongRef();
+    }
+
+    template <class TPreObjectDestroy>
+    inline FLONG Release(TPreObjectDestroy&& PreObjectDestroy) {
+        return GetWeakReferenceImpl()->ReleaseStrongRef(std::forward<TPreObjectDestroy>(PreObjectDestroy));
+    }
+
+    FRESULT QueryInterface(FREFIID riid, void** ppv) override {
+        return QIQueryRoot<false, QIRootLayer, QIBases...>(static_cast<void*>(this), riid, ppv);
+    }
+
+    void GetWeakReference(IWeakReference** ppv) override final {
+        if (ppv) {
+            auto pWeakRef = GetWeakReferenceImpl();
+            pWeakRef->AddRef();
+            *ppv = pWeakRef;
+        }
+    }
+
+    WeakReferenceImpl* GetWeakReferenceImpl() {
+#if DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
+        return &m_Storage.WeakRef;
+#else
+        return m_Storage.pWeakRef;
+#endif
+    }
+
+ protected:
+    template <typename ObjectType, typename AllocatorType>
+    friend class PackedObjectWrapper;
+    template <typename ObjectType, typename AllocatorType>
+    friend class ObjectWrapper;
+    template <typename AllocatorType>
+    friend class donut::MakeNewRCObj;
+
+    friend class WeakReferenceImpl;
+
+    template <typename ObjectType>
+    friend struct WeakRefTypeTrait;  // Used for get implement object type of IWeakReference.
+
+    using WeakRefImplType = WeakReferenceImpl;
+
+ private:
+    QIRootLayer(const QIRootLayer&) = delete;
+    QIRootLayer(QIRootLayer&&) = delete;
+    QIRootLayer& operator=(const QIRootLayer&) = delete;
+    QIRootLayer& operator=(QIRootLayer&&) = delete;
+
+    template <typename ObjectType, typename AllocatorType>
+    void Attach(ObjectType* pObject, AllocatorType* pAllocator) noexcept {
+#if DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
+        m_Storage.WeakRef.template Attach<ObjectType, AllocatorType>(pObject, pAllocator);
+#else
+        m_Storage.pWeakRef->template Attach<ObjectType, AllocatorType>(pObject, pAllocator);
+#endif
+    }
+
+    // Note that the type of the reference counters is WeakReference,
+    // not IWeakReference. This avoids virtual calls from
+    // AddRef() and Release() methods
+    union WeakReferenceImplStorage {
+        WeakReferenceImplStorage() {}
+        ~WeakReferenceImplStorage() {}
+#if DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
+        WeakReferenceImpl WeakRef;
+#else
+        WeakReferenceImpl* pWeakRef;
+#endif
+    } m_Storage;
+};
+
+template <typename... QIBases>
+class QIRootLayer<QILifetime::Delegating, QIBases...> : public QIBases..., protected UserAllocated {
+    static_assert(QICheckRootBases<QILifetime::Delegating, QIBases...>());
+
+ public:
+    using QITraits = QITraits<QILifetime::Delegating, QIRootLayer>;
+
+    QIRootLayer(IObject* pOwner) : m_pOwner(pOwner) {}
 
     FLONG AddRef() override final { return m_pOwner->AddRef(); }
 
     FLONG Release() override final { return m_pOwner->Release(); }
 
-    FRESULT QueryInterface(FREFIID riid, void** ppv) override {
-        return m_pOwner->QueryInterface(riid, ppv);
-    }
+    FRESULT QueryInterface(FREFIID riid, void** ppv) override { return m_pOwner->QueryInterface(riid, ppv); }
 
     virtual FRESULT NonDelegatingQueryInterface(FREFIID riid, void** ppv) {
-        return FE_NOINTERFACE;
+        return QIQueryRoot<true, QIRootLayer, QIBases...>(static_cast<void*>(this), riid, ppv);
     }
 
     void DestroyObject() {
         auto ObjWrapperStorageCopy = m_ObjWrapperStorage;
-        auto pWrapper =
-            reinterpret_cast<details::ObjectWrapperBase*>(&ObjWrapperStorageCopy);
+        auto pWrapper = reinterpret_cast<ObjectWrapperBase*>(&ObjWrapperStorageCopy);
         pWrapper->DestroyObject();
     }
 
  protected:
-
     template <typename ObjectType, typename AllocatorType>
-    friend class details::ObjectWrapper;
+    friend class ObjectWrapper;
 
     IObject* m_pOwner;
 
  private:
     template <typename AllocatorType>
-    friend class MakeNewRCObj;
+    friend class donut::MakeNewRCObj;
 
     template <typename ObjectType, typename AllocatorType>
     void Attach(ObjectType* pObject, AllocatorType* pAllocator) throw() {
-        static_assert(sizeof(details::ObjectWrapper<ObjectType, AllocatorType>) ==
-                          sizeof(m_ObjWrapperStorage),
+        static_assert(sizeof(ObjectWrapper<ObjectType, AllocatorType>) == sizeof(m_ObjWrapperStorage),
                       "Unexpected object wrapper size");
-        new (&m_ObjWrapperStorage)
-            details::ObjectWrapper<ObjectType, AllocatorType>{pObject, pAllocator};
+        new (&m_ObjWrapperStorage) ObjectWrapper<ObjectType, AllocatorType>{pObject, pAllocator};
     }
 
-    DelegatingObjectImpl(const DelegatingObjectImpl&) = delete;
-    DelegatingObjectImpl(DelegatingObjectImpl&&) = delete;
-    DelegatingObjectImpl& operator=(const DelegatingObjectImpl&) = delete;
-    DelegatingObjectImpl& operator=(DelegatingObjectImpl&&) = delete;
+    QIRootLayer(const QIRootLayer&) = delete;
+    QIRootLayer(QIRootLayer&&) = delete;
+    QIRootLayer& operator=(const QIRootLayer&) = delete;
+    QIRootLayer& operator=(QIRootLayer&&) = delete;
 
-    details::ObjectWrapperStorage m_ObjWrapperStorage{};
+    ObjectWrapperStorage m_ObjWrapperStorage{};
 };
+
+template <typename... QIBases>
+class QIRootLayer<QILifetime::DelegatingWeak, QIBases...> : public QIBases..., protected UserAllocated {
+    static_assert(QICheckRootBases<QILifetime::DelegatingWeak, QIBases...>());
+
+ public:
+    using QITraits = QITraits<QILifetime::DelegatingWeak, QIRootLayer>;
+
+    QIRootLayer(IWeakReferenceSource* pOwner) : m_pOwner(pOwner) {}
+
+    FLONG AddRef() override final { return m_pOwner->AddRef(); }
+
+    FLONG Release() override final { return m_pOwner->Release(); }
+
+    FRESULT QueryInterface(FREFIID riid, void** ppv) override { return m_pOwner->QueryInterface(riid, ppv); }
+
+    void GetWeakReference(IWeakReference** ppv) override { return m_pOwner->GetWeakReference(ppv); }
+
+    virtual FRESULT NonDelegatingQueryInterface(FREFIID riid, void** ppv) {
+        return QIQueryRoot<true, QIRootLayer, QIBases...>(static_cast<void*>(this), riid, ppv);
+    }
+
+    void DestroyObject() {
+        auto ObjWrapperStorageCopy = m_ObjWrapperStorage;
+        auto pWrapper = reinterpret_cast<ObjectWrapperBase*>(&ObjWrapperStorageCopy);
+        pWrapper->DestroyObject();
+    }
+
+ protected:
+    template <typename ObjectType, typename AllocatorType>
+    friend class ObjectWrapper;
+
+    IWeakReferenceSource* m_pOwner;
+
+ private:
+    template <typename AllocatorType>
+    friend class donut::MakeNewRCObj;
+
+    template <typename ObjectType, typename AllocatorType>
+    void Attach(ObjectType* pObject, AllocatorType* pAllocator) throw() {
+        static_assert(sizeof(ObjectWrapper<ObjectType, AllocatorType>) == sizeof(m_ObjWrapperStorage),
+                      "Unexpected object wrapper size");
+        new (&m_ObjWrapperStorage) ObjectWrapper<ObjectType, AllocatorType>{pObject, pAllocator};
+    }
+
+    QIRootLayer(const QIRootLayer&) = delete;
+    QIRootLayer(QIRootLayer&&) = delete;
+    QIRootLayer& operator=(const QIRootLayer&) = delete;
+    QIRootLayer& operator=(QIRootLayer&&) = delete;
+
+    ObjectWrapperStorage m_ObjWrapperStorage{};
+};
+
+// ---- Pass-through layer: the single base already owns the reference count -----------------------------
+// Bar : ObjectImpl<Foo> where Foo derives from ObjectImpl<...>: no second reference count, no
+// new vptr. ROUTE_PARENT() in Bar calls Foo's QueryInterface (or NonDelegatingQueryInterface).
+template <QILifetime QIK, typename QIB0>
+class QIPassThroughLayer<QIK, QIB0> : public QIB0 {
+    static_assert(QIB0::QITraits::Lifetime == QIK,
+                  "The base that owns the reference count must be of the same family (ObjectImpl / "
+                  "WeakReferenceSourceImpl / DelegatingObjectImpl / DelegatingWeakReferenceSourceImpl)");
+
+ public:
+    using QITraits = QITraits<QIK, QIPassThroughLayer>;
+    using QIB0::QIB0;
+};
+
+template <QILifetime QIK, typename... QIBases>
+using QILayer = std::conditional_t<sizeof...(QIBases) == 1 && (QIOwnsRefCount<QIBases> && ...),
+                                 QIPassThroughLayer<QIK, QIBases...>, QIRootLayer<QIK, QIBases...>>;
+
+}  // namespace details
+
+/// Base classes of reference-counted objects. Bases are the class's interfaces (IObject or interfaces
+/// derived from it) and classes implementing QueryInterface (mixins), or - for a class derived from an
+/// existing implementation - that implementation alone:
+///
+///     class Foo : public ObjectImpl<IA, IB> { ... };    // owns the reference count
+///     class Bar : public ObjectImpl<Foo> { ... };        // routes to Foo, adds no reference count
+///
+/// A class that ends its interface table with DONUT_END_INTERFACE_TABLE_ROUTE_PARENT() routes everything
+/// its table does not answer to these bases.
+// In the bodies below, donut::details rather than details: MSVC also searches the (user) bases for names.
+template <typename... QIBases>
+class ObjectImpl : public details::QILayer<details::QILifetime::Object, QIBases...> {
+    using QILayer = donut::details::QILayer<donut::details::QILifetime::Object, QIBases...>;
+
+ public:
+    using QILayer::QILayer;
+};
+
+/// Like ObjectImpl, with weak references: one of the bases is IWeakReferenceSource (or derived from it).
+template <typename... QIBases>
+class WeakReferenceSourceImpl : public details::QILayer<details::QILifetime::Weak, QIBases...> {
+    using QILayer = donut::details::QILayer<donut::details::QILifetime::Weak, QIBases...>;
+
+ public:
+    using QILayer::QILayer;
+};
+
+/// An aggregated object: AddRef/Release/QueryInterface go to the owner; the owner reaches this object's
+/// own interfaces through NonDelegatingQueryInterface.
+template <typename... QIBases>
+class DelegatingObjectImpl : public details::QILayer<details::QILifetime::Delegating, QIBases...> {
+    using QILayer = donut::details::QILayer<donut::details::QILifetime::Delegating, QIBases...>;
+
+ public:
+    using QILayer::QILayer;
+};
+
+template <typename... QIBases>
+class DelegatingWeakReferenceSourceImpl : public details::QILayer<details::QILifetime::DelegatingWeak, QIBases...> {
+    using QILayer = donut::details::QILayer<donut::details::QILifetime::DelegatingWeak, QIBases...>;
+
+ public:
+    using QILayer::QILayer;
+};
+
+template <typename... Itfs>
+using RuntimeClass = std::conditional_t<details::IsWeakReferenceSource<Itfs...>::value,
+                                        WeakReferenceSourceImpl<Itfs...>, ObjectImpl<Itfs...>>;
+
+template <typename... Itfs>
+using RuntimeProxyClass =
+    std::conditional_t<details::IsWeakReferenceSource<Itfs...>::value, DelegatingWeakReferenceSourceImpl<Itfs...>,
+                       DelegatingObjectImpl<Itfs...>>;
 
 template <typename AllocatorType>
 class MakeNewRCObj {
@@ -912,7 +1227,7 @@ class MakeNewRCObj {
         CtorArgTypes&&... CtorArgs) const {
 #if DONUT_PACK_CONTROL_BLOCK_AND_OBJECT
         Tp* pObj = nullptr;
-        WeakReferenceImpl* pWeakRef = nullptr;
+        details::WeakReferenceImpl* pWeakRef = nullptr;
 
         try {
             if (m_pAllocator)
@@ -938,21 +1253,20 @@ class MakeNewRCObj {
 
         return pObj;
 #else
-        static_assert(offsetof(Tp, m_pWeakRef) == sizeof(void *), "Weak pointer address must be fit");
         using MyObjectStorage = ObjectTypeStorage<Tp>;
 
-        WeakReferenceImpl* pWeakRef = nullptr;
+        details::WeakReferenceImpl* pWeakRef = nullptr;
         MyObjectStorage* pMem = nullptr;
         Tp *pObj = nullptr;
         try {
-           pWeakRef = new WeakReferenceImpl;
+           pWeakRef = new details::WeakReferenceImpl;
 
             if(m_pAllocator)
                 pMem = new (m_pAllocator)MyObjectStorage;
             else
                 pMem = new MyObjectStorage;
 
-            ((WeakReferenceImpl *&)((Tp *)pMem)->m_pWeakRef) = pWeakRef;
+            ((Tp *)pMem)->m_Storage.pWeakRef = pWeakRef;
             pObj = ::new (pMem) Tp(std::forward<CtorArgTypes>(CtorArgs)...);
 
             pWeakRef->Attach<Tp, AllocatorType>(pObj, m_pAllocator);
@@ -977,7 +1291,7 @@ class MakeNewRCObj {
 #endif
     }
 
-    // SFINEA overload for IObject (but non-IWeakable) kind object type
+    // SFINEA overload for IObject (but non-IWeakReferenceSource) kind object type
     template <typename Tp, typename... CtorArgTypes>
     Tp* RcNewImpl(
         typename std::enable_if<!details::IsWeakReferenceSource<Tp>::value, int>::type,

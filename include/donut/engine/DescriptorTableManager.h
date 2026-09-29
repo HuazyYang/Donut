@@ -64,7 +64,7 @@ namespace donut::engine
         DescriptorHandle& operator=(const DescriptorHandle&) = delete;
     };
 
-    class DescriptorTableManager : public WeakableImpl<IWeakable>
+    class DescriptorTableManager : public WeakReferenceSourceImpl<IWeakReferenceSource>
     {
     protected:
         // Custom hasher that doesn't look at the binding slot

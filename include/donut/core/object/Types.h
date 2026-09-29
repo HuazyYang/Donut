@@ -170,10 +170,12 @@ struct IWeakReference : public IObject {
     virtual FBOOL IsExpired() const = 0;
 };
 
-DONUT_IID(IWeakable, "00000000-0000-0000-0000-000000000005")
-struct IWeakable : public IObject {
-    DONUT_DECLARE_UUID_TRAITS(IWeakable)
-    virtual IWeakReference* GetWeakReference() = 0;
+DONUT_IID(IWeakReferenceSource, "00000000-0000-0000-0000-000000000005")
+struct IWeakReferenceSource : public IObject {
+    DONUT_DECLARE_UUID_TRAITS(IWeakReferenceSource)
+    /// Returns the weak reference of this object in *ppv with its reference counter
+    /// incremented; the caller must Release() it. Does nothing if ppv is null.
+    virtual void GetWeakReference(IWeakReference** ppv) = 0;
 };
 
 // Common Status Code
@@ -200,14 +202,7 @@ struct IDataBlob : public IObject {
     virtual void* GetDataPtr() = 0;
 };
 
-FRESULT CreateBlob(size_t Size, IDataBlob** ppBlob);
-
-FRESULT CreateStringBlob(size_t Size, IDataBlob** ppBlob);
-
-FRESULT CreateProxyBlob(size_t Size, const void* pData, IDataBlob** ppBlob);
-
-FRESULT CreateProxyBlobFromSource(IDataBlob* pSource, size_t Offset, size_t Size,
-                                  IDataBlob** ppBlob);
+// CreateBlob() and the other implementations: <donut/core/object/DataBlob.h>
 
 }  // namespace donut
 

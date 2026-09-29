@@ -4,7 +4,20 @@
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
-#include <donut/core/object/MemoryAllocator.h>
+#include <thread>
+#include <donut/core/object/Memory.h>
+
+// X86 PAUSE or ARM YIELD: reduces contention between hyper-threads while spinning.
+#if defined(_MSC_VER) && ((_M_IX86_FP >= 2) || defined(_M_X64))
+#include <emmintrin.h>
+#define DONUT_CPU_PAUSE() _mm_pause()
+#elif (defined(__clang__) || defined(__GNUC__)) && (defined(__i386__) || defined(__x86_64__))
+#define DONUT_CPU_PAUSE() __builtin_ia32_pause()
+#elif (defined(__clang__) || defined(__GNUC__)) && (defined(__arm__) || defined(__aarch64__))
+#define DONUT_CPU_PAUSE() asm volatile("yield")
+#else
+#define DONUT_CPU_PAUSE() ((void)0)
+#endif
 
 namespace donut {
 
@@ -56,7 +69,16 @@ public:
     }
 
 private:
-    void Wait() noexcept;
+    void Wait() noexcept {
+        // Wait for the lock to be released without generating cache misses.
+        constexpr size_t NumAttemptsToYield = 64;
+        for (size_t Attempt = 0; Attempt < NumAttemptsToYield; ++Attempt) {
+            if (!is_locked())
+                return;
+            DONUT_CPU_PAUSE();
+        }
+        std::this_thread::yield();
+    }
 
 private:
     std::atomic<bool> m_IsLocked{ false };
@@ -157,6 +179,23 @@ private:
     std::atomic_int m_NumThreadsAwaken{ 0 };
 };
 
+namespace details {
+#if defined(_WIN64) || (defined(__linux__) && defined(__x86_64__))
+inline constexpr uint64_t SListHeaderCounterBits = 17;
+inline constexpr uint64_t SListHeaderPtrMask = (~0ull) >> SListHeaderCounterBits;
+inline constexpr uint64_t SListHeaderCounterMask = ~SListHeaderPtrMask;
+inline constexpr uint64_t SListHeaderCounterInc = SListHeaderPtrMask + 1;
+#else
+inline constexpr uint64_t SListHeaderCounterBits = 32;
+inline constexpr uint64_t SListHeaderPtrMask = (-1ULL) >> SListHeaderCounterBits;
+inline constexpr uint64_t SListHeaderCounterMask = ~SListHeaderPtrMask;
+inline constexpr uint64_t SListHeaderCounterInc = SListHeaderPtrMask + 1;
+#endif
+
+inline constexpr uint64_t SharedSlimLockExclusiveMask = 1ULL << 63;
+inline constexpr uint64_t SharedSlimLockSharedMask = ~SharedSlimLockExclusiveMask;
+}  // namespace details
+
 struct LFStackEntry {
     LFStackEntry *next;
 };
@@ -166,36 +205,144 @@ struct LFStackEntry {
  * @ref gcc/+/master/libsanitizer/sanitizer_common/sanitizer_lfstack.h
  */
 struct LFStack {
-    LFStack();
-    ~LFStack();
+    LFStack() : head_{0} {}
+    ~LFStack() {}
 
-    bool Empty() const;
-    LFStackEntry *Top() const;
-    void Push(LFStackEntry *p);
-    void Push(LFStackEntry *slice, LFStackEntry *slice_end);
-    LFStackEntry *Pop();
-    LFStackEntry *Flush();
+    bool Empty() const {
+        uint64_t cmp = head_.load(std::memory_order_relaxed);
+        return (cmp & details::SListHeaderPtrMask) == 0;
+    }
+
+    LFStackEntry *Top() const {
+        uint64_t cmp = head_.load(std::memory_order_relaxed);
+        return (LFStackEntry *)(uintptr_t)(cmp & details::SListHeaderPtrMask);
+    }
+
+    void Push(LFStackEntry *p) {
+        uint64_t cmp = head_.load(std::memory_order_relaxed);
+        for (;;) {
+            uint64_t cnt = (cmp & details::SListHeaderCounterMask) + details::SListHeaderCounterInc;
+            uint64_t xch = (uint64_t)(uintptr_t)p | cnt;
+            p->next = (LFStackEntry *)(uintptr_t)(cmp & details::SListHeaderPtrMask);
+            if (head_.compare_exchange_weak(cmp, xch, std::memory_order_release)) break;
+        }
+    }
+
+    void Push(LFStackEntry *slice, LFStackEntry *slice_end) {
+        uint64_t cmp = head_.load(std::memory_order_relaxed);
+        for (;;) {
+            uint64_t cnt = (cmp & details::SListHeaderCounterMask) + details::SListHeaderCounterInc;
+            uint64_t xch = (uint64_t)(uintptr_t)slice | cnt;
+            slice_end->next = (LFStackEntry *)(uintptr_t)(cmp & details::SListHeaderPtrMask);
+            if (head_.compare_exchange_weak(cmp, xch, std::memory_order_release)) break;
+        }
+    }
+
+    LFStackEntry *Pop() {
+        uint64_t cmp = head_.load(std::memory_order_acquire);
+        for (;;) {
+            LFStackEntry *cur = (LFStackEntry *)(uintptr_t)(cmp & details::SListHeaderPtrMask);
+            if (cur == nullptr) return nullptr;
+
+            LFStackEntry *nxt = cur->next;
+            uint64_t cnt = (cmp & details::SListHeaderCounterMask);
+            uint64_t xch = (uint64_t)(uintptr_t)nxt | cnt;
+            if (head_.compare_exchange_weak(cmp, xch, std::memory_order_acquire)) return cur;
+        }
+    }
+
+    LFStackEntry *Flush() {
+        uint64_t cmp = head_.load(std::memory_order_acquire);
+        for (;;) {
+            LFStackEntry *cur = (LFStackEntry *)(uintptr_t)(cmp & details::SListHeaderPtrMask);
+            if (cur == nullptr) return nullptr;
+
+            uint64_t cnt = (cmp & details::SListHeaderCounterMask);
+            uint64_t xch = cnt;
+            if (head_.compare_exchange_weak(cmp, xch, std::memory_order_acquire)) return cur;
+        }
+    }
 
     std::atomic<uint64_t> head_;
 };
 
 struct SharedSpinLock {
-    SharedSpinLock();
-    ~SharedSpinLock();
+    SharedSpinLock() : shared_cnt_{} {}
+    ~SharedSpinLock() {}
 
-    void lock() noexcept;
-    bool try_lock() noexcept;
-    void unlock() noexcept;
+    void lock() noexcept {
+        while (true) {
+            uint64_t cmp = 0;
+            uint64_t xch = details::SharedSlimLockExclusiveMask;
+            if (shared_cnt_.compare_exchange_weak(cmp, xch, std::memory_order_acquire)) break;
 
-    void lock_shared() noexcept;
-    bool try_lock_shared() noexcept;
-    void unlock_shared() noexcept;
+            Wait();
+        }
+    }
+
+    bool try_lock() noexcept {
+        if (is_locked()) return false;
+
+        uint64_t cmp = 0;
+        uint64_t xch = details::SharedSlimLockExclusiveMask;
+        return shared_cnt_.compare_exchange_weak(cmp, xch, std::memory_order_acquire);
+    }
+
+    void unlock() noexcept { shared_cnt_.store(0, std::memory_order_relaxed); }
+
+    void lock_shared() noexcept {
+        uint64_t cmp = shared_cnt_.load(std::memory_order_release);
+        while (true) {
+            cmp &= details::SharedSlimLockSharedMask;
+            uint64_t xch = cmp + 1;
+            if (shared_cnt_.compare_exchange_weak(cmp, xch)) break;
+
+            WaitShared();
+        }
+    }
+
+    bool try_lock_shared() noexcept {
+        if (is_locked()) return false;
+        uint64_t cmp = shared_cnt_.load(std::memory_order_release);
+        cmp &= details::SharedSlimLockSharedMask;
+        uint64_t xch = cmp + 1;
+        return shared_cnt_.compare_exchange_weak(cmp, xch);
+    }
+
+    void unlock_shared() noexcept {
+        shared_cnt_.fetch_add(-1, std::memory_order_release);
+    }
 
  private:
-    bool is_locked() noexcept;
-    bool is_locked_shared() noexcept;
-    void Wait();
-    void WaitShared();
+    bool is_locked() noexcept {
+        uint64_t cnt = shared_cnt_.load(std::memory_order_relaxed);
+        return cnt == details::SharedSlimLockExclusiveMask;
+    }
+
+    bool is_locked_shared() noexcept {
+        uint64_t cnt = shared_cnt_.load(std::memory_order_relaxed);
+        return (details::SharedSlimLockSharedMask & cnt) == cnt;
+    }
+
+    void Wait() {
+        // Wait for the lock to be released without generating cache misses.
+        constexpr size_t NumAttemptsToYield = 64;
+        for (size_t Attempt = 0; Attempt < NumAttemptsToYield; ++Attempt) {
+            if (!is_locked()) return;
+            DONUT_CPU_PAUSE();
+        }
+        std::this_thread::yield();
+    }
+
+    void WaitShared() {
+        // Wait for the lock to be released without generating cache misses.
+        constexpr size_t NumAttemptsToYield = 64;
+        for (size_t Attempt = 0; Attempt < NumAttemptsToYield; ++Attempt) {
+            if (!is_locked_shared()) return;
+            DONUT_CPU_PAUSE();
+        }
+        std::this_thread::yield();
+    }
 
     std::atomic<uint64_t> shared_cnt_;
 };
