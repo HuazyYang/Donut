@@ -55,4 +55,11 @@ if(WIN32)
     target_compile_definitions(donut_core PUBLIC NOMINMAX _CRT_SECURE_NO_WARNINGS)
 endif()
 
+if(MSVC)
+    # Donut and NVRHI headers are UTF-8 without a BOM; consumers must parse them as such.
+    target_compile_options(donut_core INTERFACE
+        $<$<COMPILE_LANGUAGE:C>:/utf-8>
+        $<$<COMPILE_LANGUAGE:CXX>:/utf-8>)
+endif()
+
 set_target_properties(donut_core PROPERTIES FOLDER Donut)
