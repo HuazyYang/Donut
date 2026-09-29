@@ -16,3 +16,6 @@
 [submodule "ShaderMake"]
 	path = ShaderMake
 	url = https://github.com/NVIDIA-RTX/ShaderMake.git
+[submodule "thirdparty/shadertool"]
+	path = thirdparty/shadertool
+	url = git@github.com:HuazyYang/ShaderTool.git

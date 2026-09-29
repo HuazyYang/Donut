@@ -58,6 +58,7 @@ option(DONUT_WITH_AFTERMATH "Enable Aftermath crash dump generation with Donut" 
 option(DONUT_EMBED_SHADER_PDBS "Embed shader PDBs with shader binary files" OFF)
 
 option(DONUT_WITH_STATIC_SHADERS "Build Donut with statically linked shaders" OFF)
+option(DONUT_USE_SHADERMAKE "Build shaders with the legacy ShaderMake pipeline (transition only)" OFF)
 
 option(DONUT_WITH_AUDIO "Include Audio features (XAudio2)" OFF)
 option(DONUT_WITH_TINYEXR "Include TinyEXR" ON)
@@ -85,19 +86,21 @@ endif()
 
 add_subdirectory(thirdparty)
 
-if (NOT TARGET ShaderMake)
-    option(SHADERMAKE_FIND_FXC "" "${DONUT_WITH_DX11}")
-    if (DONUT_WITH_DX12 OR DONUT_WITH_VULKAN)
-        # Ask ShaderMake to download a build of DXC if we're building for DX12 or Vulkan,
-        # to have something in case Vulkan SDK is not installed.
-        option(SHADERMAKE_FIND_DXC "" ON)
-    else()
-        option(SHADERMAKE_FIND_DXC "" OFF)
-    endif()
-    # option(SHADERMAKE_FIND_DXC_VK "" "${DONUT_WITH_VULKAN}")
-    set(SHADERMAKE_FIND_DXC_VK OFF)
+if (DONUT_USE_SHADERMAKE)
+    if (NOT TARGET ShaderMake)
+        option(SHADERMAKE_FIND_FXC "" "${DONUT_WITH_DX11}")
+        if (DONUT_WITH_DX12 OR DONUT_WITH_VULKAN)
+            # Ask ShaderMake to download a build of DXC if we're building for DX12 or Vulkan,
+            # to have something in case Vulkan SDK is not installed.
+            option(SHADERMAKE_FIND_DXC "" ON)
+        else()
+            option(SHADERMAKE_FIND_DXC "" OFF)
+        endif()
+        # option(SHADERMAKE_FIND_DXC_VK "" "${DONUT_WITH_VULKAN}")
+        set(SHADERMAKE_FIND_DXC_VK OFF)
 
-    add_subdirectory(ShaderMake)
+        add_subdirectory(ShaderMake)
+    endif()
 endif()
 
 if (DONUT_WITH_NVRHI)

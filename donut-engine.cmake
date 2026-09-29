@@ -34,7 +34,7 @@ endif()
 add_library(donut_engine STATIC EXCLUDE_FROM_ALL ${donut_engine_src})
 target_include_directories(donut_engine PUBLIC include)
 
-target_link_libraries(donut_engine donut_core nvrhi jsoncpp_static stb cgltf ShaderMakeBlob)
+target_link_libraries(donut_engine donut_core nvrhi jsoncpp_static stb cgltf ShaderTool::Blob)
 
 add_dependencies(donut_engine donut_shaders)
 

@@ -20,6 +20,8 @@
 # DEALINGS IN THE SOFTWARE.
 
 
+if (DONUT_USE_SHADERMAKE)
+
 include(../compileshaders.cmake)
 
 file(GLOB donut_shaders
@@ -42,7 +44,7 @@ else()
 endif()
 
 # List all outputs of the shader compile target to ensure proper rebuilds when using Ninja
-set(byproducts 
+set(byproducts
 	blit_ps
 	fullscreen_vs
 	ies_profile_cs
@@ -102,3 +104,69 @@ donut_compile_shaders_all_platforms(
 	BYPRODUCTS_NO_EXT ${byproducts}
     SHADERMAKE_OPTIONS ${shadermake_options}
 )
+
+else() # ShaderTool pipeline (default)
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/shadertool/cmake/ShaderToolFunctions.cmake)
+
+file(GLOB donut_shaders
+	"*.hlsl"
+	"passes/*.hlsl"
+	"../include/donut/shaders/*.hlsli"
+	"../include/donut/shaders/*.h"
+)
+
+if(DONUT_SHADERS_OUTPUT_DIR AND NOT DONUT_WITH_STATIC_SHADERS)
+	set(output_base ${DONUT_SHADERS_OUTPUT_DIR})
+else()
+	set(output_base ${CMAKE_CURRENT_BINARY_DIR}/compiled_shaders)
+endif()
+
+if(DONUT_WITH_STATIC_SHADERS)
+	set(output_mode "HEADER_BLOB")
+else()
+	set(output_mode "BINARY_BLOB")
+endif()
+
+set(donut_shader_backends)
+if (DONUT_WITH_DX11)
+	list(APPEND donut_shader_backends DXBC)
+endif()
+if (DONUT_WITH_DX12)
+	list(APPEND donut_shader_backends DXIL)
+endif()
+if (DONUT_WITH_VULKAN)
+	list(APPEND donut_shader_backends SPIRV)
+endif()
+
+if(DONUT_WITH_AFTERMATH OR DONUT_EMBED_SHADER_PDBS)
+	set(shadertool_pdb_options EMBED_PDB)
+else()
+	set(shadertool_pdb_options)
+endif()
+
+if (donut_shader_backends)
+	shadertool_add_shader_objects(
+		TARGET donut_shaders
+		CONFIG_FILE ${CMAKE_CURRENT_LIST_DIR}/DonutShaders.cfg
+		BACKENDS ${donut_shader_backends}
+		OUTPUT_MODE ${output_mode}
+		OUTPUT_DIRECTORY ${output_base}
+		SHADER_MODEL 6_5
+		INCLUDE_DIRECTORIES ${DONUT_SHADER_INCLUDE_DIR}
+		DEFINES_DXBC TARGET_D3D11
+		DEFINES_DXIL TARGET_D3D12
+		DEFINES_SPIRV SPIRV TARGET_VULKAN
+		SOURCES ${donut_shaders}
+		FOLDER Donut
+		${shadertool_pdb_options}
+	)
+else()
+	# No graphics backends enabled: keep the donut_shaders target so that
+	# add_dependencies(...) in donut-engine/render/app keeps working, matching
+	# the legacy branch which also creates the target unconditionally.
+	add_custom_target(donut_shaders SOURCES ${donut_shaders})
+	set_target_properties(donut_shaders PROPERTIES FOLDER Donut)
+endif()
+
+endif()

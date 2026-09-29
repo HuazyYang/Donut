@@ -24,7 +24,7 @@
 #include <donut/core/vfs/VFS.h>
 #include <donut/core/log.h>
 #include <donut/core/string_utils.h>
-#include <ShaderMake/ShaderBlob.h>
+#include <ShaderToolBlob.h>
 #if DONUT_WITH_AFTERMATH
 #include <donut/app/AftermathCrashDump.h>
 #endif
@@ -32,6 +32,27 @@
 using namespace std;
 using namespace donut::vfs;
 using namespace donut::engine;
+
+// Builds the "permutation not found" message using the two-call sizing convention
+// of ShaderToolBlobFormatNotFoundMessage (the required length excludes the NUL,
+// the capacity passed with a buffer must include it).
+static std::string FormatShaderNotFoundMessage(const void* blob, size_t blobSize,
+    const ShaderToolBlobConstant* constants, size_t numConstants)
+{
+    std::string message = "Couldn't find the required shader permutation in the blob.";
+
+    size_t length = 0;
+    if (ShaderToolBlobFormatNotFoundMessage(blob, blobSize, constants, numConstants, nullptr, 0, &length) == 0)
+    {
+        message.resize(length + 1);
+        if (ShaderToolBlobFormatNotFoundMessage(blob, blobSize, constants, numConstants, &message[0], length + 1, nullptr) == 0)
+            message.resize(length);
+        else
+            message = "Couldn't find the required shader permutation in the blob.";
+    }
+
+    return message;
+}
 
 ShaderFactory::ShaderFactory(nvrhi::IDevice *rendererInterface,
 	IFileSystem* fs,
@@ -128,20 +149,20 @@ nvrhi::ShaderHandle ShaderFactory::CreateStaticShader(StaticShader shader, const
     if (!shader.pBytecode || !shader.size)
         return nullptr;
 
-    vector<ShaderMake::ShaderConstant> constants;
+    vector<ShaderToolBlobConstant> constants;
     if (pDefines)
     {
         for (const ShaderMacro& define : *pDefines)
-            constants.push_back(ShaderMake::ShaderConstant{ define.name.c_str(), define.definition.c_str() });
+            constants.push_back(ShaderToolBlobConstant{ define.name.c_str(), define.definition.c_str() });
     }
 
     const void* permutationBytecode = nullptr;
     size_t permutationSize = 0;
-    if (!ShaderMake::FindPermutationInBlob(shader.pBytecode, shader.size, constants.data(), uint32_t(constants.size()), &permutationBytecode, &permutationSize))
+    if (ShaderToolBlobFindPermutation(shader.pBytecode, shader.size, constants.data(), constants.size(), &permutationBytecode, &permutationSize) != 0)
     {
-        const std::string message = ShaderMake::FormatShaderNotFoundMessage(shader.pBytecode, shader.size, constants.data(), uint32_t(constants.size()));
+        const std::string message = FormatShaderNotFoundMessage(shader.pBytecode, shader.size, constants.data(), constants.size());
         log::error("%s", message.c_str());
-        
+
         return nullptr;
     }
 
@@ -182,18 +203,18 @@ nvrhi::ShaderLibraryHandle ShaderFactory::CreateStaticShaderLibrary(StaticShader
     if (!shader.pBytecode || !shader.size)
         return nullptr;
 
-    vector<ShaderMake::ShaderConstant> constants;
+    vector<ShaderToolBlobConstant> constants;
     if (pDefines)
     {
         for (const ShaderMacro& define : *pDefines)
-            constants.push_back(ShaderMake::ShaderConstant{ define.name.c_str(), define.definition.c_str() });
+            constants.push_back(ShaderToolBlobConstant{ define.name.c_str(), define.definition.c_str() });
     }
-    
+
     const void* permutationBytecode = nullptr;
     size_t permutationSize = 0;
-    if (!ShaderMake::FindPermutationInBlob(shader.pBytecode, shader.size, constants.data(), uint32_t(constants.size()), &permutationBytecode, &permutationSize))
+    if (ShaderToolBlobFindPermutation(shader.pBytecode, shader.size, constants.data(), constants.size(), &permutationBytecode, &permutationSize) != 0)
     {
-        const std::string message = ShaderMake::FormatShaderNotFoundMessage(shader.pBytecode, shader.size, constants.data(), uint32_t(constants.size()));
+        const std::string message = FormatShaderNotFoundMessage(shader.pBytecode, shader.size, constants.data(), constants.size());
         log::error("%s", message.c_str());
 
         return nullptr;
@@ -257,11 +278,20 @@ std::pair<const void*, size_t> donut::engine::ShaderFactory::FindShaderFromHash(
 
         // the bytecode could contain multiple permutations
         std::vector<std::string> permutations;
-        ShaderMake::EnumeratePermutationsInBlob(shaderBytes, shaderSize, permutations);
+        auto enumerateCallback = [](void* context, const char* key, size_t keyLength, const void* /*binary*/, size_t /*binarySize*/) -> int
+        {
+            auto& keys = *static_cast<std::vector<std::string>*>(context);
+            if (keyLength == 0)
+                keys.push_back("<default>");
+            else
+                keys.push_back(std::string(key, keyLength));
+            return 0;
+        };
+        ShaderToolBlobEnumeratePermutations(shaderBytes, shaderSize, enumerateCallback, &permutations);
 
         if (permutations.size() > 1)
         {
-            std::vector<ShaderMake::ShaderConstant> permutationConstants;
+            std::vector<ShaderToolBlobConstant> permutationConstants;
             std::unordered_map<std::string, std::string> permutationDefines;
             for (auto permutation : permutations)
             {
@@ -277,12 +307,12 @@ std::pair<const void*, size_t> donut::engine::ShaderFactory::FindShaderFromHash(
                 // now that we have processed all defines in this permutation, can create the shader constants
                 for (const auto& [key, value] : permutationDefines)
                 {
-                    permutationConstants.push_back(ShaderMake::ShaderConstant{ key.c_str(), value.c_str() });
+                    permutationConstants.push_back(ShaderToolBlobConstant{ key.c_str(), value.c_str() });
                 }
                 const void* permutationBytecode = nullptr;
                 size_t permutationSize = 0;
-                if (ShaderMake::FindPermutationInBlob(shaderBytes, shaderSize, permutationConstants.data(),
-                    uint32_t(permutationConstants.size()), &permutationBytecode, &permutationSize))
+                if (ShaderToolBlobFindPermutation(shaderBytes, shaderSize, permutationConstants.data(),
+                    permutationConstants.size(), &permutationBytecode, &permutationSize) == 0)
                 {
                     uint64_t entryHash = hashGenerator(std::make_pair(permutationBytecode, permutationSize), m_Device->getGraphicsAPI());
                     if (entryHash == hash)
