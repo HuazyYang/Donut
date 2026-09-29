@@ -24,7 +24,7 @@
 // vertex buffer and the geometry shader expands each point (by SV_PrimitiveID)
 // into cones / cubes / rings / quads / lines.
 //
-// Variants (selected by ShaderMake value-defines, matched 1:1 at runtime):
+// Variants (selected by permutation value-defines, matched 1:1 at runtime):
 //   MANIP_MODE       : 1 = translate, 2 = rotate, 3 = scale  (Manipulator::ManipMode)
 //   ELEM_LINES       : 0 = solid triangles, 1 = outline lines
 //   PICK_PASS        : 0 = color, 1 = write widget id (pixel shader only)

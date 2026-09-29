@@ -20,93 +20,6 @@
 # DEALINGS IN THE SOFTWARE.
 
 
-if (DONUT_USE_SHADERMAKE)
-
-include(../compileshaders.cmake)
-
-file(GLOB donut_shaders
-	"*.hlsl"
-	"passes/*.hlsl"
-	"../include/donut/shaders/*.hlsli"
-	"../include/donut/shaders/*.h"
-)
-
-if(DONUT_SHADERS_OUTPUT_DIR AND NOT DONUT_WITH_STATIC_SHADERS)
-	set(output_base ${DONUT_SHADERS_OUTPUT_DIR})
-else()
-	set(output_base ${CMAKE_CURRENT_BINARY_DIR}/compiled_shaders)
-endif()
-
-if(DONUT_WITH_STATIC_SHADERS)
-	set(output_format "HEADER")
-else()
-	set(output_format "BINARY")
-endif()
-
-# List all outputs of the shader compile target to ensure proper rebuilds when using Ninja
-set(byproducts
-	blit_ps
-	fullscreen_vs
-	ies_profile_cs
-	imgui_pixel
-	imgui_vertex
-	rect_vs
-	sharpen_ps
-	skinning_cs
-	passes/bloom_ps
-	passes/cubemap_gs
-	passes/deferred_lighting_cs
-	passes/depth_ps
-	passes/depth_vs
-	passes/dlss_exposure_cs
-	passes/environment_map_ps
-	passes/exposure_cs
-	passes/forward_ps
-	passes/forward_vs
-	passes/gbuffer_ps
-	passes/gbuffer_vs
-	passes/manipulator_vs_main
-	passes/manipulator_gs_main
-	passes/manipulator_ps_main
-	passes/manipulator_scan_cs
-	passes/histogram_cs
-	passes/joints_main_ps
-	passes/joints_main_vs
-	passes/light_probe_cubemap_gs
-	passes/light_probe_diffuse_probe_ps
-	passes/light_probe_environment_brdf_ps
-	passes/light_probe_mip_ps
-	passes/light_probe_specular_probe_ps
-	passes/material_id_ps
-	passes/mipmapgen_cs
-	passes/motion_vectors_ps
-	passes/pixel_readback_cs
-	passes/sky_ps
-	passes/ssao_blur_cs
-	passes/ssao_compute_cs
-	passes/ssao_deinterleave_cs
-	passes/taa_cs
-	passes/tonemapping_ps
-)
-
-if(DONUT_WITH_AFTERMATH OR DONUT_EMBED_SHADER_PDBS)
-    set(shadermake_options --embedPDB)
-endif()
-
-donut_compile_shaders_all_platforms(
-	TARGET donut_shaders
-	PROJECT_NAME "Donut"
-	CONFIG ${CMAKE_CURRENT_LIST_DIR}/DonutShaders.cfg
-	FOLDER Donut
-	OUTPUT_BASE ${output_base}
-	OUTPUT_FORMAT ${output_format}
-	SOURCES ${donut_shaders}
-	BYPRODUCTS_NO_EXT ${byproducts}
-    SHADERMAKE_OPTIONS ${shadermake_options}
-)
-
-else() # ShaderTool pipeline (default)
-
 include(${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/shadertool/cmake/ShaderToolFunctions.cmake)
 
 file(GLOB donut_shaders
@@ -169,4 +82,3 @@ else()
 	set_target_properties(donut_shaders PROPERTIES FOLDER Donut)
 endif()
 
-endif()

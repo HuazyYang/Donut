@@ -302,7 +302,11 @@ std::pair<const void*, size_t> donut::engine::ShaderFactory::FindShaderFromHash(
                 for (auto& s : permutationStrings)
                 {
                     std::vector<std::string> keyValue = donut::string_utils::split(s, "=");
-                    permutationDefines[keyValue[0]] = keyValue[1];
+                    // Well-formed blob keys are always NAME=VALUE pairs; skip anything
+                    // else (e.g. a "<default>" entry from a corrupted blob) instead of
+                    // indexing out of bounds.
+                    if (keyValue.size() == 2)
+                        permutationDefines[keyValue[0]] = keyValue[1];
                 }
                 // now that we have processed all defines in this permutation, can create the shader constants
                 for (const auto& [key, value] : permutationDefines)
