@@ -28,7 +28,7 @@
 #include <filesystem>
 #include <thread>
 #include <vector>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/AutoPtr.h>
 
 namespace donut::engine
 {
@@ -47,9 +47,9 @@ namespace donut::app
     protected:
         typedef IRenderPass Super;
 
-        AutoPtr<engine::TextureCache> m_TextureCache;
-        MonoPtr<std::thread> m_SceneLoadingThread;
-        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
+        nvrhi::AutoPtr<engine::TextureCache> m_TextureCache;
+        nvrhi::MonoPtr<std::thread> m_SceneLoadingThread;
+        nvrhi::AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
 
         bool m_IsAsyncLoad;
 

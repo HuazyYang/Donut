@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <nvrhi/nvrhi.h>
 
@@ -30,7 +30,7 @@ struct ShadowConstants;
 
 namespace donut::engine
 {
-    class IShadowMap: public ObjectImpl<IObject>
+    class IShadowMap: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
         virtual ~IShadowMap() = default;

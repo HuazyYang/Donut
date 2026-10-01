@@ -149,8 +149,8 @@ namespace donut::render
         std::unordered_map<std::pair<nvrhi::ITexture*, nvrhi::ITexture*>, nvrhi::BindingSetHandle> m_ShadingBindingSets;
         std::unordered_map<const engine::BufferGroup*, nvrhi::BindingSetHandle> m_InputBindingSets;
         
-        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
-        AutoPtr<engine::MaterialBindingCache> m_MaterialBindings;
+        nvrhi::AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
+        nvrhi::AutoPtr<engine::MaterialBindingCache> m_MaterialBindings;
         
         virtual nvrhi::ShaderHandle CreateVertexShader(engine::ShaderFactory& shaderFactory, const CreateParameters& params);
         virtual nvrhi::ShaderHandle CreateGeometryShader(engine::ShaderFactory& shaderFactory, const CreateParameters& params);
@@ -162,7 +162,7 @@ namespace donut::render
         virtual nvrhi::BindingSetHandle CreateShadingBindingSet(nvrhi::ITexture* shadowMapTexture, nvrhi::ITexture* diffuse, nvrhi::ITexture* specular, nvrhi::ITexture* environmentBrdf);
         virtual nvrhi::BindingLayoutHandle CreateInputBindingLayout();
         virtual nvrhi::BindingSetHandle CreateInputBindingSet(const engine::BufferGroup* bufferGroup);
-        virtual AutoPtr<engine::MaterialBindingCache> CreateMaterialBindingCache(engine::CommonRenderPasses& commonPasses);
+        virtual nvrhi::AutoPtr<engine::MaterialBindingCache> CreateMaterialBindingCache(engine::CommonRenderPasses& commonPasses);
         virtual nvrhi::GraphicsPipelineHandle CreateGraphicsPipeline(ForwardShadingPassPipelineKey const& key, nvrhi::FramebufferInfo const& framebufferInfo);
         nvrhi::BindingSetHandle GetOrCreateInputBindingSet(const engine::BufferGroup* bufferGroup);
 
@@ -180,10 +180,10 @@ namespace donut::render
         virtual void PrepareLights(
             Context& context,
             nvrhi::ICommandList* commandList,
-            const std::vector<AutoPtr<engine::Light>>& lights,
+            const std::vector<nvrhi::AutoPtr<engine::Light>>& lights,
             dm::float3 ambientColorTop,
             dm::float3 ambientColorBottom,
-            const std::vector<AutoPtr<engine::LightProbe>>& lightProbes);
+            const std::vector<nvrhi::AutoPtr<engine::LightProbe>>& lightProbes);
 
         // IGeometryPass implementation
 

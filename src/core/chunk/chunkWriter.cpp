@@ -269,7 +269,7 @@ static ChunkId chunkMeshNodes(
 }
 
 // serialize MeshSets
-FRESULT serialize(MeshSetBase const & mset, IDataBlob **ppBlob)
+nvrhi::FRESULT serialize(MeshSetBase const & mset, nvrhi::IDataBlob **ppBlob)
 {
 
     ChunkWriter writer;
@@ -282,7 +282,7 @@ FRESULT serialize(MeshSetBase const & mset, IDataBlob **ppBlob)
         case MeshSetBase::MESHLET : type = Desc::MESHLET; break;
         default:
             log::error("unsupported set type (%d)", mset.type);
-            return FE_GENERIC_ERROR;
+            return nvrhi::FE_GENERIC_ERROR;
     }
 
     Desc desc;
@@ -349,7 +349,7 @@ FRESULT serialize(MeshSetBase const & mset, IDataBlob **ppBlob)
         if (set.meshletSize>255)
         {
             log::error("meshlet info size too big : %d (max 255)", set.meshletSize);
-            return FE_GENERIC_ERROR;
+            return nvrhi::FE_GENERIC_ERROR;
         }
 
         desc.meshletMaxVerts = set.maxVerts;
@@ -369,7 +369,7 @@ FRESULT serialize(MeshSetBase const & mset, IDataBlob **ppBlob)
     else
     {
         log::error("Unknown type of MeshSet");
-        return FE_GENERIC_ERROR;
+        return nvrhi::FE_GENERIC_ERROR;
     }
 
     desc.instancesChunkId = chunkMeshInstances(mset.instances, mset.ninstances, writer);
@@ -385,10 +385,10 @@ FRESULT serialize(MeshSetBase const & mset, IDataBlob **ppBlob)
     memcpy(chunkData, &desc, chunkSize);
 
     if (!writer.cfile.addChunk<Desc>(chunkData, chunkSize).valid())
-        return FE_GENERIC_ERROR;
+        return nvrhi::FE_GENERIC_ERROR;
 
     if (!writer.createStringsTableChunk().valid())
-        return FE_GENERIC_ERROR;
+        return nvrhi::FE_GENERIC_ERROR;
 
     return writer.cfile.serialize(ppBlob);
 }

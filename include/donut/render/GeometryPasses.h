@@ -56,7 +56,7 @@ namespace donut::render
     {
     };
     
-    class IGeometryPass: public ObjectImpl<IObject>
+    class IGeometryPass: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
         [[nodiscard]] virtual engine::ViewType::Enum GetSupportedViewTypes() const = 0;

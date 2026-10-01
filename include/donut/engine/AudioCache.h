@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -48,7 +48,7 @@ class AudioCache;
 // AudioData : handle issued by the AudioCache with basic interface to
 // audio sample data.
 //
-class AudioData: public ObjectImpl<IObject>
+class AudioData: public nvrhi::ObjectImpl<nvrhi::IObject>
 {
 public:
 
@@ -83,13 +83,13 @@ private:
 
     friend class AudioCache;
 
-    AutoPtr<IDataBlob> m_data;
+    nvrhi::AutoPtr<nvrhi::IDataBlob> m_data;
 };
 
 // AudioCache : cache for audio data with synch & async read from 
 // donut vfs::IFileSystem
 //
-class AudioCache: ObjectImpl<IObject>
+class AudioCache: nvrhi::ObjectImpl<nvrhi::IObject>
 {
 public:
 
@@ -101,16 +101,16 @@ public:
 public:
 
     // Synchronous read
-    AutoPtr<AudioData> LoadFromFile(const std::filesystem::path & path);
+    nvrhi::AutoPtr<AudioData> LoadFromFile(const std::filesystem::path & path);
 
     // Asynchronous read
-    AutoPtr<AudioData> LoadFromFileAsync(const std::filesystem::path & path, ThreadPool& threadPool);
+    nvrhi::AutoPtr<AudioData> LoadFromFileAsync(const std::filesystem::path & path, ThreadPool& threadPool);
 
 private:
 
-    static AutoPtr<AudioData> importRiff(IDataBlob* blob, char const * filepath);
+    static nvrhi::AutoPtr<AudioData> importRiff(nvrhi::IDataBlob* blob, char const * filepath);
 
-    AutoPtr<AudioData> loadAudioFile(const std::filesystem::path& path);
+    nvrhi::AutoPtr<AudioData> loadAudioFile(const std::filesystem::path& path);
 
     bool findInCache(const std::filesystem::path & path, AudioData **result);
 
@@ -120,9 +120,9 @@ private:
 
     std::mutex m_LoadedDataMutex;
 
-    std::map<std::string, AutoPtr<AudioData>> m_LoadedAudioData;
+    std::map<std::string, nvrhi::AutoPtr<AudioData>> m_LoadedAudioData;
 
-    AutoPtr<donut::vfs::IFileSystem> m_fs;
+    nvrhi::AutoPtr<donut::vfs::IFileSystem> m_fs;
 };
 
 } // namespace donut::engine::audio

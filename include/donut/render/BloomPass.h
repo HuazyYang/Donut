@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <donut/engine/BindingCache.h>
 #include <nvrhi/nvrhi.h>
 #include <unordered_map>
@@ -39,11 +39,11 @@ namespace donut::engine
 
 namespace donut::render
 {
-    class BloomPass: ObjectImpl<IObject>
+    class BloomPass: nvrhi::ObjectImpl<nvrhi::IObject>
     {
     private:
-        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
-        AutoPtr<engine::FramebufferFactory> m_FramebufferFactory;
+        nvrhi::AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
+        nvrhi::AutoPtr<engine::FramebufferFactory> m_FramebufferFactory;
 
         nvrhi::DeviceHandle m_Device;
 

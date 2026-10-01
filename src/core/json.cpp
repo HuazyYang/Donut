@@ -33,7 +33,7 @@ Baptiste Lepilleur and The JsonCpp Authors explicitly disclaim copyright in all
 jurisdictions which recognize such a disclaimer. In such jurisdictions, 
 this software is released into the Public Domain.
 */
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <donut/core/json.h>
 #include <donut/core/vfs/VFS.h>
 #include <donut/core/log.h>
@@ -46,8 +46,8 @@ namespace donut::json
 {
     bool LoadFromFile(IFileSystem& fs, const std::filesystem::path& jsonFileName, Json::Value& documentRoot)
     {
-        AutoPtr<IDataBlob> data;
-        if(FFAILED(fs.readFile(jsonFileName, &data))) {
+        nvrhi::AutoPtr<nvrhi::IDataBlob> data;
+        if(NVRHI_FAILED(fs.readFile(jsonFileName, &data))) {
             log::error("Couldn't read file %s", jsonFileName.generic_string().c_str());
             return false;
         }

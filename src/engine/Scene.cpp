@@ -94,7 +94,7 @@ Scene::Scene(
     , m_DescriptorTable(descriptorTable)
     , m_Device(device)
 {
-    m_Resources = MakeMono<Resources>();
+    m_Resources = nvrhi::MakeMono<Resources>();
 
     if (!m_SceneTypeFactory)
         m_SceneTypeFactory = MAKE_RC_OBJ_PTR(SceneTypeFactory);
@@ -191,14 +191,14 @@ void Scene::LoadModelAsync(
 {
     auto ext = fileName.extension().generic_string();
     if (strcasecmp(ext.data(), ".glb") == 0 || strcasecmp(ext.data(), ".gltf") == 0) {
-        if (!m_SceneImporter || FFAILED(m_SceneImporter->QueryInterface(__uuid_of<GltfImporter>(), nullptr)))
+        if (!m_SceneImporter || NVRHI_FAILED(m_SceneImporter->QueryInterface(nvrhi::uuid_of<GltfImporter>(), nullptr)))
             m_SceneImporter = MAKE_RC_OBJ_PTR(GltfImporter, m_fs, m_SceneTypeFactory);
     } else {
         log::error("Donut scene loader does not support this scene archive type");
-        DONUT_ASSERT(0 && "Unsupported scene archive type");
+        NVRHI_ASSERT(0 && "Unsupported scene archive type");
         return;
 #if 0
-        if(!m_SceneImporter || FFAILED(m_SceneImporter->QueryInterface(__uuid_of<AssimpSceneImporter>(), nullptr)))
+        if(!m_SceneImporter || NVRHI_FAILED(m_SceneImporter->QueryInterface(nvrhi::uuid_of<AssimpSceneImporter>(), nullptr)))
             m_SceneImporter = MAKE_RC_OBJ_PTR(AssimpSceneImporter, m_fs, m_SceneTypeFactory);
 #endif
     }
@@ -266,7 +266,7 @@ void Scene::LoadSceneGraph(const Json::Value& nodeList, SceneGraphNode* parent)
             nodeName = name.asString();
         }
 
-        AutoPtr<SceneGraphNode> customParent = parent;
+        nvrhi::AutoPtr<SceneGraphNode> customParent = parent;
         const auto& parentNode = src["parent"];
         if (parentNode.isString())
         {
@@ -284,7 +284,7 @@ void Scene::LoadSceneGraph(const Json::Value& nodeList, SceneGraphNode* parent)
                 nodeName.c_str());
         }
 
-        AutoPtr<SceneGraphNode> dst;
+        nvrhi::AutoPtr<SceneGraphNode> dst;
 
         const auto& modelNode = src["model"];
         if (!modelNode.isNull())
@@ -402,7 +402,7 @@ static dm::float4 ReadUpToFloat4(const Json::Value& node)
 
 void Scene::LoadAnimations(const Json::Value& nodeList)
 {
-    AutoPtr<SceneGraphNode> animationContainer;
+    nvrhi::AutoPtr<SceneGraphNode> animationContainer;
 
     for (const auto& animationNode : nodeList)
     {
@@ -504,7 +504,7 @@ void Scene::LoadAnimations(const Json::Value& nodeList)
                         {
                             targetName = targetName.substr(9);
 
-                            AutoPtr<Material> material;
+                            nvrhi::AutoPtr<Material> material;
                             for (const auto& it : m_SceneGraph->GetMaterials())
                             {
                                 if (it->name == targetName)
@@ -596,7 +596,7 @@ bool Scene::LoadCustomData(Json::Value& rootNode, const std::filesystem::path& s
 
 Scene::~Scene() {}
 
-donut::AutoPtr<SceneGraph> Scene::CreateSceneGraph()
+nvrhi::AutoPtr<SceneGraph> Scene::CreateSceneGraph()
 {
     return m_SceneGraph = m_SceneTypeFactory->CreateGraph();
 }

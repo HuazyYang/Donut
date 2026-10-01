@@ -180,17 +180,17 @@ bool TarFile::fileExists(const std::filesystem::path& name)
     return m_Files.find(normalizedName) != m_Files.end();
 }
 
-FRESULT TarFile::readFile(const std::filesystem::path& name, IDataBlob **ppBlob)
+nvrhi::FRESULT TarFile::readFile(const std::filesystem::path& name, nvrhi::IDataBlob **ppBlob)
 {
     std::string normalizedName = name.lexically_normal().relative_path().generic_string();
     
     if (normalizedName.empty())
-        return FE_GENERIC_ERROR;
+        return nvrhi::FE_GENERIC_ERROR;
     
     auto entry = m_Files.find(normalizedName);
 
     if (entry == m_Files.end())
-        return FE_GENERIC_ERROR;
+        return nvrhi::FE_GENERIC_ERROR;
 
     // prevent concurrent file operations from multiple threads from this point on
     std::lock_guard<std::mutex> lockGuard(m_Mutex);
@@ -199,12 +199,12 @@ FRESULT TarFile::readFile(const std::filesystem::path& name, IDataBlob **ppBlob)
     {
         log::warning("Error seeking to offset %ull for file '%s' in tar archive '%s'",
             entry->second.offset, normalizedName.c_str(), m_ArchivePath.c_str());
-        return FE_GENERIC_ERROR;
+        return nvrhi::FE_GENERIC_ERROR;
     }
 
-    IDataBlob* pBlob;
-    FRESULT fr;
-    if(FFAILED(fr = CreateBlob(entry->second.size, &pBlob))) {
+    nvrhi::IDataBlob* pBlob;
+    nvrhi::FRESULT fr;
+    if(NVRHI_FAILED(fr = nvrhi::CreateBlob(entry->second.size, &pBlob))) {
         return fr;
     }
 
@@ -215,7 +215,7 @@ FRESULT TarFile::readFile(const std::filesystem::path& name, IDataBlob **ppBlob)
         log::warning("Error reading file '%s' (%ull bytes) from tar archive '%s'", 
             entry->second.size, normalizedName.c_str(), m_ArchivePath.c_str());
         pBlob->Release();
-        return FE_GENERIC_ERROR;
+        return nvrhi::FE_GENERIC_ERROR;
     }
 
     if(ppBlob) {
@@ -224,7 +224,7 @@ FRESULT TarFile::readFile(const std::filesystem::path& name, IDataBlob **ppBlob)
     }
 
     pBlob->Release();
-    return FS_OK;
+    return nvrhi::FS_OK;
 }
 
 bool TarFile::writeFile(const std::filesystem::path&, const void*, size_t)

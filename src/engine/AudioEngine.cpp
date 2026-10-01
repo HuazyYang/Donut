@@ -233,7 +233,7 @@ struct Xaudio2Effect : public Effect
 
     bool setEmitterTransform(donut::math::affine3 const & transform) override;
 
-    AutoPtr<AudioData> sample;
+    nvrhi::AutoPtr<AudioData> sample;
     bool stopped = false;
     uint32_t key = 0;
     IXAudio2SourceVoice * voice = nullptr;
@@ -330,7 +330,7 @@ public:
 
     virtual ~Xaudio2Implementation();
 
-    static MonoPtr<Engine::Implementation> create(Options const & opts);
+    static nvrhi::MonoPtr<Engine::Implementation> create(Options const & opts);
 
     virtual Effect* playEffect(EffectDesc const & desc) override;
 
@@ -380,10 +380,10 @@ private:
 
     std::unordered_multimap<uint32_t, IXAudio2SourceVoice *> m_voicePool; // see makeKey() for hashing details
 
-    std::list<AutoPtr<Effect>> m_activeVoices;
+    std::list<nvrhi::AutoPtr<Effect>> m_activeVoices;
 
     // music soundtrack
-    WeakPtr<Effect> m_currentSong,
+    nvrhi::WeakPtr<Effect> m_currentSong,
                           m_nextSong;
 
     std::chrono::system_clock::time_point m_crossfadeStart,
@@ -585,7 +585,7 @@ Effect* Xaudio2Implementation::playSample(IXAudio2SubmixVoice * submix, EffectDe
             return result;
         }
 
-        AutoPtr<Xaudio2Effect> effect;
+        nvrhi::AutoPtr<Xaudio2Effect> effect;
 
         if (!m_options.use3D || !desc.transform)
             effect = MAKE_RC_OBJ_PTR(Xaudio2Effect);
@@ -810,7 +810,7 @@ void Xaudio2Implementation::stopUpdateThread()
         m_updateThread.join();
 }
 
-MonoPtr<Engine::Implementation> Xaudio2Implementation::create(Options const & opts)
+nvrhi::MonoPtr<Engine::Implementation> Xaudio2Implementation::create(Options const & opts)
 {
     HRESULT hr;
     if (FAILED(hr = CoInitializeEx(NULL, COINIT_MULTITHREADED)))
@@ -819,7 +819,7 @@ MonoPtr<Engine::Implementation> Xaudio2Implementation::create(Options const & op
         return nullptr;
     }
 
-    MonoPtr<Xaudio2Implementation> result = MakeMono<Xaudio2Implementation>(opts);
+    nvrhi::MonoPtr<Xaudio2Implementation> result = nvrhi::MakeMono<Xaudio2Implementation>(opts);
 
     // interface
     if (FAILED(hr = XAudio2Create(&result->m_xaudio2, 0)))
@@ -889,7 +889,7 @@ MonoPtr<Engine::Implementation> Xaudio2Implementation::create(Options const & op
 
     result->startUpdateThread();
 
-    return MonoPtr<Engine::Implementation>(result);
+    return nvrhi::MonoPtr<Engine::Implementation>(result);
 }
 
 

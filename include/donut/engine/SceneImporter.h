@@ -1,5 +1,5 @@
 #pragma once
-#include <donut/core/object/Types.h>
+#include <nvrhi/core/Types.h>
 #include <filesystem>
 
 namespace donut::vfs {
@@ -19,11 +19,11 @@ class SceneGraphAnimation;
 
 namespace donut::engine {
 
-DONUT_IID(ISceneImporter, "b3fc47ab-f053-404e-a71a-e0a80291f9b7")
-struct ISceneImporter : IObject {
-    DONUT_DECLARE_UUID_TRAITS(ISceneImporter)
+NVRHI_IID(ISceneImporter, "b3fc47ab-f053-404e-a71a-e0a80291f9b7")
+struct ISceneImporter : nvrhi::IObject {
+    NVRHI_DECLARE_UUID_TRAITS(ISceneImporter)
 
-    virtual FRESULT Load(const std::filesystem::path& fileName, TextureCache& textureCache,
+    virtual nvrhi::FRESULT Load(const std::filesystem::path& fileName, TextureCache& textureCache,
                          SceneLoadingStats& stats, ThreadPool* threadPool, SceneImportResult& result) = 0;
 };
 

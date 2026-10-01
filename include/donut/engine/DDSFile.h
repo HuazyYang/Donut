@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <donut/engine/SceneTypes.h>
 #include <nvrhi/nvrhi.h>
 #include <vector>
@@ -75,14 +75,14 @@ namespace donut::engine
     bool LoadDDSTextureFromMemory(TextureData& textureInfo);
 
     // Creates a texture based on DDS data in memory
-    nvrhi::TextureHandle CreateDDSTextureFromMemory(nvrhi::IDevice* device, nvrhi::ICommandList* commandList, IDataBlob* data, const char* debugName = nullptr, const TextureLoadOptions& loadOptions = TextureLoadOptions());
+    nvrhi::TextureHandle CreateDDSTextureFromMemory(nvrhi::IDevice* device, nvrhi::ICommandList* commandList, nvrhi::IDataBlob* data, const char* debugName = nullptr, const TextureLoadOptions& loadOptions = TextureLoadOptions());
 
     // Back-compat overload for callers written against the older `bool forceSRGB`.
     [[deprecated("Pass a TextureLoadOptions instead")]]
-    inline nvrhi::TextureHandle CreateDDSTextureFromMemory(nvrhi::IDevice* device, nvrhi::ICommandList* commandList, IDataBlob* data, const char* debugName, bool forceSRGB)
+    inline nvrhi::TextureHandle CreateDDSTextureFromMemory(nvrhi::IDevice* device, nvrhi::ICommandList* commandList, nvrhi::IDataBlob* data, const char* debugName, bool forceSRGB)
     {
         return CreateDDSTextureFromMemory(device, commandList, data, debugName, TextureLoadOptions{ SRGBModeFromBool(forceSRGB) });
     }
 
-    AutoPtr<IDataBlob> SaveStagingTextureAsDDS(nvrhi::IDevice* device, nvrhi::IStagingTexture* stagingTexture);
+    nvrhi::AutoPtr<nvrhi::IDataBlob> SaveStagingTextureAsDDS(nvrhi::IDevice* device, nvrhi::IStagingTexture* stagingTexture);
 }

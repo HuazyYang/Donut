@@ -23,7 +23,7 @@
 #pragma once
 
 #include <donut/core/log.h>
-#include <donut/core/object/Foundation.h>
+#include <nvrhi/core/Foundation.h>
 #include <cstdint>
 #include <vector>
 #include <string>
@@ -85,15 +85,15 @@ struct Chunk
 // ChunkFile
 //
 
-class ChunkFile: public ObjectImpl<IObject>
+class ChunkFile: public nvrhi::ObjectImpl<nvrhi::IObject>
 {
 
 public:
     ~ChunkFile();
     // deserialization interface
 
-    static FRESULT deserialize(
-        IDataBlob *pBlob, char const * filepath, ChunkFile **pChunkFile);
+    static nvrhi::FRESULT deserialize(
+        nvrhi::IDataBlob *pBlob, char const * filepath, ChunkFile **pChunkFile);
 
     std::string const & getFilePath() const { return _filepath; }
 
@@ -101,7 +101,7 @@ public:
 
     // serialization interface
 
-    FRESULT serialize(IDataBlob **ppBlob) const;
+    nvrhi::FRESULT serialize(nvrhi::IDataBlob **ppBlob) const;
 
     template <typename ChunkDesc> ChunkId addChunk(void const * data, size_t size);
 
@@ -132,7 +132,7 @@ private:
 
     std::vector<Chunk *> _chunks;
 
-    IDataBlob *_data = nullptr;
+    nvrhi::IDataBlob *_data = nullptr;
 };
 
 

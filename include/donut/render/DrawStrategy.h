@@ -34,7 +34,7 @@ namespace donut::render
 {
     struct DrawItem;
 
-    class IDrawStrategy: public ObjectImpl<IObject>
+    class IDrawStrategy: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
         virtual void PrepareForView(

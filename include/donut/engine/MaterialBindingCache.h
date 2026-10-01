@@ -48,7 +48,7 @@ namespace donut::engine
         uint32_t slot; // type depends on resource
     };
 
-    class MaterialBindingCache: public ObjectImpl<IObject>
+    class MaterialBindingCache: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     private:
         nvrhi::DeviceHandle m_Device;

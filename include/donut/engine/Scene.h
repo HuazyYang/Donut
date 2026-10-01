@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <donut/engine/SceneGraph.h>
 #include <nvrhi/nvrhi.h>
 #include <vector>
@@ -50,15 +50,15 @@ namespace donut::engine
     class DescriptorTableManager;
     struct ISceneImporter;
 
-    class Scene: public ObjectImpl<IObject>
+    class Scene: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     protected:
-        AutoPtr<vfs::IFileSystem> m_fs;
-        AutoPtr<SceneTypeFactory> m_SceneTypeFactory;
-        AutoPtr<TextureCache> m_TextureCache;
-        AutoPtr<DescriptorTableManager> m_DescriptorTable;
-        AutoPtr<SceneGraph> m_SceneGraph;
-        AutoPtr<ISceneImporter> m_SceneImporter;
+        nvrhi::AutoPtr<vfs::IFileSystem> m_fs;
+        nvrhi::AutoPtr<SceneTypeFactory> m_SceneTypeFactory;
+        nvrhi::AutoPtr<TextureCache> m_TextureCache;
+        nvrhi::AutoPtr<DescriptorTableManager> m_DescriptorTable;
+        nvrhi::AutoPtr<SceneGraph> m_SceneGraph;
+        nvrhi::AutoPtr<ISceneImporter> m_SceneImporter;
         std::vector<SceneImportResult> m_Models;
         bool m_EnableBindlessResources = false;
         bool m_UseResourceDescriptorHeapBindless = false;
@@ -77,7 +77,7 @@ namespace donut::engine
         bool m_SceneStructureChanged = false;
 
         struct Resources; // Hide the implementation to avoid including <material_cb.h> and <bindless.h> here
-        MonoPtr<Resources> m_Resources;
+        nvrhi::MonoPtr<Resources> m_Resources;
 
         void LoadModelAsync(
             uint32_t index,
@@ -138,7 +138,7 @@ namespace donut::engine
         static const SceneLoadingStats& GetLoadingStats();
 
         // Creates an empty scene graph for hand-built scenes
-        AutoPtr<SceneGraph> CreateSceneGraph();
+        nvrhi::AutoPtr<SceneGraph> CreateSceneGraph();
 
         [[nodiscard]] SceneGraph* GetSceneGraph() const { return m_SceneGraph; }
         [[nodiscard]] nvrhi::IDescriptorTable* GetDescriptorTable() const { return m_DescriptorTable ? m_DescriptorTable->GetDescriptorTable() : nullptr; }

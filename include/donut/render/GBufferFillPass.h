@@ -106,8 +106,8 @@ namespace donut::render
 
         std::unordered_map<const engine::BufferGroup*, nvrhi::BindingSetHandle> m_InputBindingSets;
 
-        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
-        AutoPtr<engine::MaterialBindingCache> m_MaterialBindings;
+        nvrhi::AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
+        nvrhi::AutoPtr<engine::MaterialBindingCache> m_MaterialBindings;
 
         bool m_EnableDepthWrite = true;
         bool m_EnableMotionVectors = false;
@@ -122,7 +122,7 @@ namespace donut::render
         virtual nvrhi::BindingLayoutHandle CreateInputBindingLayout();
         virtual nvrhi::BindingSetHandle CreateInputBindingSet(const engine::BufferGroup* bufferGroup);
         virtual void CreateViewBindings(nvrhi::BindingLayoutHandle& layout, nvrhi::BindingSetHandle& set, const CreateParameters& params);
-        virtual AutoPtr<engine::MaterialBindingCache> CreateMaterialBindingCache(engine::CommonRenderPasses& commonPasses);
+        virtual nvrhi::AutoPtr<engine::MaterialBindingCache> CreateMaterialBindingCache(engine::CommonRenderPasses& commonPasses);
         virtual nvrhi::GraphicsPipelineHandle CreateGraphicsPipeline(PipelineKey key, nvrhi::FramebufferInfo const& framebufferInfo);
         nvrhi::BindingSetHandle GetOrCreateInputBindingSet(const engine::BufferGroup* bufferGroup);
         

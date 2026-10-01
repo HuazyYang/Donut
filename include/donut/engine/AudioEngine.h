@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <functional>
 
@@ -32,7 +32,7 @@ class AudioData;
 
 // Effect : transient interface to manipulate active sound effects
 //
-struct Effect: WeakReferenceSourceImpl<IWeakReferenceSource>
+struct Effect: nvrhi::WeakReferenceSourceImpl<nvrhi::IWeakReferenceSource>
 {
     // returns the audio sample associated with this effect
     virtual AudioData* getSample() const = 0;    
@@ -152,7 +152,7 @@ public:
 
     // platform-specific engine implementation
     class Implementation;
-    MonoPtr<Implementation> m_implementation;
+    nvrhi::MonoPtr<Implementation> m_implementation;
 };
 
 } // namespace donut::engine::audio

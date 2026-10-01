@@ -142,7 +142,7 @@ Light::Light() {}
 
 DirectionalLight::DirectionalLight() {}
 
-donut::AutoPtr<SceneGraphLeaf> DirectionalLight::Clone() {
+nvrhi::AutoPtr<SceneGraphLeaf> DirectionalLight::Clone() {
     auto copy = MAKE_RC_OBJ_PTR(DirectionalLight);
     copy->color = color;
     copy->irradiance = irradiance;
@@ -197,7 +197,7 @@ inline float square(const float x) { return x * x; }
 
 SpotLight::SpotLight() {}
 
-donut::AutoPtr<SceneGraphLeaf> SpotLight::Clone() {
+nvrhi::AutoPtr<SceneGraphLeaf> SpotLight::Clone() {
     auto copy = MAKE_RC_OBJ_PTR(SpotLight);
     copy->color = color;
     copy->intensity = intensity;
@@ -281,7 +281,7 @@ bool SpotLight::SetProperty(const std::string& name, const dm::float4& value)
 
 PointLight::PointLight() {}
 
-donut::AutoPtr<SceneGraphLeaf> PointLight::Clone() {
+nvrhi::AutoPtr<SceneGraphLeaf> PointLight::Clone() {
     auto copy = MAKE_RC_OBJ_PTR(PointLight);
     copy->color = color;
     copy->intensity = intensity;

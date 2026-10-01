@@ -23,7 +23,7 @@
 #pragma once
 
 #include <nvrhi/nvrhi.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <donut/render/Manipulator.h>
 #include <cstdint>
@@ -108,7 +108,7 @@ namespace donut::render
 
             nvrhi::TextureHandle idTexture; // R8_UINT widget ids
             nvrhi::TextureHandle depth;
-            AutoPtr<engine::FramebufferFactory> framebuffer;
+            nvrhi::AutoPtr<engine::FramebufferFactory> framebuffer;
         } m_Pick;
 
         // Compute pass scans the pixels around the mouse pointer 

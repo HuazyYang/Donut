@@ -110,12 +110,12 @@ bool MediaFileSystem::fileExists(const std::filesystem::path & path)
 	return false;
 }
 
-donut::FRESULT MediaFileSystem::readFile(const std::filesystem::path & name, IDataBlob **ppBlob)
+nvrhi::FRESULT MediaFileSystem::readFile(const std::filesystem::path & name, nvrhi::IDataBlob **ppBlob)
 {
-    FRESULT fr = FE_NOT_FOUND;
+    nvrhi::FRESULT fr = nvrhi::FE_NOT_FOUND;
     for (const auto& fs : m_FileSystems)
-        if (FSUCCEEDED(fr = fs->readFile(name, ppBlob)))
-			return FS_OK;
+        if (NVRHI_SUCCEEDED(fr = fs->readFile(name, ppBlob)))
+			return nvrhi::FS_OK;
     return fr;
 }
 

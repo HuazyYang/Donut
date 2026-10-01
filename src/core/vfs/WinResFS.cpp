@@ -62,7 +62,7 @@ bool WinResFileSystem::fileExists(const fs::path& name)
     return (hResource != nullptr);
 }
 
-FRESULT WinResFileSystem::readFile(const fs::path& name, IDataBlob **ppBlob)
+nvrhi::FRESULT WinResFileSystem::readFile(const fs::path& name, nvrhi::IDataBlob **ppBlob)
 {
     std::string nameString = name.lexically_normal().generic_string();
     donut::string_utils::ltrim(nameString, '/');
@@ -70,25 +70,25 @@ FRESULT WinResFileSystem::readFile(const fs::path& name, IDataBlob **ppBlob)
     HRSRC hResource = FindResourceA((HMODULE)m_hModule, nameString.c_str(), m_Type.c_str());
 
     if (hResource == nullptr)
-        return FE_NOT_FOUND;
+        return nvrhi::FE_NOT_FOUND;
 
     DWORD size = SizeofResource((HMODULE)m_hModule, hResource);
     if (size == 0)
     {
         // empty resource (can that really happen?)
-        return FE_GENERIC_ERROR;
+        return nvrhi::FE_GENERIC_ERROR;
     }
 
     HGLOBAL hGlobal = LoadResource((HMODULE)m_hModule, hResource);
 
     if (hGlobal == nullptr)
-        return FE_GENERIC_ERROR;
+        return nvrhi::FE_GENERIC_ERROR;
 
     void* pData = LockResource(hGlobal);
 
-    IDataBlob* pBlob;
-    FRESULT fr;
-    if(FFAILED(fr = CreateProxyBlob(size, pData, &pBlob))) {
+    nvrhi::IDataBlob* pBlob;
+    nvrhi::FRESULT fr;
+    if(NVRHI_FAILED(fr = nvrhi::CreateProxyBlob(size, pData, &pBlob))) {
         return fr;
     }
 
@@ -98,7 +98,7 @@ FRESULT WinResFileSystem::readFile(const fs::path& name, IDataBlob **ppBlob)
     }
     pBlob->Release();
 
-    return FS_OK;
+    return nvrhi::FS_OK;
 }
 
 bool WinResFileSystem::writeFile(const fs::path&, const void*, size_t)

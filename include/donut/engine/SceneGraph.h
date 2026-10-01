@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <donut/engine/SceneTypes.h>
 #include <donut/engine/KeyframeAnimation.h>
 #include <donut/core/math/math.h>
@@ -49,11 +49,11 @@ namespace donut::engine
         Animations = 0x20
     };
 
-    class SceneGraphLeaf: public WeakReferenceSourceImpl<IWeakReferenceSource>
+    class SceneGraphLeaf: public nvrhi::WeakReferenceSourceImpl<nvrhi::IWeakReferenceSource>
     {
     private:
         friend class SceneGraphNode;
-        WeakPtr<SceneGraphNode> m_Node;
+        nvrhi::WeakPtr<SceneGraphNode> m_Node;
 
     protected:
 
@@ -63,7 +63,7 @@ namespace donut::engine
 
         [[nodiscard]] SceneGraphNode* GetNode() const { return m_Node.Lock(); }
         [[nodiscard]] virtual dm::box3 GetLocalBoundingBox() { return dm::box3::empty(); }
-        [[nodiscard]] virtual AutoPtr<SceneGraphLeaf> Clone() = 0;
+        [[nodiscard]] virtual nvrhi::AutoPtr<SceneGraphLeaf> Clone() = 0;
         [[nodiscard]] virtual SceneContentFlags GetContentFlags() const { return SceneContentFlags::None; }
         [[nodiscard]] const std::string& GetName() const;
         void SetName(const std::string& name) const;
@@ -85,7 +85,7 @@ namespace donut::engine
         int m_GeometryInstanceIndex = -1;
 
     protected:
-        AutoPtr<MeshInfo> m_Mesh;
+        nvrhi::AutoPtr<MeshInfo> m_Mesh;
 
     public:
         explicit MeshInstance(MeshInfo* mesh)
@@ -96,14 +96,14 @@ namespace donut::engine
         [[nodiscard]] int GetInstanceIndex() const { return m_InstanceIndex; }
         [[nodiscard]] int GetGeometryInstanceIndex() const { return m_GeometryInstanceIndex; }
         [[nodiscard]] dm::box3 GetLocalBoundingBox() override { return m_Mesh->objectSpaceBounds; }
-        [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
+        [[nodiscard]] nvrhi::AutoPtr<SceneGraphLeaf> Clone() override;
         [[nodiscard]] SceneContentFlags GetContentFlags() const override;
         bool SetProperty(const std::string& name, const dm::float4& value) override;
     };
 
     struct SkinnedMeshJoint
     {
-        WeakPtr<SceneGraphNode> node;
+        nvrhi::WeakPtr<SceneGraphNode> node;
         dm::float4x4 inverseBindMatrix;
     };
 
@@ -111,9 +111,9 @@ namespace donut::engine
     {
     protected:
         friend class SceneGraph;
-        AutoPtr<MeshInfo> m_PrototypeMesh;
+        nvrhi::AutoPtr<MeshInfo> m_PrototypeMesh;
         uint32_t m_LastUpdateFrameIndex = 0;
-        AutoPtr<SceneTypeFactory> m_SceneTypeFactory;
+        nvrhi::AutoPtr<SceneTypeFactory> m_SceneTypeFactory;
 
     public:
         std::vector<SkinnedMeshJoint> joints;
@@ -125,7 +125,7 @@ namespace donut::engine
 
         [[nodiscard]] const MeshInfo* GetPrototypeMesh() const { return m_PrototypeMesh; }
         [[nodiscard]] uint32_t GetLastUpdateFrameIndex() const { return m_LastUpdateFrameIndex; }
-        [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
+        [[nodiscard]] nvrhi::AutoPtr<SceneGraphLeaf> Clone() override;
     };
 
     // This leaf is attached to the joint nodes for a skeleton, and it makes them point at the mesh.
@@ -135,11 +135,11 @@ namespace donut::engine
     {
     private:
         friend class SceneGraph;
-        WeakPtr<SkinnedMeshInstance> m_Instance;
+        nvrhi::WeakPtr<SkinnedMeshInstance> m_Instance;
     public:
        explicit SkinnedMeshReference(SkinnedMeshInstance* instance)
            : m_Instance(instance) {}
-       [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
+       [[nodiscard]] nvrhi::AutoPtr<SceneGraphLeaf> Clone() override;
     };
 
     class SceneCamera : public SceneGraphLeaf
@@ -163,7 +163,7 @@ namespace donut::engine
         std::optional<float> aspectRatio;
 
         using SceneCamera::SceneCamera;
-        [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
+        [[nodiscard]] nvrhi::AutoPtr<SceneGraphLeaf> Clone() override;
         void Load(const Json::Value& node) override;
         bool SetProperty(const std::string& name, const dm::float4& value) override;
     };
@@ -177,7 +177,7 @@ namespace donut::engine
         float yMag = 1.f;
 
         using SceneCamera::SceneCamera;
-        [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
+        [[nodiscard]] nvrhi::AutoPtr<SceneGraphLeaf> Clone() override;
         void Load(const Json::Value& node) override;
         bool SetProperty(const std::string& name, const dm::float4& value) override;
     };
@@ -187,7 +187,7 @@ namespace donut::engine
     class Light : public SceneGraphLeaf
     {
     public:
-        AutoPtr<IShadowMap> shadowMap;
+        nvrhi::AutoPtr<IShadowMap> shadowMap;
         int shadowChannel = -1;
         dm::float3 color = dm::colors::white;
 
@@ -212,10 +212,10 @@ namespace donut::engine
     public:
         float irradiance = 1.f; // Target illuminance (lm/m2) of surfaces lit by this light; multiplied by `color`.
         float angularSize = 0.f; // Angular size of the light source, in degrees.
-        std::vector<AutoPtr<IShadowMap>> perObjectShadows;
+        std::vector<nvrhi::AutoPtr<IShadowMap>> perObjectShadows;
 
         DirectionalLight();
-        [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
+        [[nodiscard]] nvrhi::AutoPtr<SceneGraphLeaf> Clone() override;
         [[nodiscard]] int GetLightType() const override { return LightType_Directional; }
         void FillLightConstants(LightConstants& lightConstants) const override;
         void Load(const Json::Value& node) override;
@@ -233,7 +233,7 @@ namespace donut::engine
         float outerAngle = 180.f;    // Apex angle of the light cone, in degrees - everything outside of that cone is dark.
 
         SpotLight();
-        [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
+        [[nodiscard]] nvrhi::AutoPtr<SceneGraphLeaf> Clone() override;
         [[nodiscard]] int GetLightType() const override { return LightType_Spot; }
         void FillLightConstants(LightConstants& lightConstants) const override;
         void Load(const Json::Value& node) override;
@@ -249,7 +249,7 @@ namespace donut::engine
         float range = 0.f;     // Range of influence for the light. 0 means infinite range.
 
         PointLight();
-        [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
+        [[nodiscard]] nvrhi::AutoPtr<SceneGraphLeaf> Clone() override;
         [[nodiscard]] int GetLightType() const override { return LightType_Point; }
         void FillLightConstants(LightConstants& lightConstants) const override;
         void Load(const Json::Value& node) override;
@@ -257,7 +257,7 @@ namespace donut::engine
         bool SetProperty(const std::string& name, const dm::float4& value) override;
     };
     
-    class SceneGraphNode final : public WeakReferenceSourceImpl<IWeakReferenceSource>
+    class SceneGraphNode final : public nvrhi::WeakReferenceSourceImpl<nvrhi::IWeakReferenceSource>
     {
     public:
         enum struct DirtyFlags : uint32_t
@@ -275,10 +275,10 @@ namespace donut::engine
 
     private:
         friend class SceneGraph;
-        WeakPtr<SceneGraph> m_Graph;
+        nvrhi::WeakPtr<SceneGraph> m_Graph;
         SceneGraphNode* m_Parent = nullptr;
-        std::vector<AutoPtr<SceneGraphNode>> m_Children;
-        AutoPtr<SceneGraphLeaf> m_Leaf;
+        std::vector<nvrhi::AutoPtr<SceneGraphNode>> m_Children;
+        nvrhi::AutoPtr<SceneGraphLeaf> m_Leaf;
 
         std::string m_Name;
         dm::daffine3 m_LocalTransform = dm::daffine3::identity();
@@ -411,12 +411,12 @@ namespace donut::engine
         LeafProperty
     };
 
-    class SceneGraphAnimationChannel: public ObjectImpl<IObject>
+    class SceneGraphAnimationChannel: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     private:
-        AutoPtr<animation::Sampler> m_Sampler;
-        WeakPtr<SceneGraphNode> m_TargetNode;
-        WeakPtr<Material> m_TargetMaterial;
+        nvrhi::AutoPtr<animation::Sampler> m_Sampler;
+        nvrhi::WeakPtr<SceneGraphNode> m_TargetNode;
+        nvrhi::WeakPtr<Material> m_TargetMaterial;
         AnimationAttribute m_Attribute;
         std::string m_LeafPropertyName;
 
@@ -445,17 +445,17 @@ namespace donut::engine
     class SceneGraphAnimation : public SceneGraphLeaf
     {
     private:
-        std::vector<AutoPtr<SceneGraphAnimationChannel>> m_Channels;
+        std::vector<nvrhi::AutoPtr<SceneGraphAnimationChannel>> m_Channels;
         float m_Duration = 0.f;
 
     public:
        using SceneGraphLeaf::SceneGraphLeaf;
 
-       [[nodiscard]] AutoPtr<SceneGraphLeaf> Clone() override;
+       [[nodiscard]] nvrhi::AutoPtr<SceneGraphLeaf> Clone() override;
        [[nodiscard]] SceneContentFlags GetContentFlags() const override {
            return SceneContentFlags::Animations;
        }
-        [[nodiscard]] const std::vector<AutoPtr<SceneGraphAnimationChannel>>& GetChannels() const { return m_Channels; }
+        [[nodiscard]] const std::vector<nvrhi::AutoPtr<SceneGraphAnimationChannel>>& GetChannels() const { return m_Channels; }
         [[nodiscard]] float GetDuration() const { return m_Duration; }
         [[nodiscard]] bool IsVald() const;
         bool Apply(float time) const;  // NOLINT(modernize-use-nodiscard)
@@ -469,8 +469,8 @@ namespace donut::engine
     class ResourceTracker
     {
     private:
-        std::unordered_map<AutoPtr<T>, uint32_t> m_Map;
-        using UnderlyingConstIterator = typename std::unordered_map<AutoPtr<T>, uint32_t>::const_iterator;
+        std::unordered_map<nvrhi::AutoPtr<T>, uint32_t> m_Map;
+        using UnderlyingConstIterator = typename std::unordered_map<nvrhi::AutoPtr<T>, uint32_t>::const_iterator;
 
     public:
         class ConstIterator
@@ -529,21 +529,21 @@ namespace donut::engine
     template<typename T>
     using SceneResourceCallback = std::function<void(const T*)>;
     
-    class SceneGraph : public WeakReferenceSourceImpl<IWeakReferenceSource>
+    class SceneGraph : public nvrhi::WeakReferenceSourceImpl<nvrhi::IWeakReferenceSource>
     {
     private:
         friend class SceneGraphNode;
-        AutoPtr<SceneGraphNode> m_Root;
+        nvrhi::AutoPtr<SceneGraphNode> m_Root;
         ResourceTracker<Material> m_Materials;
         ResourceTracker<MeshInfo> m_Meshes;
         size_t m_GeometryCount = 0;
         size_t m_MaxGeometryCountPerMesh = 0;
         size_t m_GeometryInstancesCount = 0;
-        std::vector<AutoPtr<MeshInstance>> m_MeshInstances;
-        std::vector<AutoPtr<SkinnedMeshInstance>> m_SkinnedMeshInstances;
-        std::vector<AutoPtr<SceneGraphAnimation>> m_Animations;
-        std::vector<AutoPtr<SceneCamera>> m_Cameras;
-        std::vector<AutoPtr<Light>> m_Lights;
+        std::vector<nvrhi::AutoPtr<MeshInstance>> m_MeshInstances;
+        std::vector<nvrhi::AutoPtr<SkinnedMeshInstance>> m_SkinnedMeshInstances;
+        std::vector<nvrhi::AutoPtr<SceneGraphAnimation>> m_Animations;
+        std::vector<nvrhi::AutoPtr<SceneCamera>> m_Cameras;
+        std::vector<nvrhi::AutoPtr<Light>> m_Lights;
         
     protected:
         virtual void RegisterLeaf(SceneGraphLeaf *leaf);
@@ -565,27 +565,27 @@ namespace donut::engine
         [[nodiscard]] const size_t GetGeometryCount() const { return m_GeometryCount; }
         [[nodiscard]] const size_t GetMaxGeometryCountPerMesh() const { return m_MaxGeometryCountPerMesh; }
         [[nodiscard]] const size_t GetGeometryInstancesCount() const { return m_GeometryInstancesCount; }
-        [[nodiscard]] const std::vector<AutoPtr<MeshInstance>>& GetMeshInstances() const { return m_MeshInstances; }
-        [[nodiscard]] const std::vector<AutoPtr<SkinnedMeshInstance>>& GetSkinnedMeshInstances() const { return m_SkinnedMeshInstances; }
-        [[nodiscard]] const std::vector<AutoPtr<SceneGraphAnimation>>& GetAnimations() const { return m_Animations; }
-        [[nodiscard]] const std::vector<AutoPtr<SceneCamera>>& GetCameras() const { return m_Cameras; }
-        [[nodiscard]] const std::vector<AutoPtr<Light>>& GetLights() const { return m_Lights; }
+        [[nodiscard]] const std::vector<nvrhi::AutoPtr<MeshInstance>>& GetMeshInstances() const { return m_MeshInstances; }
+        [[nodiscard]] const std::vector<nvrhi::AutoPtr<SkinnedMeshInstance>>& GetSkinnedMeshInstances() const { return m_SkinnedMeshInstances; }
+        [[nodiscard]] const std::vector<nvrhi::AutoPtr<SceneGraphAnimation>>& GetAnimations() const { return m_Animations; }
+        [[nodiscard]] const std::vector<nvrhi::AutoPtr<SceneCamera>>& GetCameras() const { return m_Cameras; }
+        [[nodiscard]] const std::vector<nvrhi::AutoPtr<Light>>& GetLights() const { return m_Lights; }
         [[nodiscard]] bool HasPendingStructureChanges() const { return m_Root && (m_Root->m_Dirty & SceneGraphNode::DirtyFlags::SubgraphStructure) != 0; }
         [[nodiscard]] bool HasPendingTransformChanges() const { return m_Root && (m_Root->m_Dirty & (SceneGraphNode::DirtyFlags::SubgraphTransforms | SceneGraphNode::DirtyFlags::SubgraphPrevTransforms)) != 0; }
 
         // Replaces the current root node of the graph with the new one.
-        AutoPtr<SceneGraphNode> SetRootNode(SceneGraphNode *root);
+        nvrhi::AutoPtr<SceneGraphNode> SetRootNode(SceneGraphNode *root);
         
         // Attaches a node and its subgraph to the parent.
         // If the node is already attached to this or other graph, a deep copy of the subgraph is made first.
-        AutoPtr<SceneGraphNode> Attach(SceneGraphNode *parent, SceneGraphNode* child);
+        nvrhi::AutoPtr<SceneGraphNode> Attach(SceneGraphNode *parent, SceneGraphNode* child);
         
         // Creates a node holding the provided leaf and attaches it to the parent.
-        AutoPtr<SceneGraphNode> AttachLeafNode(SceneGraphNode* parent,SceneGraphLeaf* leaf);
+        nvrhi::AutoPtr<SceneGraphNode> AttachLeafNode(SceneGraphNode* parent,SceneGraphLeaf* leaf);
         
         // Removes the node and its subgraph from the graph.
         // When preserveOrder is 'false', the order of node's siblings may be changed during this operation to improve performance.
-        AutoPtr<SceneGraphNode> Detach(SceneGraphNode* node, bool preserveOrder = false);
+        nvrhi::AutoPtr<SceneGraphNode> Detach(SceneGraphNode* node, bool preserveOrder = false);
 
         // Finds a node whose path (sequence of nested node names) matches the provided path,
         // relative to the 'context' node or the root if 'context' is NULL.
@@ -599,20 +599,20 @@ namespace donut::engine
 
     struct SceneImportResult
     {
-        AutoPtr<SceneGraphNode> rootNode;
+        nvrhi::AutoPtr<SceneGraphNode> rootNode;
     };
 
-    class SceneTypeFactory: public ObjectImpl<IObject>
+    class SceneTypeFactory: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
         virtual ~SceneTypeFactory() = default;
-        virtual AutoPtr<SceneGraph> CreateGraph();
-        virtual AutoPtr<SceneGraphLeaf> CreateLeaf(const std::string& type);
-        virtual AutoPtr<Material> CreateMaterial();
-        virtual AutoPtr<MeshInfo> CreateMesh();
-        virtual AutoPtr<MeshGeometry> CreateMeshGeometry();
-        virtual AutoPtr<MeshInstance> CreateMeshInstance(MeshInfo* mesh);
-        virtual AutoPtr<SkinnedMeshInstance> CreateSkinnedMeshInstance(SceneTypeFactory *sceneTypeFactory, MeshInfo *prototypeMesh);
+        virtual nvrhi::AutoPtr<SceneGraph> CreateGraph();
+        virtual nvrhi::AutoPtr<SceneGraphLeaf> CreateLeaf(const std::string& type);
+        virtual nvrhi::AutoPtr<Material> CreateMaterial();
+        virtual nvrhi::AutoPtr<MeshInfo> CreateMesh();
+        virtual nvrhi::AutoPtr<MeshGeometry> CreateMeshGeometry();
+        virtual nvrhi::AutoPtr<MeshInstance> CreateMeshInstance(MeshInfo* mesh);
+        virtual nvrhi::AutoPtr<SkinnedMeshInstance> CreateSkinnedMeshInstance(SceneTypeFactory *sceneTypeFactory, MeshInfo *prototypeMesh);
     };
 
     void PrintSceneGraph(const SceneGraphNode* root);

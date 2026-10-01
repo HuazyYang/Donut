@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <atomic>
 #include <condition_variable>
 #include <functional>
@@ -36,7 +36,7 @@ using namespace std::chrono;
 namespace donut::engine
 {
 
-class ThreadPoolTask: public ObjectImpl<IObject>
+class ThreadPoolTask: public nvrhi::ObjectImpl<nvrhi::IObject>
 {
 public:
     // Execute the task.
@@ -65,7 +65,7 @@ private:
     void ThreadProc();
 
     std::vector<std::thread> m_threads;
-    std::queue<AutoPtr<ThreadPoolTask>> m_tasks;
+    std::queue<nvrhi::AutoPtr<ThreadPoolTask>> m_tasks;
     std::mutex m_mutex;
     std::condition_variable m_forward;
     std::atomic<bool> m_terminate = false;

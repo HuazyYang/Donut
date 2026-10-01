@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <string>
 #include <unordered_map>
@@ -57,7 +57,7 @@ namespace donut::engine::animation
         const Keyframe& a, const Keyframe& b,
         const Keyframe& c, const Keyframe& d, float t, float dt);
 
-    class Sampler: public ObjectImpl<IObject>
+    class Sampler: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     protected:
         std::vector<Keyframe> m_Keyframes;
@@ -84,7 +84,7 @@ namespace donut::engine::animation
     class Sequence
     {
     protected:
-        std::unordered_map<std::string, AutoPtr<Sampler>> m_Tracks;
+        std::unordered_map<std::string, nvrhi::AutoPtr<Sampler>> m_Tracks;
         float m_Duration = 0.f;
 
     public:

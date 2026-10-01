@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -86,12 +86,12 @@ namespace donut::engine
     //      CreateStaticPlatformShaderLibrary(DONUT_MAKE_PLATFORM_SHADER_LIBRARY(g_MyShaderLibrary), defines);
     #define DONUT_MAKE_PLATFORM_SHADER_LIBRARY(basename) DONUT_MAKE_DXIL_SHADER(basename##_dxil), DONUT_MAKE_SPIRV_SHADER(basename##_spirv)
 
-    class ShaderFactory: public ObjectImpl<IObject>
+    class ShaderFactory: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     private:
         nvrhi::DeviceHandle m_Device;
-        std::unordered_map<std::string, AutoPtr<IDataBlob>> m_BytecodeCache;
-		AutoPtr<vfs::IFileSystem> m_fs;
+        std::unordered_map<std::string, nvrhi::AutoPtr<nvrhi::IDataBlob>> m_BytecodeCache;
+		nvrhi::AutoPtr<vfs::IFileSystem> m_fs;
 		std::filesystem::path m_basePath;
 
     public:
@@ -104,7 +104,7 @@ namespace donut::engine
 
         void ClearCache();
 
-        AutoPtr<IDataBlob> GetBytecode(const char* fileName, const char* entryName);
+        nvrhi::AutoPtr<nvrhi::IDataBlob> GetBytecode(const char* fileName, const char* entryName);
 
         // Creates a shader from binary file.
         nvrhi::ShaderHandle CreateShader(const char* fileName, const char* entryName, const std::vector<ShaderMacro>* pDefines, const nvrhi::ShaderDesc& desc);

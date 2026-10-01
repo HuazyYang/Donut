@@ -35,8 +35,8 @@ namespace donut::render
     {
     private:
         nvrhi::TextureHandle m_ShadowMapTexture;
-        std::vector<AutoPtr<PlanarShadowMap>> m_Cascades;
-        std::vector<AutoPtr<PlanarShadowMap>> m_PerObjectShadows;
+        std::vector<nvrhi::AutoPtr<PlanarShadowMap>> m_Cascades;
+        std::vector<nvrhi::AutoPtr<PlanarShadowMap>> m_PerObjectShadows;
         engine::CompositeView m_CompositeView;
         int m_NumberOfCascades;
 

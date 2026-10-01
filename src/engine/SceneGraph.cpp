@@ -72,7 +72,7 @@ SkinnedMeshInstance::SkinnedMeshInstance(SceneTypeFactory* sceneTypeFactory, Mes
     m_Mesh = skinnedMesh;
 }
 
-donut::AutoPtr<SceneGraphLeaf> SkinnedMeshInstance::Clone()
+nvrhi::AutoPtr<SceneGraphLeaf> SkinnedMeshInstance::Clone()
 {
     auto copy = MAKE_RC_OBJ_PTR(SkinnedMeshInstance, m_SceneTypeFactory, m_PrototypeMesh);
 
@@ -84,12 +84,12 @@ donut::AutoPtr<SceneGraphLeaf> SkinnedMeshInstance::Clone()
     return copy;
 }
 
-donut::AutoPtr<SceneGraphLeaf> SkinnedMeshReference::Clone()
+nvrhi::AutoPtr<SceneGraphLeaf> SkinnedMeshReference::Clone()
 {
     return MAKE_RC_OBJ_PTR(SkinnedMeshReference, m_Instance.Lock());
 }
 
-donut::AutoPtr<SceneGraphLeaf> MeshInstance::Clone()
+nvrhi::AutoPtr<SceneGraphLeaf> MeshInstance::Clone()
 {
     return MAKE_RC_OBJ_PTR(MeshInstance, m_Mesh);
 }
@@ -149,7 +149,7 @@ dm::affine3 SceneCamera::GetWorldToViewMatrix() const
     return dm::affine3(inverse(node->GetLocalToWorldTransform())) * dm::scaling(dm::float3(1.f, 1.f, -1.f));
 }
 
-donut::AutoPtr<SceneGraphLeaf> PerspectiveCamera::Clone()
+nvrhi::AutoPtr<SceneGraphLeaf> PerspectiveCamera::Clone()
 {
     auto copy = MAKE_RC_OBJ_PTR(PerspectiveCamera);
     copy->zNear = zNear;
@@ -196,7 +196,7 @@ bool PerspectiveCamera::SetProperty(const std::string& name, const dm::float4& v
     return SceneGraphLeaf::SetProperty(name, value);
 }
 
-donut::AutoPtr<SceneGraphLeaf> OrthographicCamera::Clone()
+nvrhi::AutoPtr<SceneGraphLeaf> OrthographicCamera::Clone()
 {
     auto copy = MAKE_RC_OBJ_PTR(OrthographicCamera);
     copy->zNear = zNear;
@@ -318,7 +318,7 @@ void SceneGraphNode::SetLeaf(SceneGraphLeaf* leaf)
     }
 
     m_Leaf = leaf;
-    leaf->m_Node = WeakPtr<SceneGraphNode>(this);
+    leaf->m_Node = nvrhi::WeakPtr<SceneGraphNode>(this);
     if (graph)
         graph->RegisterLeaf(leaf);
 
@@ -472,7 +472,7 @@ bool SceneGraphAnimationChannel::Apply(float time) const
     return true;
 }
 
-donut::AutoPtr<SceneGraphLeaf> SceneGraphAnimation::Clone()
+nvrhi::AutoPtr<SceneGraphLeaf> SceneGraphAnimation::Clone()
 {
     auto copy = MAKE_RC_OBJ_PTR(SceneGraphAnimation);
     for (const auto& channel : m_Channels)
@@ -668,7 +668,7 @@ void SceneGraph::UnregisterLeaf(SceneGraphLeaf *leaf)
     }
 }
 
-donut::AutoPtr<SceneGraphNode> SceneGraph::SetRootNode(SceneGraphNode *root)
+nvrhi::AutoPtr<SceneGraphNode> SceneGraph::SetRootNode(SceneGraphNode *root)
 {
     auto oldRoot = m_Root;
     if (m_Root)
@@ -679,8 +679,8 @@ donut::AutoPtr<SceneGraphNode> SceneGraph::SetRootNode(SceneGraphNode *root)
     return oldRoot;
 }
 
-donut::AutoPtr<SceneGraphNode> SceneGraph::Attach(SceneGraphNode* parent, SceneGraphNode* child) {
-    auto parentGraph = parent ? parent->m_Graph.Lock() : AutoPtr<SceneGraph>(this);
+nvrhi::AutoPtr<SceneGraphNode> SceneGraph::Attach(SceneGraphNode* parent, SceneGraphNode* child) {
+    auto parentGraph = parent ? parent->m_Graph.Lock() : nvrhi::AutoPtr<SceneGraph>(this);
     auto childGraph = child->m_Graph.Lock();
 
     if (!parentGraph && !childGraph)
@@ -694,7 +694,7 @@ donut::AutoPtr<SceneGraphNode> SceneGraph::Attach(SceneGraphNode* parent, SceneG
     }
 
     assert(parentGraph == this);
-    AutoPtr<SceneGraphNode> attachedChild;
+    nvrhi::AutoPtr<SceneGraphNode> attachedChild;
     
     if (childGraph)
     {
@@ -702,7 +702,7 @@ donut::AutoPtr<SceneGraphNode> SceneGraph::Attach(SceneGraphNode* parent, SceneG
         // copy the subgraph first
 
         // keep a mapping of old nodes to new nodes to patch the copied animations
-        std::unordered_map<SceneGraphNode*, AutoPtr<SceneGraphNode>> nodeMap;
+        std::unordered_map<SceneGraphNode*, nvrhi::AutoPtr<SceneGraphNode>> nodeMap;
         
         SceneGraphNode* currentParent = parent;
         SceneGraphWalker walker(child);
@@ -714,7 +714,7 @@ donut::AutoPtr<SceneGraphNode> SceneGraph::Attach(SceneGraphNode* parent, SceneG
 
             copy->m_Name = walker->m_Name;
             copy->m_Parent = currentParent;
-            copy->m_Graph = WeakPtr<SceneGraph>(this);
+            copy->m_Graph = nvrhi::WeakPtr<SceneGraph>(this);
             copy->m_Dirty = walker->m_Dirty;
 
             if (walker->m_HasLocalTransform)
@@ -838,7 +838,7 @@ donut::AutoPtr<SceneGraphNode> SceneGraph::Attach(SceneGraphNode* parent, SceneG
     return attachedChild;
 }
 
-donut::AutoPtr<SceneGraphNode> SceneGraph::AttachLeafNode(SceneGraphNode *parent, SceneGraphLeaf *leaf)
+nvrhi::AutoPtr<SceneGraphNode> SceneGraph::AttachLeafNode(SceneGraphNode *parent, SceneGraphLeaf *leaf)
 {
     auto node = MAKE_RC_OBJ_PTR(SceneGraphNode);
     if (leaf->GetNode())
@@ -848,7 +848,7 @@ donut::AutoPtr<SceneGraphNode> SceneGraph::AttachLeafNode(SceneGraphNode *parent
     return Attach(parent, node);
 }
 
-donut::AutoPtr<SceneGraphNode> SceneGraph::Detach(SceneGraphNode* node, bool preserveOrder)
+nvrhi::AutoPtr<SceneGraphNode> SceneGraph::Detach(SceneGraphNode* node, bool preserveOrder)
 {
     auto nodeGraph = node->m_Graph.Lock();
 
@@ -871,7 +871,7 @@ donut::AutoPtr<SceneGraphNode> SceneGraph::Detach(SceneGraphNode* node, bool pre
     // remove the node from its parent
     if (node->m_Parent)
     {
-        std::vector<AutoPtr<SceneGraphNode>>& siblings = node->m_Parent->m_Children;
+        std::vector<nvrhi::AutoPtr<SceneGraphNode>>& siblings = node->m_Parent->m_Children;
 
         node->m_Parent->PropagateDirtyFlags(SceneGraphNode::DirtyFlags::SubgraphStructure);
 
@@ -940,7 +940,7 @@ SceneGraphNode* SceneGraph::FindNode(const std::filesystem::path& path, SceneGra
         }
 
         auto found = std::find_if(current->m_Children.begin(), current->m_Children.end(),
-            [&pathComponent](AutoPtr<SceneGraphNode> const& item) { return item->GetName() == *pathComponent; });
+            [&pathComponent](nvrhi::AutoPtr<SceneGraphNode> const& item) { return item->GetName() == *pathComponent; });
 
         if (found != current->m_Children.end())
         {
@@ -1133,12 +1133,12 @@ void SceneGraph::Refresh(uint32_t frameIndex)
     }
 }
 
-donut::AutoPtr<SceneGraph> SceneTypeFactory::CreateGraph()
+nvrhi::AutoPtr<SceneGraph> SceneTypeFactory::CreateGraph()
 {
     return MAKE_RC_OBJ_PTR(SceneGraph);
 }
 
-donut::AutoPtr<SceneGraphLeaf> SceneTypeFactory::CreateLeaf(const std::string& type)
+nvrhi::AutoPtr<SceneGraphLeaf> SceneTypeFactory::CreateLeaf(const std::string& type)
 {
     if (type == "DirectionalLight")
     {
@@ -1164,27 +1164,27 @@ donut::AutoPtr<SceneGraphLeaf> SceneTypeFactory::CreateLeaf(const std::string& t
     return nullptr;
 }
 
-donut::AutoPtr<Material> SceneTypeFactory::CreateMaterial()
+nvrhi::AutoPtr<Material> SceneTypeFactory::CreateMaterial()
 {
     return MAKE_RC_OBJ_PTR(Material);
 }
 
-donut::AutoPtr<MeshInfo> SceneTypeFactory::CreateMesh()
+nvrhi::AutoPtr<MeshInfo> SceneTypeFactory::CreateMesh()
 {
     return MAKE_RC_OBJ_PTR(MeshInfo);
 }
 
-donut::AutoPtr<MeshGeometry> SceneTypeFactory::CreateMeshGeometry()
+nvrhi::AutoPtr<MeshGeometry> SceneTypeFactory::CreateMeshGeometry()
 {
     return MAKE_RC_OBJ_PTR(MeshGeometry);
 }
 
-donut::AutoPtr<MeshInstance> SceneTypeFactory::CreateMeshInstance(MeshInfo* mesh)
+nvrhi::AutoPtr<MeshInstance> SceneTypeFactory::CreateMeshInstance(MeshInfo* mesh)
 {
     return MAKE_RC_OBJ_PTR(MeshInstance, mesh);
 }
 
-donut::AutoPtr<SkinnedMeshInstance> SceneTypeFactory::CreateSkinnedMeshInstance(SceneTypeFactory *sceneTypeFactory, MeshInfo *prototypeMesh)
+nvrhi::AutoPtr<SkinnedMeshInstance> SceneTypeFactory::CreateSkinnedMeshInstance(SceneTypeFactory *sceneTypeFactory, MeshInfo *prototypeMesh)
 {
     return MAKE_RC_OBJ_PTR(SkinnedMeshInstance, sceneTypeFactory, prototypeMesh);
 }

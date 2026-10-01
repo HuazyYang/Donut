@@ -303,7 +303,7 @@ nvrhi::GraphicsPipelineHandle ForwardShadingPass::CreateGraphicsPipeline(Forward
     return m_Device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
 }
 
-donut::AutoPtr<MaterialBindingCache> ForwardShadingPass::CreateMaterialBindingCache(CommonRenderPasses& commonPasses)
+nvrhi::AutoPtr<MaterialBindingCache> ForwardShadingPass::CreateMaterialBindingCache(CommonRenderPasses& commonPasses)
 {
     std::vector<MaterialResourceBinding> materialBindings = {
         { MaterialResource::ConstantBuffer,         FORWARD_BINDING_MATERIAL_CONSTANTS },
@@ -346,10 +346,10 @@ void ForwardShadingPass::SetupView(
 void ForwardShadingPass::PrepareLights(
     Context& context,
     nvrhi::ICommandList* commandList,
-    const std::vector<donut::AutoPtr<Light>>& lights,
+    const std::vector<nvrhi::AutoPtr<Light>>& lights,
     dm::float3 ambientColorTop,
     dm::float3 ambientColorBottom,
-    const std::vector<donut::AutoPtr<LightProbe>>& lightProbes)
+    const std::vector<nvrhi::AutoPtr<LightProbe>>& lightProbes)
 {
     nvrhi::ITexture* shadowMapTexture = nullptr;
     int2 shadowMapTextureSize = 0;

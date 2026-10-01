@@ -103,7 +103,7 @@ void ThreadPool::ThreadProc()
 {
     while(!m_terminate.load())
     {
-        AutoPtr<ThreadPoolTask> task;
+        nvrhi::AutoPtr<ThreadPoolTask> task;
         
         // Wait until a task is available or termination is requested
         {

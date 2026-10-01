@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <nvrhi/nvrhi.h>
 #include <unordered_map>
 
@@ -49,7 +49,7 @@ namespace donut::render
         bool enableColorLUT = true;
     };
 
-    class ToneMappingPass: ObjectImpl<IObject>
+    class ToneMappingPass: nvrhi::ObjectImpl<nvrhi::IObject>
     {
     private:
 
@@ -77,8 +77,8 @@ namespace donut::render
         nvrhi::BindingLayoutHandle m_RenderBindingLayout;
         nvrhi::GraphicsPipelineHandle m_RenderPso;
 
-        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
-        AutoPtr<engine::FramebufferFactory> m_FramebufferFactory;
+        nvrhi::AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
+        nvrhi::AutoPtr<engine::FramebufferFactory> m_FramebufferFactory;
 
         std::unordered_map<nvrhi::ITexture*, nvrhi::BindingSetHandle> m_HistogramBindingSets;
         std::unordered_map<nvrhi::ITexture*, nvrhi::BindingSetHandle> m_RenderBindingSets;

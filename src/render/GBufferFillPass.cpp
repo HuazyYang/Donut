@@ -260,7 +260,7 @@ nvrhi::GraphicsPipelineHandle GBufferFillPass::CreateGraphicsPipeline(PipelineKe
     return m_Device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
 }
 
-donut::AutoPtr<MaterialBindingCache> GBufferFillPass::CreateMaterialBindingCache(CommonRenderPasses& commonPasses)
+nvrhi::AutoPtr<MaterialBindingCache> GBufferFillPass::CreateMaterialBindingCache(CommonRenderPasses& commonPasses)
 {
     std::vector<MaterialResourceBinding> materialBindings = {
         { MaterialResource::ConstantBuffer,         GBUFFER_BINDING_MATERIAL_CONSTANTS },

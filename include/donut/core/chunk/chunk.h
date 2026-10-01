@@ -92,13 +92,13 @@ struct MeshletInfo : public MeshInfoBase
 
 static_assert(sizeof(MeshletInfo) == 56);
 
-struct MeshSetBase: ObjectImpl<IObject>
+struct MeshSetBase: nvrhi::ObjectImpl<nvrhi::IObject>
 {
 
 public:
 
     MeshSetBase() {}
-    ~MeshSetBase() { SafeRelease(blob); }
+    ~MeshSetBase() { nvrhi::SafeRelease(blob); }
 
     enum Type {
         UNDEFINED=0,
@@ -132,7 +132,7 @@ public:
 
     donut::math::box3 bbox = {};
 
-    IDataBlob *blob = {};
+    nvrhi::IDataBlob *blob = {};
 };
 
 struct MeshSet : public MeshSetBase
@@ -167,8 +167,8 @@ struct MeshletSet : public MeshSetBase
     MeshletInfo const * meshInfos = {};
 };
 
-FRESULT serialize(MeshSetBase const & mset, IDataBlob **ppBlob);
+nvrhi::FRESULT serialize(MeshSetBase const & mset, nvrhi::IDataBlob **ppBlob);
 
-FRESULT deserialize(IDataBlob *pBlob, char const * assetpath, MeshSetBase **ppMesh);
+nvrhi::FRESULT deserialize(nvrhi::IDataBlob *pBlob, char const * assetpath, MeshSetBase **ppMesh);
 
 }

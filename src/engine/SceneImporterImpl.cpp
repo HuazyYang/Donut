@@ -30,14 +30,14 @@ namespace donut::engine {
 // Presents one donut VFS blob to Assimp as a seekable read-only stream.
 class AssimpIOStreamAdapter : public Assimp::IOStream {
  public:
-    AssimpIOStreamAdapter(IDataBlob* pBlob) : m_FileBlob(pBlob), m_FileSize(0), m_Offset(0) {
+    AssimpIOStreamAdapter(nvrhi::IDataBlob* pBlob) : m_FileBlob(pBlob), m_FileSize(0), m_Offset(0) {
         if (m_FileBlob) {
             m_FileBlob->AddRef();
             m_FileSize = m_FileBlob->GetSize();
         }
     }
 
-    ~AssimpIOStreamAdapter() { SafeRelease(m_FileBlob); }
+    ~AssimpIOStreamAdapter() { nvrhi::SafeRelease(m_FileBlob); }
 
     size_t Read(void* pvBuffer, size_t pSize, size_t pCount) override {
         if (!m_FileBlob || !pSize || !pCount)
@@ -93,7 +93,7 @@ class AssimpIOStreamAdapter : public Assimp::IOStream {
     void Flush() override {}
 
  private:
-    IDataBlob* m_FileBlob;
+    nvrhi::IDataBlob* m_FileBlob;
     size_t m_FileSize;
     size_t m_Offset;
 };
@@ -106,8 +106,8 @@ class AssimpIOSystemAdapter : public Assimp::IOSystem {
     AssimpIOSystemAdapter(vfs::IFileSystem* pFS) : m_FS{pFS} {}
 
     bool Exists(const char* pFile) const override {
-        AutoPtr<IDataBlob> pBlob;
-        return m_FS && FSUCCEEDED(m_FS->readFile(pFile, &pBlob)) && pBlob;
+        nvrhi::AutoPtr<nvrhi::IDataBlob> pBlob;
+        return m_FS && NVRHI_SUCCEEDED(m_FS->readFile(pFile, &pBlob)) && pBlob;
     }
 
     char getOsSeparator() const override { return '/'; }
@@ -121,8 +121,8 @@ class AssimpIOSystemAdapter : public Assimp::IOSystem {
         if (!m_FS)
             return nullptr;
 
-        AutoPtr<IDataBlob> pBlob;
-        if (FFAILED(m_FS->readFile(pFile, &pBlob)) || !pBlob)
+        nvrhi::AutoPtr<nvrhi::IDataBlob> pBlob;
+        if (NVRHI_FAILED(m_FS->readFile(pFile, &pBlob)) || !pBlob)
             return nullptr;
 
         auto pStream = new AssimpIOStreamAdapter(pBlob);
@@ -132,7 +132,7 @@ class AssimpIOSystemAdapter : public Assimp::IOSystem {
     void Close(Assimp::IOStream* pFile) override { delete pFile; }
 
  private:
-    AutoPtr<vfs::IFileSystem> m_FS;
+    nvrhi::AutoPtr<vfs::IFileSystem> m_FS;
 };
 
 AssimpSceneImporter::AssimpSceneImporter(vfs::IFileSystem* fs, SceneTypeFactory* sceneTypeFactory)
@@ -140,7 +140,7 @@ AssimpSceneImporter::AssimpSceneImporter(vfs::IFileSystem* fs, SceneTypeFactory*
 
 AssimpSceneImporter::~AssimpSceneImporter() {}
 
-FRESULT AssimpSceneImporter::Load(const std::filesystem::path& fileName, TextureCache& textureCache,
+nvrhi::FRESULT AssimpSceneImporter::Load(const std::filesystem::path& fileName, TextureCache& textureCache,
                                   SceneLoadingStats& stats, ThreadPool* threadPool,
                                   SceneImportResult& result) {
     result.rootNode.Reset();
@@ -157,15 +157,15 @@ FRESULT AssimpSceneImporter::Load(const std::filesystem::path& fileName, Texture
 
     if (!pAiScene || !pAiScene->mRootNode) {
         log::error("Couldn't load scene file '%s': %s", normalizedFileName.c_str(), importer.GetErrorString());
-        return FE_GENERIC_ERROR;
+        return nvrhi::FE_GENERIC_ERROR;
     }
 
     const std::filesystem::path fileParentPath = fileName.parent_path();
 
-    std::unordered_map<std::string, AutoPtr<LoadedTexture>> imageCache;
+    std::unordered_map<std::string, nvrhi::AutoPtr<LoadedTexture>> imageCache;
 
     auto LoadTexture = [fileParentPath, pAiScene, threadPool, &textureCache, &imageCache](
-                           const aiString& inlinePath, bool sRGB) -> AutoPtr<LoadedTexture> {
+                           const aiString& inlinePath, bool sRGB) -> nvrhi::AutoPtr<LoadedTexture> {
         if (inlinePath.length == 0)
             return nullptr;
 
@@ -174,7 +174,7 @@ FRESULT AssimpSceneImporter::Load(const std::filesystem::path& fileName, Texture
         if (it != imageCache.end())
             return it->second;
 
-        AutoPtr<LoadedTexture> loadedTexture;
+        nvrhi::AutoPtr<LoadedTexture> loadedTexture;
 
         // Textures embedded in the container (GLB, FBX) are named "*<index>".
         const TextureLoadOptions loadOptions{ SRGBModeFromBool(sRGB) };
@@ -182,8 +182,8 @@ FRESULT AssimpSceneImporter::Load(const std::filesystem::path& fileName, Texture
         if (pAiTexture) {
             // mHeight == 0 means the payload is a compressed file image, not raw texels.
             if (pAiTexture->mHeight == 0) {
-                AutoPtr<IDataBlob> textureData;
-                if (FSUCCEEDED(CreateBlob(pAiTexture->mWidth, &textureData)) && textureData) {
+                nvrhi::AutoPtr<nvrhi::IDataBlob> textureData;
+                if (NVRHI_SUCCEEDED(nvrhi::CreateBlob(pAiTexture->mWidth, &textureData)) && textureData) {
                     memcpy(textureData->GetDataPtr(), pAiTexture->pcData, pAiTexture->mWidth);
 
                     const std::string name = inlinePath.C_Str();
@@ -219,7 +219,7 @@ FRESULT AssimpSceneImporter::Load(const std::filesystem::path& fileName, Texture
     };
 
     // ---------------------------------------------------------------- materials
-    std::vector<AutoPtr<Material>> materials((size_t)pAiScene->mNumMaterials);
+    std::vector<nvrhi::AutoPtr<Material>> materials((size_t)pAiScene->mNumMaterials);
 
     for (uint32_t materialIndex = 0; materialIndex < pAiScene->mNumMaterials; ++materialIndex) {
         const aiMaterial* pAiMat = pAiScene->mMaterials[materialIndex];
@@ -382,8 +382,8 @@ FRESULT AssimpSceneImporter::Load(const std::filesystem::path& fileName, Texture
     totalIndices = 0;
     totalVertices = 0;
 
-    std::unordered_map<aiMesh*, AutoPtr<MeshInfo>> meshes;
-    AutoPtr<Material> emptyMaterial;
+    std::unordered_map<aiMesh*, nvrhi::AutoPtr<MeshInfo>> meshes;
+    nvrhi::AutoPtr<Material> emptyMaterial;
 
     for (uint32_t meshIndex = 0; meshIndex < pAiScene->mNumMeshes; ++meshIndex) {
         aiMesh* pAiMesh = pAiScene->mMeshes[meshIndex];
@@ -492,7 +492,7 @@ FRESULT AssimpSceneImporter::Load(const std::filesystem::path& fileName, Texture
     }
 
     // ------------------------------------------------------------------ cameras
-    std::vector<std::pair<aiString, AutoPtr<SceneCamera>>> cameras((size_t)pAiScene->mNumCameras);
+    std::vector<std::pair<aiString, nvrhi::AutoPtr<SceneCamera>>> cameras((size_t)pAiScene->mNumCameras);
 
     for (uint32_t cameraIndex = 0; cameraIndex < pAiScene->mNumCameras; ++cameraIndex) {
         const aiCamera* src = pAiScene->mCameras[cameraIndex];
@@ -505,33 +505,33 @@ FRESULT AssimpSceneImporter::Load(const std::filesystem::path& fileName, Texture
         if (src->mAspect > 0.f)
             perspectiveCamera->aspectRatio = src->mAspect;
 
-        cameras[cameraIndex] = std::make_pair(src->mName, AutoPtr<SceneCamera>(perspectiveCamera));
+        cameras[cameraIndex] = std::make_pair(src->mName, nvrhi::AutoPtr<SceneCamera>(perspectiveCamera));
     }
 
     // ------------------------------------------------------------------- lights
-    std::vector<std::pair<aiString, AutoPtr<Light>>> lights((size_t)pAiScene->mNumLights);
+    std::vector<std::pair<aiString, nvrhi::AutoPtr<Light>>> lights((size_t)pAiScene->mNumLights);
 
     for (uint32_t lightIndex = 0; lightIndex < pAiScene->mNumLights; ++lightIndex) {
         const aiLight* src = pAiScene->mLights[lightIndex];
-        AutoPtr<Light> dst;
+        nvrhi::AutoPtr<Light> dst;
 
         switch (src->mType) {
             case aiLightSource_DIRECTIONAL: {
-                AutoPtr<DirectionalLight> directional{
+                nvrhi::AutoPtr<DirectionalLight> directional{
                     dynamic_cast<DirectionalLight*>(m_SceneTypeFactory->CreateLeaf("DirectionalLight").Get())};
                 directional->color = float3(src->mColorDiffuse.r, src->mColorDiffuse.g, src->mColorDiffuse.b);
                 dst = directional;
                 break;
             }
             case aiLightSource_POINT: {
-                AutoPtr<PointLight> point{
+                nvrhi::AutoPtr<PointLight> point{
                     dynamic_cast<PointLight*>(m_SceneTypeFactory->CreateLeaf("PointLight").Get())};
                 point->color = float3(src->mColorDiffuse.r, src->mColorDiffuse.g, src->mColorDiffuse.b);
                 dst = point;
                 break;
             }
             case aiLightSource_SPOT: {
-                AutoPtr<SpotLight> spot{dynamic_cast<SpotLight*>(m_SceneTypeFactory->CreateLeaf("SpotLight").Get())};
+                nvrhi::AutoPtr<SpotLight> spot{dynamic_cast<SpotLight*>(m_SceneTypeFactory->CreateLeaf("SpotLight").Get())};
                 spot->color = float3(src->mColorDiffuse.r, src->mColorDiffuse.g, src->mColorDiffuse.b);
                 spot->innerAngle = dm::degrees(src->mAngleInnerCone);
                 spot->outerAngle = dm::degrees(src->mAngleOuterCone);
@@ -553,7 +553,7 @@ FRESULT AssimpSceneImporter::Load(const std::filesystem::path& fileName, Texture
     std::vector<std::pair<aiNode*, aiMesh*>> skinnedNodes;
 
     struct StackItem {
-        AutoPtr<SceneGraphNode> dstParent;
+        nvrhi::AutoPtr<SceneGraphNode> dstParent;
         aiNode* const* srcNodes = nullptr;
         size_t srcCount = 0;
     };
@@ -612,7 +612,7 @@ FRESULT AssimpSceneImporter::Load(const std::filesystem::path& fileName, Texture
 
         // One aiMesh becomes one MeshInstance. A node with several meshes gets one
         // child node per mesh, because a SceneGraphNode holds a single leaf.
-        std::vector<AutoPtr<MeshInfo>> nodeMeshes;
+        std::vector<nvrhi::AutoPtr<MeshInfo>> nodeMeshes;
         for (uint32_t i = 0; i < src->mNumMeshes; ++i) {
             aiMesh* pAiMesh = pAiScene->mMeshes[src->mMeshes[i]];
 
@@ -704,7 +704,7 @@ FRESULT AssimpSceneImporter::Load(const std::filesystem::path& fileName, Texture
 
     result.rootNode = root;
 
-    return FS_OK;
+    return nvrhi::FS_OK;
 }
 
 }  // namespace donut::engine

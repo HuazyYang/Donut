@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <nvrhi/nvrhi.h>
 #include <unordered_map>
 #include <memory>
@@ -34,13 +34,13 @@ namespace donut::engine
     typedef int DescriptorIndex;
 
     // Stores a descriptor index in a descriptor table. Releases the descriptor when destroyed.
-    class DescriptorHandle: public ObjectImpl<IObject>
+    class DescriptorHandle: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     private:
       friend class DescriptorTableManager;
       DescriptorHandle(DescriptorTableManager *managerPtr,
                        DescriptorIndex index);
-      WeakPtr<DescriptorTableManager> m_Manager;
+      nvrhi::WeakPtr<DescriptorTableManager> m_Manager;
       DescriptorIndex m_DescriptorIndex;
 
     public:
@@ -64,7 +64,7 @@ namespace donut::engine
         DescriptorHandle& operator=(const DescriptorHandle&) = delete;
     };
 
-    class DescriptorTableManager : public WeakReferenceSourceImpl<IWeakReferenceSource>
+    class DescriptorTableManager : public nvrhi::WeakReferenceSourceImpl<nvrhi::IWeakReferenceSource>
     {
     protected:
         // Custom hasher that doesn't look at the binding slot

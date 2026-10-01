@@ -23,7 +23,7 @@
 #pragma once
 
 #include <donut/core/vfs/VFS.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <filesystem>
 #include <vector>
 
@@ -67,12 +67,12 @@ namespace donut::app
 
 		bool folderExists(const std::filesystem::path& name) override;
 		bool fileExists(const std::filesystem::path& name) override;
-		FRESULT readFile(const std::filesystem::path& name, IDataBlob **ppBlob) override;
+		nvrhi::FRESULT readFile(const std::filesystem::path& name, nvrhi::IDataBlob **ppBlob) override;
 		bool writeFile(const std::filesystem::path& name, const void* data, size_t size) override;
 		int enumerateFiles(const std::filesystem::path& path, const std::vector<std::string>& extensions, vfs::enumerate_callback_t callback, bool allowDuplicates = false) override;
 		int enumerateDirectories(const std::filesystem::path& path, vfs::enumerate_callback_t callback, bool allowDuplicates = false) override;
 
 	private:
-		std::vector<AutoPtr<vfs::IFileSystem>> m_FileSystems;
+		std::vector<nvrhi::AutoPtr<vfs::IFileSystem>> m_FileSystems;
 	};
 } // end namespace donut::app

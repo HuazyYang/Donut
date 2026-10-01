@@ -837,7 +837,7 @@ namespace donut::engine
         return texture;
     }
 
-    nvrhi::TextureHandle CreateDDSTextureFromMemory(nvrhi::IDevice* device, nvrhi::ICommandList* commandList, IDataBlob* data, const char* debugName /*= nullptr*/, const TextureLoadOptions& loadOptions /*= TextureLoadOptions()*/)
+    nvrhi::TextureHandle CreateDDSTextureFromMemory(nvrhi::IDevice* device, nvrhi::ICommandList* commandList, nvrhi::IDataBlob* data, const char* debugName /*= nullptr*/, const TextureLoadOptions& loadOptions /*= TextureLoadOptions()*/)
     {
         if (!data)
             return nullptr;
@@ -849,7 +849,7 @@ namespace donut::engine
         return CreateDDSTextureInternal(device, commandList, info, debugName);
     }
 
-    AutoPtr<IDataBlob> SaveStagingTextureAsDDS(nvrhi::IDevice* device, nvrhi::IStagingTexture* stagingTexture)
+    nvrhi::AutoPtr<nvrhi::IDataBlob> SaveStagingTextureAsDDS(nvrhi::IDevice* device, nvrhi::IStagingTexture* stagingTexture)
     {
         DDS_HEADER header = {};
         DDS_HEADER_DXT10 dx10header = {};
@@ -930,8 +930,8 @@ namespace donut::engine
 
         size_t dataSize = FillTextureInfoOffsets(textureInfo, 0, dataOffset);
 
-        AutoPtr<IDataBlob> blob;
-        if(FFAILED(CreateBlob(dataSize, &blob))) {
+        nvrhi::AutoPtr<nvrhi::IDataBlob> blob;
+        if(NVRHI_FAILED(nvrhi::CreateBlob(dataSize, &blob))) {
             log::error("Failed to create DDS texture storage blob");
             return nullptr;
         }

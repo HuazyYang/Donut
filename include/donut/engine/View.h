@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <nvrhi/nvrhi.h>
 #include <vector>
@@ -43,7 +43,7 @@ namespace donut::engine
         };
     };
 
-    class ICompositeView: public ObjectImpl<IObject>
+    class ICompositeView: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
         [[nodiscard]] virtual uint32_t GetNumChildViews(ViewType::Enum supportedTypes) const = 0;
@@ -150,7 +150,7 @@ namespace donut::engine
     class CompositeView : public ICompositeView
     {
     protected:
-        std::vector<AutoPtr<IView>> m_ChildViews;
+        std::vector<nvrhi::AutoPtr<IView>> m_ChildViews;
 
     public:
         void AddView(IView* view);

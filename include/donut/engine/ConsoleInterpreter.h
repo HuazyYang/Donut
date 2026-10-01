@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -66,7 +66,7 @@ namespace donut::engine
 
 		// Command-line interpreter
 
-		class Interpreter: public ObjectImpl<IObject>
+		class Interpreter: public nvrhi::ObjectImpl<nvrhi::IObject>
 		{
 		public:
 
@@ -88,7 +88,7 @@ namespace donut::engine
 
 		private:
 
-			AutoPtr<TextureCache> m_TextureCache;
+			nvrhi::AutoPtr<TextureCache> m_TextureCache;
 		};
 
 	} // end namespace console

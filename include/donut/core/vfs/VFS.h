@@ -22,8 +22,8 @@
 
 #pragma once
 
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/DataBlob.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/DataBlob.h>
 #include <string>
 #include <filesystem>
 #include <functional>
@@ -54,7 +54,7 @@ namespace donut::vfs
     }
 
     // Basic interface for the virtual file system.
-    class IFileSystem: public ObjectImpl<IObject>
+    class IFileSystem: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
         virtual ~IFileSystem() = default;
@@ -67,7 +67,7 @@ namespace donut::vfs
 
         // Read the entire file.
         // Returns nullptr if the file cannot be read.
-        virtual FRESULT readFile(const std::filesystem::path& name, IDataBlob** ppBlob) = 0;
+        virtual nvrhi::FRESULT readFile(const std::filesystem::path& name, nvrhi::IDataBlob** ppBlob) = 0;
 
         // Write the entire file.
         // Returns false if the file cannot be written.
@@ -91,7 +91,7 @@ namespace donut::vfs
     public:
 		bool folderExists(const std::filesystem::path& name) override;
         bool fileExists(const std::filesystem::path& name) override;
-        FRESULT readFile(const std::filesystem::path& name, IDataBlob** ppBlob) override;
+        nvrhi::FRESULT readFile(const std::filesystem::path& name, nvrhi::IDataBlob** ppBlob) override;
         bool writeFile(const std::filesystem::path& name, const void* data, size_t size) override;
         int enumerateFiles(const std::filesystem::path& path, const std::vector<std::string>& extensions, enumerate_callback_t callback, bool allowDuplicates = false) override;
         int enumerateDirectories(const std::filesystem::path& path, enumerate_callback_t callback, bool allowDuplicates = false) override;
@@ -113,7 +113,7 @@ namespace donut::vfs
 
         bool folderExists(const std::filesystem::path& name) override;
         bool fileExists(const std::filesystem::path& name) override;
-        FRESULT readFile(const std::filesystem::path& name, IDataBlob **ppBlob) override;
+        nvrhi::FRESULT readFile(const std::filesystem::path& name, nvrhi::IDataBlob **ppBlob) override;
         bool writeFile(const std::filesystem::path& name, const void* data, size_t size) override;
         int enumerateFiles(const std::filesystem::path& path, const std::vector<std::string>& extensions, enumerate_callback_t callback, bool allowDuplicates = false) override;
         int enumerateDirectories(const std::filesystem::path& path, enumerate_callback_t callback, bool allowDuplicates = false) override;
@@ -135,8 +135,8 @@ namespace donut::vfs
 
 		bool folderExists(const std::filesystem::path& name) override;
         bool fileExists(const std::filesystem::path& name) override;
-        FRESULT readFile(const std::filesystem::path& name,
-                                        IDataBlob** ppBlob) override;
+        nvrhi::FRESULT readFile(const std::filesystem::path& name,
+                                        nvrhi::IDataBlob** ppBlob) override;
         bool writeFile(const std::filesystem::path& name, const void* data, size_t size) override;
         int enumerateFiles(const std::filesystem::path& path, const std::vector<std::string>& extensions, enumerate_callback_t callback, bool allowDuplicates = false) override;
         int enumerateDirectories(const std::filesystem::path& path, enumerate_callback_t callback, bool allowDuplicates = false) override;

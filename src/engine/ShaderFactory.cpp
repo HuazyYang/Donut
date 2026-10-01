@@ -80,7 +80,7 @@ void ShaderFactory::ClearCache()
 	m_BytecodeCache.clear();
 }
 
-donut::AutoPtr<donut::IDataBlob> ShaderFactory::GetBytecode(const char* fileName, const char* entryName)
+nvrhi::AutoPtr<nvrhi::IDataBlob> ShaderFactory::GetBytecode(const char* fileName, const char* entryName)
 {
     if (!m_fs)
         return nullptr;
@@ -105,7 +105,7 @@ donut::AutoPtr<donut::IDataBlob> ShaderFactory::GetBytecode(const char* fileName
     if (data)
         return data;
 
-    if (FFAILED(m_fs->readFile(shaderFilePath, &data)))
+    if (NVRHI_FAILED(m_fs->readFile(shaderFilePath, &data)))
     {
         log::error("Couldn't read the binary file for shader %s from %s", fileName, shaderFilePath.generic_string().c_str());
         return nullptr;

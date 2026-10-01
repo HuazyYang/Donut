@@ -70,7 +70,7 @@ struct ChunkFile::ChunkTableEntry
 //
 
 ChunkFile::~ChunkFile() {
-    SafeRelease(_data);
+    nvrhi::SafeRelease(_data);
     for(auto chunk : _chunks) {
         if (chunk->deleteUserData) delete[] (uint8_t *)chunk->data;
         delete chunk;
@@ -115,7 +115,7 @@ void ChunkFile::reset()
 {
     _filepath.clear();
     _chunks.clear();
-    SafeRelease(_data);
+    nvrhi::SafeRelease(_data);
     for(auto chunk : _chunks) {
         if (chunk->deleteUserData) delete[] (uint8_t *)chunk->data;
         delete chunk;
@@ -123,8 +123,8 @@ void ChunkFile::reset()
     _chunks.clear();
 }
 
-FRESULT ChunkFile::deserialize(
-    IDataBlob *blobPtr, char const * filepath, ChunkFile **ppChunkFile)
+nvrhi::FRESULT ChunkFile::deserialize(
+    nvrhi::IDataBlob *blobPtr, char const * filepath, ChunkFile **ppChunkFile)
 {
 
     if (auto const blob = blobPtr)
@@ -132,7 +132,7 @@ FRESULT ChunkFile::deserialize(
         if (!blob->GetDataPtr() || blob->GetSize() < sizeof(Header))
         {
             log::error("ChunkFile '%s' : invalid header", filepath);
-            return FE_GENERIC_ERROR;
+            return nvrhi::FE_GENERIC_ERROR;
         }
 
         uint8_t const * data = reinterpret_cast<uint8_t const *>(blob->GetDataPtr());
@@ -148,13 +148,13 @@ FRESULT ChunkFile::deserialize(
         if (nchunks == 0 || nchunks > 1000000)
         {
             log::error("ChunkFile '%s' : invalid number of chunks in file", filepath);
-            return FE_GENERIC_ERROR;
+            return nvrhi::FE_GENERIC_ERROR;
         }
 
         if (blob->GetSize() < header.chunkTableOffset + nchunks * sizeof(ChunkTableEntry))
         {
             log::error("ChunkFile '%s' : invalid chunks table", filepath);
-            return FE_GENERIC_ERROR;
+            return nvrhi::FE_GENERIC_ERROR;
         }
 
         ChunkTableEntry const * chunktable =
@@ -171,7 +171,7 @@ FRESULT ChunkFile::deserialize(
 
             if (blob->GetSize() < e.offset + e.size) {
                 log::error("ChunkFile '%s' : chunk %d invalid size/offset", filepath, e.chunkId);
-                return FE_GENERIC_ERROR;
+                return nvrhi::FE_GENERIC_ERROR;
             }
 
             auto chunk = new Chunk
@@ -189,16 +189,16 @@ FRESULT ChunkFile::deserialize(
         }
         result->Release();
 
-        return FS_OK;
+        return nvrhi::FS_OK;
     }
     else
     {
         log::error("ChunkFile '%s' : no data", filepath);
     }
-    return FE_GENERIC_ERROR;
+    return nvrhi::FE_GENERIC_ERROR;
 }
 
-FRESULT ChunkFile::serialize(IDataBlob **ppBlob) const {
+nvrhi::FRESULT ChunkFile::serialize(nvrhi::IDataBlob **ppBlob) const {
 
     uint32_t nchunks = (uint32_t)_chunks.size();
 
@@ -210,10 +210,10 @@ FRESULT ChunkFile::serialize(IDataBlob **ppBlob) const {
     for (auto const & chunk : _chunks)
         blobSize += chunk->size;
 
-    FRESULT fr;
-    IDataBlob *pBlob;
+    nvrhi::FRESULT fr;
+    nvrhi::IDataBlob *pBlob;
 
-    if (FSUCCEEDED(fr = CreateBlob(blobSize, &pBlob)))
+    if (NVRHI_SUCCEEDED(fr = nvrhi::CreateBlob(blobSize, &pBlob)))
     {
         size_t offset = 0;
         auto data = (uint8_t *)pBlob->GetDataPtr();
@@ -262,14 +262,14 @@ FRESULT ChunkFile::serialize(IDataBlob **ppBlob) const {
             pBlob->AddRef();
         }
         pBlob->Release();
-        return FS_OK;
+        return nvrhi::FS_OK;
     }
     else
     {
         log::error("Chunkfile '%s' : blob allocation failed", _filepath.c_str());
     }
 
-    return FE_GENERIC_ERROR;
+    return nvrhi::FE_GENERIC_ERROR;
 }
 
 };

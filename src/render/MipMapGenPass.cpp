@@ -72,14 +72,14 @@ static nvrhi::TextureHandle createNullTexture(nvrhi::DeviceHandle device)
     return device->createTexture(desc);
 }
 
-struct MipMapGenPass::NullTextures: ObjectImpl<IObject> {
+struct MipMapGenPass::NullTextures: nvrhi::ObjectImpl<nvrhi::IObject> {
 
     nvrhi::TextureHandle lod[NUM_LODS];
 
-    static AutoPtr<NullTextures> get(nvrhi::DeviceHandle device)
+    static nvrhi::AutoPtr<NullTextures> get(nvrhi::DeviceHandle device)
     {
         static std::mutex _mutex;
-        static AutoPtr<NullTextures> _nullTextures;
+        static nvrhi::AutoPtr<NullTextures> _nullTextures;
 
         std::lock_guard<std::mutex> lock(_mutex);
 

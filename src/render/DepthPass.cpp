@@ -151,7 +151,7 @@ void DepthPass::CreateViewBindings(nvrhi::BindingLayoutHandle& layout, nvrhi::Bi
     set = m_Device->createBindingSet(bindingSetDesc, layout);
 }
 
-donut::AutoPtr<MaterialBindingCache> DepthPass::CreateMaterialBindingCache(CommonRenderPasses& commonPasses)
+nvrhi::AutoPtr<MaterialBindingCache> DepthPass::CreateMaterialBindingCache(CommonRenderPasses& commonPasses)
 {
     std::vector<MaterialResourceBinding> materialBindings = {
         { MaterialResource::DiffuseTexture, DEPTH_BINDING_MATERIAL_DIFFUSE_TEXTURE },

@@ -21,7 +21,7 @@
 */
 
 #pragma once
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <nvrhi/nvrhi.h>
 
@@ -49,7 +49,7 @@ namespace donut::render
 
         nvrhi::TextureHandle MotionVectors;
 
-        AutoPtr<engine::FramebufferFactory> GBufferFramebuffer;
+        nvrhi::AutoPtr<engine::FramebufferFactory> GBufferFramebuffer;
 
         virtual ~GBufferRenderTargets() = default;
 

@@ -252,7 +252,7 @@ public:
     }
 };
 
-AutoPtr<DLSS> DLSS::CreateDX12(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
+nvrhi::AutoPtr<DLSS> DLSS::CreateDX12(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
     std::string const& directoryWithExecutable, uint32_t applicationID)
 {
     return MAKE_RC_OBJ_PTR(DLSS_DX12, device, shaderFactory, directoryWithExecutable, applicationID);

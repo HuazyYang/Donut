@@ -22,7 +22,7 @@
 
 
 #pragma once
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <donut/engine/BindingCache.h>
 #include <donut/core/math/math.h>
 #include <nvrhi/nvrhi.h>
@@ -80,7 +80,7 @@ namespace donut::render
 
         // Set of unique dummy textures - see details in class implementation
         struct NullTextures;
-        AutoPtr<NullTextures> m_NullTextures;
+        nvrhi::AutoPtr<NullTextures> m_NullTextures;
 
         engine::BindingCache m_BindingCache;
 

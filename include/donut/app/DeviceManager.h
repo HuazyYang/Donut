@@ -85,7 +85,7 @@ freely, subject to the following restrictions:
 #include <functional>
 #include <optional>
 
-#include <donut/core/object/Foundation.h>
+#include <nvrhi/core/Foundation.h>
 
 namespace donut::app
 {
@@ -259,7 +259,7 @@ namespace donut::app
 #endif
     };
 
-    class DeviceManager: public ObjectImpl<IObject>
+    class DeviceManager: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
         static DeviceManager* Create(nvrhi::GraphicsAPI api);
@@ -447,7 +447,7 @@ namespace donut::app
 #endif
     };
 
-    class IRenderPass: public ObjectImpl<IObject>
+    class IRenderPass: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     private:
         DeviceManager* m_DeviceManager;

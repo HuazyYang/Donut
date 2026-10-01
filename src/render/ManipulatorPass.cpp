@@ -388,7 +388,7 @@ void ManipulatorPass::RenderPick(
 {
     // Strip jitter so the widget ids rasterize at stable pixel centers
     // (PlanarView is a ref-counted object and not copyable, so rebuild it without the offset)
-    AutoPtr<PlanarView> pickView = MAKE_RC_OBJ_PTR(PlanarView);
+    nvrhi::AutoPtr<PlanarView> pickView = MAKE_RC_OBJ_PTR(PlanarView);
     pickView->SetViewport(view.GetViewport());
     pickView->SetVariableRateShadingState(view.GetVariableRateShadingState());
     pickView->SetMatrices(view.GetViewMatrix(), view.GetProjectionMatrix(false));

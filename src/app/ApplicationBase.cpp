@@ -138,7 +138,7 @@ void ApplicationBase::BeginLoadingScene(IFileSystem *fs, const std::filesystem::
 
     if (m_IsAsyncLoad)
     {
-        m_SceneLoadingThread = MakeMono<std::thread>([this, fs, sceneFileName]() {
+        m_SceneLoadingThread = nvrhi::MakeMono<std::thread>([this, fs, sceneFileName]() {
 			m_SceneLoaded = LoadScene(fs, sceneFileName); 
 			});
     }

@@ -49,7 +49,7 @@ bool NativeFileSystem::fileExists(const std::filesystem::path& name)
     return std::filesystem::exists(name) && std::filesystem::is_regular_file(name);
 }
 
-FRESULT NativeFileSystem::readFile(const std::filesystem::path& name, IDataBlob **ppBlob)
+nvrhi::FRESULT NativeFileSystem::readFile(const std::filesystem::path& name, nvrhi::IDataBlob **ppBlob)
 {
     // TODO: better error reporting
 
@@ -58,7 +58,7 @@ FRESULT NativeFileSystem::readFile(const std::filesystem::path& name, IDataBlob 
     if (!file.is_open())
     {
         // file does not exist or is locked
-        return FE_INVALID_ARGS;
+        return nvrhi::FE_INVALID_ARGS;
     }
 
     file.seekg(0, std::ios::end);
@@ -69,12 +69,12 @@ FRESULT NativeFileSystem::readFile(const std::filesystem::path& name, IDataBlob 
     {
         // file larger than size_t
         assert(false);
-        return FE_GENERIC_ERROR;
+        return nvrhi::FE_GENERIC_ERROR;
     }
 
-    IDataBlob* pBlob;
-    FRESULT fr;
-    if(FFAILED(fr = CreateBlob(size, &pBlob))) {
+    nvrhi::IDataBlob* pBlob;
+    nvrhi::FRESULT fr;
+    if(NVRHI_FAILED(fr = nvrhi::CreateBlob(size, &pBlob))) {
         return fr;
     }
 
@@ -85,7 +85,7 @@ FRESULT NativeFileSystem::readFile(const std::filesystem::path& name, IDataBlob 
         // reading error
         assert(false);
         pBlob->Release();
-        return FE_GENERIC_ERROR;
+        return nvrhi::FE_GENERIC_ERROR;
     }
 
     if(ppBlob) {
@@ -94,7 +94,7 @@ FRESULT NativeFileSystem::readFile(const std::filesystem::path& name, IDataBlob 
     }
 
     pBlob->Release();
-    return FS_OK;
+    return nvrhi::FS_OK;
 }
 
 bool NativeFileSystem::writeFile(const std::filesystem::path& name, const void* data, size_t size)
@@ -233,7 +233,7 @@ RelativeFileSystem::RelativeFileSystem(IFileSystem *fs, const std::filesystem::p
     m_UnderlyingFS->AddRef();
 }
 
-RelativeFileSystem::~RelativeFileSystem() { SafeRelease(m_UnderlyingFS); }
+RelativeFileSystem::~RelativeFileSystem() { nvrhi::SafeRelease(m_UnderlyingFS); }
 
 bool RelativeFileSystem::folderExists(const std::filesystem::path& name) {
     return m_UnderlyingFS->folderExists(m_BasePath / name.relative_path());
@@ -244,7 +244,7 @@ bool RelativeFileSystem::fileExists(const std::filesystem::path& name)
     return m_UnderlyingFS->fileExists(m_BasePath / name.relative_path());
 }
 
-FRESULT RelativeFileSystem::readFile(const std::filesystem::path& name, IDataBlob **ppBlob)
+nvrhi::FRESULT RelativeFileSystem::readFile(const std::filesystem::path& name, nvrhi::IDataBlob **ppBlob)
 {
     return m_UnderlyingFS->readFile(m_BasePath / name.relative_path(), ppBlob);
 }
@@ -266,7 +266,7 @@ int RelativeFileSystem::enumerateDirectories(const std::filesystem::path& path, 
 
 RootFileSystem::~RootFileSystem() {
     for(auto &item : m_MountPoints) {
-        SafeRelease(item.second);
+        nvrhi::SafeRelease(item.second);
     }
 }
 
@@ -277,7 +277,7 @@ void RootFileSystem::mount(const std::filesystem::path& path, IFileSystem* fs) {
         return;
     }
 
-    SafeAddRef(fs);
+    nvrhi::SafeAddRef(fs);
     m_MountPoints.push_back(std::make_pair(path.lexically_normal().generic_string(), fs));
 }
 
@@ -298,7 +298,7 @@ bool RootFileSystem::unmount(const std::filesystem::path& path)
     {
         if (m_MountPoints[index].first == spath)
         {
-            SafeRelease(m_MountPoints[index].second);
+            nvrhi::SafeRelease(m_MountPoints[index].second);
             m_MountPoints.erase(m_MountPoints.begin() + index);
             return true;
         }
@@ -359,7 +359,7 @@ bool RootFileSystem::fileExists(const std::filesystem::path& name)
     return false;
 }
 
-FRESULT RootFileSystem::readFile(const std::filesystem::path& name, IDataBlob **ppBlob)
+nvrhi::FRESULT RootFileSystem::readFile(const std::filesystem::path& name, nvrhi::IDataBlob **ppBlob)
 {
     std::filesystem::path relativePath;
     IFileSystem* fs = nullptr;
@@ -369,7 +369,7 @@ FRESULT RootFileSystem::readFile(const std::filesystem::path& name, IDataBlob **
         return fs->readFile(relativePath, ppBlob);
     }
 
-    return FE_NOT_FOUND;
+    return nvrhi::FE_NOT_FOUND;
 }
 
 bool RootFileSystem::writeFile(const std::filesystem::path& name, const void* data, size_t size)

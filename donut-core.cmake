@@ -26,12 +26,6 @@ file(GLOB donut_core_src
     include/donut/core/vfs/TarFile.h
     include/donut/core/vfs/VFS.h
     include/donut/core/*.h
-    include/donut/core/object/AutoPtr.h
-    include/donut/core/object/DataBlob.h
-    include/donut/core/object/Foundation.h
-    include/donut/core/object/Memory.h
-    include/donut/core/object/Threading.h
-    include/donut/core/object/Types.h
     src/core/chunk/*.cpp
     src/core/math/*.cpp
     src/core/vfs/TarFile.cpp
@@ -42,6 +36,13 @@ file(GLOB donut_core_src
 add_library(donut_core STATIC EXCLUDE_FROM_ALL ${donut_core_src})
 target_include_directories(donut_core PUBLIC include)
 target_link_libraries(donut_core jsoncpp_static)
+
+# The object model (IObject, AutoPtr, ObjectImpl, ...) is nvrhi::core. nvrhi/CMakeLists.txt defines it
+# when DONUT_WITH_NVRHI is on; otherwise only the core library is added here.
+if (NOT TARGET nvrhi::core)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/nvrhi/cmake/NvrhiCore.cmake)
+endif()
+target_link_libraries(donut_core nvrhi::core)
 
 if(NOT WIN32)
     target_link_libraries(donut_core stdc++fs dl pthread)

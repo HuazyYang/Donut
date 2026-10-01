@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <nvrhi/nvrhi.h>
 
 namespace donut::engine
@@ -45,8 +45,8 @@ namespace donut::render
         nvrhi::BindingSetHandle m_RenderBindingSet;
         nvrhi::GraphicsPipelineHandle m_RenderPso;
 
-        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
-        AutoPtr<engine::FramebufferFactory> m_FramebufferFactory;
+        nvrhi::AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
+        nvrhi::AutoPtr<engine::FramebufferFactory> m_FramebufferFactory;
 
     public:
         EnvironmentMapPass(

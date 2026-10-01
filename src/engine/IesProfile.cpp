@@ -204,18 +204,18 @@ static IesStatus ParseIesFile(char* fileData,
     return IesStatus::Success;
 }
 
-AutoPtr<IesProfile> IesProfileLoader::LoadIesProfile(donut::vfs::IFileSystem *fs, const std::filesystem::path& path)
+nvrhi::AutoPtr<IesProfile> IesProfileLoader::LoadIesProfile(donut::vfs::IFileSystem *fs, const std::filesystem::path& path)
 {
-    AutoPtr<IDataBlob> fileBlob;
-    if (FFAILED(fs->readFile(path, &fileBlob)))
+    nvrhi::AutoPtr<nvrhi::IDataBlob> fileBlob;
+    if (NVRHI_FAILED(fs->readFile(path, &fileBlob)))
         return nullptr;
 
     if (fileBlob->GetSize() == 0)
         return nullptr;
 
     // make a copy of the data because we need to modify it, and blobs are immutable
-    AutoPtr<IDataBlob> fileDataBlob;
-    if(FFAILED(CreateBlob(fileBlob->GetSize() + 1, &fileDataBlob))) {
+    nvrhi::AutoPtr<nvrhi::IDataBlob> fileDataBlob;
+    if(NVRHI_FAILED(nvrhi::CreateBlob(fileBlob->GetSize() + 1, &fileDataBlob))) {
         return nullptr;
     }
 

@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <nvrhi/nvrhi.h>
 #include <unordered_map>
@@ -57,7 +57,7 @@ namespace donut::render
         nvrhi::TextureHandle m_EnvironmentBrdfTexture;
         uint32_t m_EnvironmentBrdfTextureSize;
 
-        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
+        nvrhi::AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
 
         std::unordered_map<nvrhi::FramebufferInfo, nvrhi::GraphicsPipelineHandle> m_BlitPsoCache;
         std::unordered_map<nvrhi::FramebufferInfo, nvrhi::GraphicsPipelineHandle> m_DiffusePsoCache;

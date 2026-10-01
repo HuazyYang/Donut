@@ -82,7 +82,7 @@ using namespace donut::math;
 using namespace donut::vfs;
 using namespace donut::engine;
 
-class StbImageBlob : public donut::ObjectImpl<donut::IDataBlob>
+class StbImageBlob : public nvrhi::ObjectImpl<nvrhi::IDataBlob>
 {
 private:
     unsigned char* m_data = nullptr;
@@ -101,12 +101,12 @@ public:
         }
     }
 
-    virtual void Resize(size_t) override { DONUT_VERIFY(false, "Operation forbidden"); }
+    virtual void Resize(size_t) override { NVRHI_VERIFY(false, "Operation forbidden"); }
 
     void* GetDataPtr() override { return m_data; }
 
     size_t GetSize() override {
-        DONUT_VERIFY(false, "Operation forbidden");
+        NVRHI_VERIFY(false, "Operation forbidden");
         return 0;
     }
 };
@@ -147,7 +147,7 @@ bool TextureCache::FindTextureInCache(const std::filesystem::path& path, const T
     std::lock_guard<std::shared_mutex> guard(m_LoadedTexturesMutex);
 
     // First see if this texture is already loaded (or being loaded).
-    AutoPtr<TextureData> texture;
+    nvrhi::AutoPtr<TextureData> texture;
 
     const TextureCacheKey key{ path.generic_string(), options };
 
@@ -173,22 +173,22 @@ bool TextureCache::FindTextureInCache(const std::filesystem::path& path, const T
     return false;
 }
 
-donut::AutoPtr<donut::IDataBlob> TextureCache::ReadTextureFile(const std::filesystem::path& path) const
+nvrhi::AutoPtr<nvrhi::IDataBlob> TextureCache::ReadTextureFile(const std::filesystem::path& path) const
 {
-    AutoPtr<IDataBlob> fileData;
-    if (FFAILED(m_fs->readFile(path, &fileData)))
+    nvrhi::AutoPtr<nvrhi::IDataBlob> fileData;
+    if (NVRHI_FAILED(m_fs->readFile(path, &fileData)))
         log::message(m_ErrorLogSeverity, "Couldn't read texture file '%s'", path.generic_string().c_str());
 
     return fileData;
 }
 
-donut::AutoPtr<TextureData> TextureCache::CreateTextureData()
+nvrhi::AutoPtr<TextureData> TextureCache::CreateTextureData()
 {
     return MAKE_RC_OBJ_PTR(TextureData);
 }
 
 bool TextureCache::FillTextureData(
-    IDataBlob *fileData,
+    nvrhi::IDataBlob *fileData,
     TextureData* texture,
     const std::string& extension,
     const std::string& mimeType) const
@@ -229,7 +229,7 @@ bool TextureCache::FillTextureData(
             uint32_t channels = 4;
             uint32_t bytesPerPixel = channels * 4;
 
-            if(FFAILED(CreateBlob(bytesPerPixel * width * height, &texture->data))) {
+            if(NVRHI_FAILED(nvrhi::CreateBlob(bytesPerPixel * width * height, &texture->data))) {
                 assert(0);
             }
             memcpy(texture->data->GetDataPtr(), data, texture->data->GetSize());
@@ -510,13 +510,13 @@ void TextureCache::TextureLoaded(TextureData* texture)
         texture->originalBitsPerPixel, texture->path.c_str(), texture->mimeType.c_str());
 }
 
-donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFile(
+nvrhi::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFile(
     const std::filesystem::path& path,
     const TextureLoadOptions& options,
     CommonRenderPasses* passes,
     nvrhi::ICommandList* commandList)
 {
-    AutoPtr<TextureData> texture;
+    nvrhi::AutoPtr<TextureData> texture;
 
     if (FindTextureInCache(path, options, &texture))
         return texture;
@@ -540,11 +540,11 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFile(
     return texture;
 }
 
-donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFileDeferred(
+nvrhi::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFileDeferred(
     const std::filesystem::path& path,
     const TextureLoadOptions& options)
 {
-    AutoPtr<TextureData> texture;
+    nvrhi::AutoPtr<TextureData> texture;
 
     if (FindTextureInCache(path, options, &texture))
         return texture;
@@ -570,12 +570,12 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFileDeferred(
     return texture;
 }
 
-donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFileAsync(
+nvrhi::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFileAsync(
     const std::filesystem::path& path,
     const TextureLoadOptions& options,
     ThreadPool& threadPool)
 {
-    AutoPtr<TextureData> texture;
+    nvrhi::AutoPtr<TextureData> texture;
 
     if (FindTextureInCache(path, options, &texture))
         return texture;
@@ -604,14 +604,14 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromFileAsync(
     return texture;
 }
 
-donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemoryAsync(
-    IDataBlob *data,
+nvrhi::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemoryAsync(
+    nvrhi::IDataBlob *data,
     const std::string& name,
     const std::string& mimeType,
     const TextureLoadOptions& options,
     ThreadPool& threadPool)
 {
-    AutoPtr<TextureData> texture = CreateTextureData();
+    nvrhi::AutoPtr<TextureData> texture = CreateTextureData();
     
     texture->loadOptions = options;
     texture->path = name;
@@ -638,15 +638,15 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemoryAsync(
     return texture;
 }
 
-donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemory(
-    IDataBlob *data,
+nvrhi::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemory(
+    nvrhi::IDataBlob *data,
     const std::string& name,
     const std::string& mimeType,
     const TextureLoadOptions& options,
     CommonRenderPasses* passes,
     nvrhi::ICommandList* commandList)
 {
-    AutoPtr<TextureData> texture = CreateTextureData();
+    nvrhi::AutoPtr<TextureData> texture = CreateTextureData();
     
     texture->loadOptions = options;
     texture->path = name;
@@ -664,13 +664,13 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemory(
     return texture;
 }
 
-donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemoryDeferred(
-    IDataBlob *data,
+nvrhi::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemoryDeferred(
+    nvrhi::IDataBlob *data,
     const std::string& name,
     const std::string& mimeType,
     const TextureLoadOptions& options)
 {
-    AutoPtr<TextureData> texture = CreateTextureData();
+    nvrhi::AutoPtr<TextureData> texture = CreateTextureData();
     
     texture->loadOptions = options;
     texture->path = name;
@@ -690,13 +690,13 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromMemoryDeferred(
     return texture;
 }
 
-donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromRawImageMemory(IDataBlob* data, const char* name,
+nvrhi::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromRawImageMemory(nvrhi::IDataBlob* data, const char* name,
                                                                             uint32_t width, uint32_t height,
                                                                             nvrhi::Format format,
                                                                             const TextureLoadOptions& options,
                                                                             uint32_t imageBitsPerPixel,
                                                                             uint32_t imagePixelStride) {
-    AutoPtr<TextureData> texture = CreateTextureData();
+    nvrhi::AutoPtr<TextureData> texture = CreateTextureData();
     texture->loadOptions = options;
     texture->path = name;
 
@@ -722,12 +722,12 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromRawImageMemory(IDataB
         if(imagePixelStride == 0 || imageBytesPerPixel == imagePixelStride) {
             texture->data = data;
         } else {
-            FRESULT fr;
+            nvrhi::FRESULT fr;
             size_t rowPitch = texture->dataLayout[0][0].rowPitch;
             size_t srcRowPitch = width * imagePixelStride;
 
-            AutoPtr<IDataBlob> imageDataUnpacked;
-            if(FFAILED(fr = CreateBlob(rowPitch * height, &imageDataUnpacked))) {
+            nvrhi::AutoPtr<nvrhi::IDataBlob> imageDataUnpacked;
+            if(NVRHI_FAILED(fr = nvrhi::CreateBlob(rowPitch * height, &imageDataUnpacked))) {
                 log::error("Failed to create unpacked image buffer");
                 return nullptr;
             }
@@ -757,7 +757,7 @@ donut::AutoPtr<LoadedTexture> TextureCache::LoadTextureFromRawImageMemory(IDataB
     return texture;
 }
 
-donut::AutoPtr<TextureData> TextureCache::GetLoadedTexture(std::filesystem::path const& path, const TextureLoadOptions& options)
+nvrhi::AutoPtr<TextureData> TextureCache::GetLoadedTexture(std::filesystem::path const& path, const TextureLoadOptions& options)
 {
 	std::lock_guard<std::shared_mutex> guard(m_LoadedTexturesMutex);
 	return m_LoadedTextures[TextureCacheKey{ path.generic_string(), options }];

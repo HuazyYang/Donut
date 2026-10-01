@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <nvrhi/nvrhi.h>
 #include <unordered_map>
@@ -58,7 +58,7 @@ namespace donut::engine
         nvrhi::Color blendConstantColor = nvrhi::Color(0.f);
     };
 
-    class CommonRenderPasses: public ObjectImpl<IObject>
+    class CommonRenderPasses: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     protected:
         nvrhi::DeviceHandle m_Device;

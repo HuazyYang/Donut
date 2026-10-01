@@ -74,7 +74,7 @@ void AudioCache::Reset()
     m_LoadedAudioData.clear();
 }
 
-AutoPtr<AudioData> AudioCache::importRiff(IDataBlob* blob, char const * filepath)
+nvrhi::AutoPtr<AudioData> AudioCache::importRiff(nvrhi::IDataBlob* blob, char const * filepath)
 {
     uint8_t const * data = (uint8_t const *)blob->GetDataPtr(),
                   * ptr = data;
@@ -155,10 +155,10 @@ static bool strcaseequals(const std::string& a, const std::string& b)
 #endif
 }
 
-AutoPtr<AudioData> AudioCache::loadAudioFile (const std::filesystem::path & path)
+nvrhi::AutoPtr<AudioData> AudioCache::loadAudioFile (const std::filesystem::path & path)
 {
-    AutoPtr<IDataBlob> blob;
-    if (FFAILED(m_fs->readFile(path, &blob)))
+    nvrhi::AutoPtr<nvrhi::IDataBlob> blob;
+    if (NVRHI_FAILED(m_fs->readFile(path, &blob)))
     {
         log::warning("Couldn't read audio file `%s`", path.generic_string().c_str());
         return nullptr;
@@ -198,9 +198,9 @@ void AudioCache::sendAudioLoadedMessage(const AudioData* audio, char const * pat
     log::info("Loaded (%dkHz) : %s", audio->sampleRate/1000, path);
 }
 
-AutoPtr<AudioData> AudioCache::LoadFromFile(const std::filesystem::path & path)
+nvrhi::AutoPtr<AudioData> AudioCache::LoadFromFile(const std::filesystem::path & path)
 {
-    AutoPtr<AudioData> audio;
+    nvrhi::AutoPtr<AudioData> audio;
 
     if (findInCache(path, &audio))
         return audio;
@@ -212,9 +212,9 @@ AutoPtr<AudioData> AudioCache::LoadFromFile(const std::filesystem::path & path)
     return audio;
 }
 
-AutoPtr<AudioData> AudioCache::LoadFromFileAsync(const std::filesystem::path & path, ThreadPool& threadPool)
+nvrhi::AutoPtr<AudioData> AudioCache::LoadFromFileAsync(const std::filesystem::path & path, ThreadPool& threadPool)
 {
-    AutoPtr<AudioData> audio;
+    nvrhi::AutoPtr<AudioData> audio;
     if (findInCache(path, &audio))
         return audio;
 

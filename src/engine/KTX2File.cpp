@@ -440,8 +440,8 @@ namespace donut::engine
             totalBytes += levelBytes;
         }
 
-        AutoPtr<IDataBlob> dstBlob;
-        if (FFAILED(CreateBlob(totalBytes, &dstBlob)))
+        nvrhi::AutoPtr<nvrhi::IDataBlob> dstBlob;
+        if (NVRHI_FAILED(nvrhi::CreateBlob(totalBytes, &dstBlob)))
             return false;
         char* dst = static_cast<char*>(dstBlob->GetDataPtr());
 

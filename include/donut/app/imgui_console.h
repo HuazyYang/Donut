@@ -45,8 +45,8 @@ SOFTWARE.
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <donut/core/circular_buffer.h>
 #include <donut/core/log.h>
 
@@ -129,7 +129,7 @@ namespace donut::app
 
 		Options m_Options;
 
-		AutoPtr<donut::engine::console::Interpreter> m_Interpreter;
+		nvrhi::AutoPtr<donut::engine::console::Interpreter> m_Interpreter;
 	};
 
 } // namespace donut::app

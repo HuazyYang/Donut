@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <nvrhi/nvrhi.h>
 #include <filesystem>
 
@@ -36,7 +36,7 @@ namespace donut::engine
     class ShaderFactory;
     class DescriptorTableManager;
 
-    struct IesProfile: ObjectImpl<IObject>
+    struct IesProfile: nvrhi::ObjectImpl<nvrhi::IObject>
     {
         std::string name;
         std::vector<float> rawData;
@@ -51,8 +51,8 @@ namespace donut::engine
         nvrhi::ComputePipelineHandle m_ComputePipeline;
         nvrhi::BindingLayoutHandle m_BindingLayout;
 
-        AutoPtr<donut::engine::ShaderFactory> m_ShaderFactory;
-        AutoPtr<donut::engine::DescriptorTableManager> m_DescriptorTableManager;
+        nvrhi::AutoPtr<donut::engine::ShaderFactory> m_ShaderFactory;
+        nvrhi::AutoPtr<donut::engine::DescriptorTableManager> m_DescriptorTableManager;
 
     public:
         IesProfileLoader(
@@ -60,7 +60,7 @@ namespace donut::engine
             donut::engine::ShaderFactory *shaderFactory,
             donut::engine::DescriptorTableManager* descriptorTableManager);
 
-        AutoPtr<IesProfile> LoadIesProfile(donut::vfs::IFileSystem* fs, const std::filesystem::path& path);
+        nvrhi::AutoPtr<IesProfile> LoadIesProfile(donut::vfs::IFileSystem* fs, const std::filesystem::path& path);
 
         void BakeIesProfile(IesProfile& profile, nvrhi::ICommandList* commandList);
     };

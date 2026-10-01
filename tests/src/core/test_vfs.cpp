@@ -24,7 +24,7 @@
 
 #include <donut/tests/utils.h>
 #include <filesystem>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/AutoPtr.h>
 
 using namespace donut;
 
@@ -68,8 +68,8 @@ void test_native_filesystem()
 
 	// readFile
 	{		
-		donut::AutoPtr<donut::IDataBlob> blob;
-        CHECK(FSUCCEEDED(fs.readFile(rpath / "src/core/test_vfs.cpp", &blob)));
+		nvrhi::AutoPtr<nvrhi::IDataBlob> blob;
+        CHECK(NVRHI_SUCCEEDED(fs.readFile(rpath / "src/core/test_vfs.cpp", &blob)));
 		CHECK(blob->GetSize() > 0);
 
 		std::string data = (char const*)blob->GetDataPtr();
@@ -115,8 +115,8 @@ void test_relative_filesystem()
 	}
 	// readFile
 	{
-		donut::AutoPtr<donut::IDataBlob> blob;
-		CHECK(FSUCCEEDED(relativeFS.readFile("src/core/test_vfs.cpp", &blob)));
+		nvrhi::AutoPtr<nvrhi::IDataBlob> blob;
+		CHECK(NVRHI_SUCCEEDED(relativeFS.readFile("src/core/test_vfs.cpp", &blob)));
 		CHECK(blob->GetSize() > 0);
 
 		std::string data = (char const*)blob->GetDataPtr();
@@ -164,8 +164,8 @@ void test_root_filesystem()
 	}
 	// readFile
 	{
-		donut::AutoPtr<donut::IDataBlob> blob;
-		CHECK(FSUCCEEDED(rootFS.readFile("/tests/src/core/test_vfs.cpp", &blob)));
+		nvrhi::AutoPtr<nvrhi::IDataBlob> blob;
+		CHECK(NVRHI_SUCCEEDED(rootFS.readFile("/tests/src/core/test_vfs.cpp", &blob)));
 		CHECK(blob->GetSize() > 0);
 
 		std::string data = (char const*)blob->GetDataPtr();

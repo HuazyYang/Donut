@@ -21,7 +21,7 @@
 */
 
 #pragma once
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <unordered_map>
 #include <array>
 #include <optional>
@@ -308,7 +308,7 @@ namespace donut::app
     private:
         FirstPersonCamera m_FirstPerson;
         ThirdPersonCamera m_ThirdPerson;
-        AutoPtr<engine::SceneCamera> m_SceneCamera;
+        nvrhi::AutoPtr<engine::SceneCamera> m_SceneCamera;
         bool m_UseFirstPerson = false;
     };
 }

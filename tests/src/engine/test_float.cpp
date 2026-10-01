@@ -38,7 +38,7 @@ extern "C"
 #include <memory>
 #include <random>
 #include <nvrhi/utils.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/AutoPtr.h>
 
 using namespace donut::math;
 
@@ -517,11 +517,11 @@ bool test_gpu_float8(nvrhi::IDevice* device, bool e5m2)
     return errorCount == 0;
 }
 
-donut::AutoPtr<donut::app::DeviceManager> InitializeGraphicsDevice(nvrhi::GraphicsAPI graphicsApi)
+nvrhi::AutoPtr<donut::app::DeviceManager> InitializeGraphicsDevice(nvrhi::GraphicsAPI graphicsApi)
 {
     using namespace donut::app;
 
-    donut::AutoPtr<DeviceManager> deviceManager = TakeOver(
+    nvrhi::AutoPtr<DeviceManager> deviceManager = nvrhi::TakeOver(
         DeviceManager::Create(graphicsApi));
 
     if (!deviceManager)
@@ -579,7 +579,7 @@ int main(int argc, char** argv)
     donut::log::SetMinSeverity(donut::log::Severity::Warning);
 
     nvrhi::GraphicsAPI graphicsApi = donut::app::GetGraphicsAPIFromCommandLine(argc, argv);
-    donut::AutoPtr<donut::app::DeviceManager> deviceManager = InitializeGraphicsDevice(graphicsApi);
+    nvrhi::AutoPtr<donut::app::DeviceManager> deviceManager = InitializeGraphicsDevice(graphicsApi);
 
     bool f16c = donut::math::IsF16CSupported();
 

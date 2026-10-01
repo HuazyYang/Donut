@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <donut/core/object/Foundation.h>
-#include <donut/core/object/AutoPtr.h>
+#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/AutoPtr.h>
 #include <donut/core/math/math.h>
 #include <nvrhi/nvrhi.h>
 
@@ -49,7 +49,7 @@ namespace donut::render
         float blurSharpness = 16.f;
     };
 
-    class SsaoPass: ObjectImpl<IObject>
+    class SsaoPass: nvrhi::ObjectImpl<nvrhi::IObject>
     {
     private:
         struct SubPass
@@ -71,7 +71,7 @@ namespace donut::render
         nvrhi::TextureHandle m_DeinterleavedOcclusion;
         dm::float2 m_QuantizedGbufferTextureSize;
                 
-        AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
+        nvrhi::AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
 
     public:
         struct CreateParameters
