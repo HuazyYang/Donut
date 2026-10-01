@@ -239,9 +239,9 @@ FRESULT QIEntryFinder(void* pThis, uint32_t offset, FREFIID riid, void** ppv) {
         }
         return FS_OK;
     } else if constexpr (ND && QIHasNonDelegating<QIB>)
-        return reinterpret_cast<QIB*>(static_cast<char*>(pThis) + offset)->QIB_::NonDelegatingQueryInterface(riid, ppv);
+        return reinterpret_cast<QIB*>(static_cast<char*>(pThis) + offset)->QIB::NonDelegatingQueryInterface(riid, ppv);
     else if constexpr (!ND && QIKind<QIB> == QIImpl)
-        return reinterpret_cast<QIB*>(static_cast<char*>(pThis) + offset)->QIB_::QueryInterface(riid, ppv);
+        return reinterpret_cast<QIB*>(static_cast<char*>(pThis) + offset)->QIB::QueryInterface(riid, ppv);
     else
         return FE_NOINTERFACE;
 }
