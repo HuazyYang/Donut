@@ -39,8 +39,9 @@ MediaFileSystem::MediaFileSystem(
 	auto mediafs = MAKE_RC_OBJ_PTR(RelativeFileSystem, parent, mediaFolder);
 
 	// open package files & add a vfs for each
-	NativeFileSystem* nativeFS = dynamic_cast<NativeFileSystem*>(parent);
-	if (nativeFS)
+	// (only on a native file system: QueryInterface for its class ID, not dynamic_cast, see nvrhi ADR 0006)
+	nvrhi::AutoPtr<NativeFileSystem> nativeFS;
+	if (parent && NVRHI_SUCCEEDED(parent->QueryInterface(NVRHI_IID_PPV_ARGS(&nativeFS))))
 	{
 		std::vector<std::string> packs;
 		if (mediafs->enumerateFiles("", { ".tar" }, vfs::enumerate_to_vector(packs)) > 0)

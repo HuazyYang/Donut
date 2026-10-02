@@ -32,17 +32,14 @@ struct $InterfaceName : $Parent
 "@
 } else {
 $BaseList = $Bases -join ', '
+# NVRHI_CLASS_CLSID forward-declares the class and gives it the class ID; NVRHI_CLASS_INTERFACE_TABLE answers
+# it (what checked_cast and the QueryInterface type tests use, nvrhi ADR 0006) and routes the rest to ObjectImpl.
 Write-Output @"
-class $ClassName;
-NVRHI_CCLSID($ClassName, `"$GuidLiteral`")
+NVRHI_CLASS_CLSID($ClassName, `"$GuidLiteral`")
 class $ClassName final : public nvrhi::ObjectImpl<$BaseList>
 {
 public:
-    NVRHI_DECLARE_UUID_TRAITS($ClassName)
-
-    NVRHI_BEGIN_INTERFACE_TABLE_INLINE($ClassName)
-    NVRHI_IMPLEMENTS_INTERFACE($ClassName)
-    NVRHI_END_INTERFACE_TABLE_ROUTE_PARENT()
+    NVRHI_CLASS_INTERFACE_TABLE($ClassName)
 };
 "@
 }

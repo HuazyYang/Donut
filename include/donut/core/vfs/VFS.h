@@ -86,9 +86,13 @@ namespace donut::vfs
     };
 
     // An implementation of virtual file system that directly maps to the OS files.
+    // Answers QueryInterface for its class ID, which callers use instead of dynamic_cast (nvrhi ADR 0006).
+    NVRHI_CLASS_CLSID(NativeFileSystem, "ea646050-1e22-4749-b77c-54e11e099f7b")
     class NativeFileSystem : public IFileSystem
     {
     public:
+        NVRHI_CLASS_INTERFACE_TABLE(NativeFileSystem)
+
 		bool folderExists(const std::filesystem::path& name) override;
         bool fileExists(const std::filesystem::path& name) override;
         nvrhi::FRESULT readFile(const std::filesystem::path& name, nvrhi::IDataBlob** ppBlob) override;
