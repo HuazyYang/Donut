@@ -1,37 +1,48 @@
+<#
+.SYNOPSIS
+Prints the declaration skeleton of an nvrhi::core interface or implementation class with a fresh GUID.
+
+.EXAMPLE
+.\Gen-Interface.ps1 -InterfaceName IFoo                       # struct IFoo : nvrhi::IObject
+.\Gen-Interface.ps1 -InterfaceName IBar -Parent nvrhi::IRHIObject
+.\Gen-Interface.ps1 -ClassName Foo -Bases IFoo                 # class Foo final : public nvrhi::ObjectImpl<IFoo>
+#>
 [CmdletBinding(DefaultParameterSetName = 'Interface')]
 param(
-    [Parameter(HelpMessage = "Interface/Class Name", ParameterSetName='Interface')]
+    [Parameter(Mandatory, HelpMessage = "Interface Name", ParameterSetName = 'Interface')]
     [string]$InterfaceName,
-    [Parameter(HelpMessage = "Class Name", ParameterSetName='Class')]
-    [string]$ClassName
+    [Parameter(HelpMessage = "Parent interface", ParameterSetName = 'Interface')]
+    [string]$Parent = 'nvrhi::IObject',
+    [Parameter(Mandatory, HelpMessage = "Class Name", ParameterSetName = 'Class')]
+    [string]$ClassName,
+    [Parameter(HelpMessage = "ObjectImpl bases (interfaces the class implements)", ParameterSetName = 'Class')]
+    [string[]]$Bases = @('nvrhi::IObject')
 )
 
-$TypeName = ''
+# The GUID parser only accepts lowercase hex digits.
+$GuidLiteral = (New-Guid).ToString('D').ToLowerInvariant()
+
 if ($InterfaceName) {
-    $TypeName = $InterfaceName
-} else {
-    $TypeName = $ClassName
-}
-
-$CurGuid = New-Guid
-
-
-$GuidLiteral = $CurGuid.ToString('D')
-
-if($InterfaceName) {
 Write-Output @"
-DONUT_IID($TypeName, `"$GuidLiteral`")
-struct $TypeName : IObject {
-DONUT_DECLARE_UUID_TRAITS($TypeName)
+NVRHI_IID($InterfaceName, `"$GuidLiteral`")
+struct $InterfaceName : $Parent
+{
+    NVRHI_DECLARE_UUID_TRAITS_DERIVED($InterfaceName, $Parent)
 };
 "@
-
 } else {
-    Write-Output @"
-DONUT_CCLSID($TypeName, `"$GuidLiteral`")
-struct $TypeName {
-    DONUT_DECLARE_UUID_TRAITS($TypeName)
-    DONUT_DECLARE_INTERFACE_TABLE()
+$BaseList = $Bases -join ', '
+Write-Output @"
+class $ClassName;
+NVRHI_CCLSID($ClassName, `"$GuidLiteral`")
+class $ClassName final : public nvrhi::ObjectImpl<$BaseList>
+{
+public:
+    NVRHI_DECLARE_UUID_TRAITS($ClassName)
+
+    NVRHI_BEGIN_INTERFACE_TABLE_INLINE($ClassName)
+    NVRHI_IMPLEMENTS_INTERFACE($ClassName)
+    NVRHI_END_INTERFACE_TABLE_ROUTE_PARENT()
 };
 "@
 }
