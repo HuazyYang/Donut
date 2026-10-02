@@ -46,6 +46,7 @@ namespace donut::vfs
     */
     class WinResFileSystem : public IFileSystem
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     private:
         const void* m_hModule;
         std::string m_Type;

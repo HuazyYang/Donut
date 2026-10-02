@@ -62,6 +62,7 @@ public:
 $EntryText
     NVRHI_IMPLEMENTS_CLASS($ClassName)
     NVRHI_END_INTERFACE_TABLE()
+    // A class derived from this one (drop final) that adds no interface or class ID: NVRHI_INHERIT_INTERFACE_TABLE().
 };
 "@
 }

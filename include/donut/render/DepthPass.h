@@ -41,6 +41,7 @@ namespace donut::render
 {
     class DepthPass : public IGeometryPass
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     public:
         union PipelineKey
         {

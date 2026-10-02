@@ -52,6 +52,7 @@ namespace donut::render
 
     class PassthroughDrawStrategy : public IDrawStrategy
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     private:
         const DrawItem* m_Data = nullptr;
         size_t m_Count = 0;
@@ -68,6 +69,7 @@ namespace donut::render
     
     class InstancedOpaqueDrawStrategy : public IDrawStrategy
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     private:
         dm::frustum m_ViewFrustum;
         engine::SceneGraphWalker m_Walker;
@@ -92,6 +94,7 @@ namespace donut::render
 
     class TransparentDrawStrategy : public IDrawStrategy
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     private:
         std::vector<DrawItem> m_InstancesToDraw;
         std::vector<const DrawItem*> m_InstancePtrsToDraw;

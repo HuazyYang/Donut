@@ -37,6 +37,7 @@ namespace donut::vfs
     */
     class TarFile : public IFileSystem
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     private:
         std::string m_ArchivePath;
         std::mutex m_Mutex;

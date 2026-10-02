@@ -31,6 +31,7 @@ namespace donut::render
 {
     class PlanarShadowMap : public engine::IShadowMap
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     private:
         nvrhi::TextureHandle m_ShadowMapTexture;
         nvrhi::AutoPtr<engine::PlanarView> m_View;

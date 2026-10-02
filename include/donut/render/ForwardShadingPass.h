@@ -96,6 +96,7 @@ namespace donut::render
 {
     class ForwardShadingPass : public IGeometryPass
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     public:
 
         class Context : public GeometryPassContext

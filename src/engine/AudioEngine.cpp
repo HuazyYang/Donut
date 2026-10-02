@@ -219,6 +219,7 @@ class Xaudio2Implementation;
 
 struct Xaudio2Effect : public Effect
 {
+    NVRHI_INHERIT_INTERFACE_TABLE()
     using Effect::Effect;
 
     AudioData *getSample() const override;
@@ -268,6 +269,7 @@ float Xaudio2Effect::played()
 
 struct Xaudio2Effect3D : public Xaudio2Effect
 {
+    NVRHI_INHERIT_INTERFACE_TABLE()
     using Xaudio2Effect::Xaudio2Effect;
     virtual bool setEmitterTransform(donut::math::affine3 const & transform);
 

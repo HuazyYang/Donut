@@ -65,6 +65,7 @@ freely, subject to the following restrictions:
 
 class DeviceManager_VK : public donut::app::DeviceManager
 {
+    NVRHI_INHERIT_INTERFACE_TABLE()
 public:
     [[nodiscard]] nvrhi::IDevice* GetDevice() const override
     {

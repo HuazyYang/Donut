@@ -11,6 +11,7 @@ class ShaderFactory;
 namespace donut::app {
 
 class ImGuiRenderPass : public IRenderPass {
+    NVRHI_INHERIT_INTERFACE_TABLE()
  public:
     ImGuiRenderPass(DeviceManager *deviceManager);
     ~ImGuiRenderPass();

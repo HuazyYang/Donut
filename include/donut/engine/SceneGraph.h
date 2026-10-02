@@ -84,6 +84,7 @@ namespace donut::engine
 
     class MeshInstance : public SceneGraphLeaf
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     private:
         friend class SceneGraph;
         int m_InstanceIndex = -1;
@@ -114,6 +115,7 @@ namespace donut::engine
 
     class SkinnedMeshInstance : public MeshInstance
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     protected:
         friend class SceneGraph;
         nvrhi::AutoPtr<MeshInfo> m_PrototypeMesh;
@@ -138,6 +140,7 @@ namespace donut::engine
     // Cannot do this through the graph because the skeleton can be separate from the mesh instance node.
     class SkinnedMeshReference : public SceneGraphLeaf
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     private:
         friend class SceneGraph;
         nvrhi::WeakPtr<SkinnedMeshInstance> m_Instance;
@@ -149,6 +152,7 @@ namespace donut::engine
 
     class SceneCamera : public SceneGraphLeaf
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     public:
         [[nodiscard]] SceneContentFlags GetContentFlags() const override { return SceneContentFlags::Cameras; }
 
@@ -161,6 +165,7 @@ namespace donut::engine
 
     class PerspectiveCamera : public SceneCamera
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     public:
         float zNear = 1.f;
         float verticalFov = 1.f; // in radians
@@ -175,6 +180,7 @@ namespace donut::engine
 
     class OrthographicCamera : public SceneCamera
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     public:
         float zNear = 0.f;
         float zFar = 1.f;
@@ -191,6 +197,7 @@ namespace donut::engine
 
     class Light : public SceneGraphLeaf
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     public:
         nvrhi::AutoPtr<IShadowMap> shadowMap;
         int shadowChannel = -1;
@@ -214,6 +221,7 @@ namespace donut::engine
 
     class DirectionalLight : public Light
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     public:
         float irradiance = 1.f; // Target illuminance (lm/m2) of surfaces lit by this light; multiplied by `color`.
         float angularSize = 0.f; // Angular size of the light source, in degrees.
@@ -230,6 +238,7 @@ namespace donut::engine
 
     class SpotLight : public Light
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     public:
         float intensity = 1.f;  // Luminous intensity of the light (lm/sr) in its primary direction; multiplied by `color`.
         float radius = 0.f;     // Radius of the light sphere, in world units.
@@ -248,6 +257,7 @@ namespace donut::engine
 
     class PointLight : public Light
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     public:
         float intensity = 1.f;  // Luminous intensity of the light (lm/sr); multiplied by `color`.
         float radius = 0.f;    // Radius of the light sphere, in world units.
@@ -458,6 +468,7 @@ namespace donut::engine
 
     class SceneGraphAnimation : public SceneGraphLeaf
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     private:
         std::vector<nvrhi::AutoPtr<SceneGraphAnimationChannel>> m_Channels;
         float m_Duration = 0.f;

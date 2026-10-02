@@ -39,6 +39,7 @@ static void NVSDK_CONV NgxLogCallback(const char* message, NVSDK_NGX_Logging_Lev
 
 class DLSS_DX11 : public DLSS
 {
+    NVRHI_INHERIT_INTERFACE_TABLE()
 public:
     DLSS_DX11(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory,
         std::string const& directoryWithExecutable, uint32_t applicationID)

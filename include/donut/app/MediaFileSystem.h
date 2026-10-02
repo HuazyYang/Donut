@@ -54,6 +54,7 @@ namespace donut::app
 	//
 	class MediaFileSystem : public vfs::IFileSystem
 	{
+		NVRHI_INHERIT_INTERFACE_TABLE()
 	public:
 
 		MediaFileSystem(vfs::IFileSystem *parent, const std::filesystem::path& path);

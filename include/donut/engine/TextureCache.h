@@ -72,6 +72,7 @@ namespace donut::engine
 
     struct TextureData : public LoadedTexture
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
         nvrhi::AutoPtr<nvrhi::IDataBlob> data;
 
         nvrhi::Format format = nvrhi::Format::UNKNOWN;

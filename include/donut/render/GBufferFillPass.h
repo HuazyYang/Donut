@@ -40,6 +40,7 @@ namespace donut::render
 {
     class GBufferFillPass : public IGeometryPass
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     public:
         union PipelineKey
         {
@@ -147,6 +148,7 @@ namespace donut::render
 
     class MaterialIDPass : public GBufferFillPass
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     protected:
         nvrhi::ShaderHandle CreatePixelShader(engine::ShaderFactory& shaderFactory, const CreateParameters& params, bool alphaTested) override;
 

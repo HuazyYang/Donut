@@ -35,6 +35,7 @@
 
 class DeviceManager_DX11 : public donut::app::DeviceManager
 {
+    NVRHI_INHERIT_INTERFACE_TABLE()
 protected:
     nvrhi::AutoPtr<IDXGIFactory1> m_DxgiFactory;
     nvrhi::AutoPtr<IDXGIAdapter> m_DxgiAdapter;

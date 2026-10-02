@@ -114,6 +114,7 @@ namespace donut::vfs
     // and passes the requests to the underlying FS.
     class RelativeFileSystem : public IFileSystem
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     private:
         IFileSystem *m_UnderlyingFS;
         std::filesystem::path m_BasePath;
@@ -135,6 +136,7 @@ namespace donut::vfs
     // Does not have any file systems by default, all of them must be mounted first.
     class RootFileSystem : public IFileSystem
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     private:
         std::vector<std::pair<std::string, IFileSystem *>> m_MountPoints;
 

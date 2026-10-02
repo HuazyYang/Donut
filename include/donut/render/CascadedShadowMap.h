@@ -33,6 +33,7 @@ namespace donut::render
 
     class CascadedShadowMap : public engine::IShadowMap
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     private:
         nvrhi::TextureHandle m_ShadowMapTexture;
         std::vector<nvrhi::AutoPtr<PlanarShadowMap>> m_Cascades;

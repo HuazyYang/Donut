@@ -58,6 +58,7 @@ namespace donut::engine
 
     class IView : public ICompositeView
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     public:
         virtual void FillPlanarViewConstants(PlanarViewConstants& constants) const;
 
@@ -90,6 +91,7 @@ namespace donut::engine
 
     class PlanarView : public IView
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     protected:
         // Directly settable parameters
         nvrhi::Viewport m_Viewport;
@@ -153,6 +155,7 @@ namespace donut::engine
 
     class CompositeView : public ICompositeView
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     protected:
         std::vector<nvrhi::AutoPtr<IView>> m_ChildViews;
 
@@ -166,6 +169,7 @@ namespace donut::engine
     template<typename ChildType>
     class StereoView : public IView
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     private:
         typedef IView Super;
 
@@ -342,6 +346,7 @@ namespace donut::engine
 
     class CubemapView : public IView
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     protected:
         typedef IView Super;
 

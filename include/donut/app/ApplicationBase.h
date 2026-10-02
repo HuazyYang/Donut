@@ -40,6 +40,7 @@ namespace donut::app
 {
     class ApplicationBase : public IRenderPass
     {
+        NVRHI_INHERIT_INTERFACE_TABLE()
     private:
         bool m_SceneLoaded;
         bool m_AllTexturesFinalized;

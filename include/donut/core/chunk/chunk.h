@@ -141,6 +141,7 @@ public:
 
 struct MeshSet : public MeshSetBase
 {
+    NVRHI_INHERIT_INTERFACE_TABLE()
 
     MeshSet() {}
 
@@ -152,6 +153,7 @@ struct MeshSet : public MeshSetBase
 
 struct MeshletSet : public MeshSetBase
 {
+    NVRHI_INHERIT_INTERFACE_TABLE()
 
     MeshletSet() {}
 

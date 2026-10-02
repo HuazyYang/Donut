@@ -29,6 +29,7 @@ namespace donut::engine
 // A simple task wrapper for a function object
 class ThreadPoolFunctionTask : public ThreadPoolTask
 {
+    NVRHI_INHERIT_INTERFACE_TABLE()
 public:
     ThreadPoolFunctionTask(std::function<void()>&& func)
         : m_func(std::move(func))
