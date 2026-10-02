@@ -22,8 +22,8 @@
 
 #pragma once
 
-#include <nvrhi/core/Foundation.h>
-#include <nvrhi/core/DataBlob.h>
+#include <nvrhi/core/foundation.h>
+#include <nvrhi/core/datablob.h>
 #include <string>
 #include <filesystem>
 #include <functional>

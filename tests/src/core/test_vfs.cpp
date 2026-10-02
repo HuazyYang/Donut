@@ -24,7 +24,7 @@
 
 #include <donut/tests/utils.h>
 #include <filesystem>
-#include <nvrhi/core/AutoPtr.h>
+#include <nvrhi/core/autoptr.h>
 
 using namespace donut;
 

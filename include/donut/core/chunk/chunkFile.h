@@ -23,7 +23,7 @@
 #pragma once
 
 #include <donut/core/log.h>
-#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/foundation.h>
 #include <cstdint>
 #include <vector>
 #include <string>

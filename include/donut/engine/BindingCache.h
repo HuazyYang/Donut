@@ -21,7 +21,7 @@
 */
 
 #pragma once
-#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/foundation.h>
 #include <nvrhi/nvrhi.h>
 #include <unordered_map>
 #include <shared_mutex>

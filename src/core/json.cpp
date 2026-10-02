@@ -33,7 +33,7 @@ Baptiste Lepilleur and The JsonCpp Authors explicitly disclaim copyright in all
 jurisdictions which recognize such a disclaimer. In such jurisdictions, 
 this software is released into the Public Domain.
 */
-#include <nvrhi/core/AutoPtr.h>
+#include <nvrhi/core/autoptr.h>
 #include <donut/core/json.h>
 #include <donut/core/vfs/VFS.h>
 #include <donut/core/log.h>

@@ -85,7 +85,7 @@ freely, subject to the following restrictions:
 #include <functional>
 #include <optional>
 
-#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/foundation.h>
 
 namespace donut::app
 {

@@ -45,8 +45,8 @@ SOFTWARE.
 */
 
 #pragma once
-#include <nvrhi/core/Foundation.h>
-#include <nvrhi/core/AutoPtr.h>
+#include <nvrhi/core/foundation.h>
+#include <nvrhi/core/autoptr.h>
 #include <donut/core/circular_buffer.h>
 #include <donut/core/log.h>
 

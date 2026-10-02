@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#include <nvrhi/core/Foundation.h>
-#include <nvrhi/core/AutoPtr.h>
+#include <nvrhi/core/foundation.h>
+#include <nvrhi/core/autoptr.h>
 #include <donut/core/math/math.h>
 #include <string>
 #include <unordered_map>

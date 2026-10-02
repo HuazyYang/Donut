@@ -21,7 +21,7 @@
 */
 
 #pragma once
-#include <nvrhi/core/AutoPtr.h>
+#include <nvrhi/core/autoptr.h>
 #include <donut/core/math/math.h>
 #include <nvrhi/nvrhi.h>
 

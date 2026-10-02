@@ -23,7 +23,7 @@
 #pragma once
 
 #include <donut/core/vfs/VFS.h>
-#include <nvrhi/core/AutoPtr.h>
+#include <nvrhi/core/autoptr.h>
 #include <filesystem>
 #include <vector>
 

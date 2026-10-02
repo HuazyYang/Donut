@@ -38,7 +38,7 @@ extern "C"
 #include <memory>
 #include <random>
 #include <nvrhi/utils.h>
-#include <nvrhi/core/AutoPtr.h>
+#include <nvrhi/core/autoptr.h>
 
 using namespace donut::math;
 

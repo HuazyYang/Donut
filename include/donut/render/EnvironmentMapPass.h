@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include <nvrhi/core/AutoPtr.h>
+#include <nvrhi/core/autoptr.h>
 #include <nvrhi/nvrhi.h>
 
 namespace donut::engine

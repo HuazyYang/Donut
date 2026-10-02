@@ -24,7 +24,7 @@
 
 #if DONUT_WITH_DLSS
 
-#include <nvrhi/core/Foundation.h>
+#include <nvrhi/core/foundation.h>
 #include <nvrhi/nvrhi.h>
 
 class RenderTargets;

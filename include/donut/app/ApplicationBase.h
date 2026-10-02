@@ -28,7 +28,7 @@
 #include <filesystem>
 #include <thread>
 #include <vector>
-#include <nvrhi/core/AutoPtr.h>
+#include <nvrhi/core/autoptr.h>
 
 namespace donut::engine
 {

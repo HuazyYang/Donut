@@ -23,7 +23,7 @@
 #pragma once
 
 #include <nvrhi/nvrhi.h>
-#include <nvrhi/core/AutoPtr.h>
+#include <nvrhi/core/autoptr.h>
 #include <donut/core/math/math.h>
 #include <donut/render/Manipulator.h>
 #include <cstdint>
