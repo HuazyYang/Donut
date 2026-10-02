@@ -175,9 +175,9 @@ public:
         static_assert(std::is_base_of<IUnknown, T>::value);
         return UpgradeInterface((IUnknown*&)interfacePointer);
     }
-    // In-place slUpgradeInterface of a nvrhi::RefCountPtr
+    // In-place slUpgradeInterface of a nvrhi::AutoPtr
     template<typename T>
-    static inline bool UpgradeInterface(nvrhi::RefCountPtr<T>& interfacePointer)
+    static inline bool UpgradeInterface(nvrhi::AutoPtr<T>& interfacePointer)
     {
         // Ensure that T derives from IUnknown
         static_assert(std::is_base_of<IUnknown, T>::value);

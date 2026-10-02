@@ -62,7 +62,7 @@ freely, subject to the following restrictions:
 #include <StreamlineIntegration.h>
 #endif
 
-using nvrhi::RefCountPtr;
+using nvrhi::AutoPtr;
 
 using namespace donut::app;
 
@@ -84,7 +84,7 @@ static bool MoveWindowOntoAdapter(IDXGIAdapter* targetAdapter, RECT& rect)
     unsigned int outputNo = 0;
     while (SUCCEEDED(hres))
     {
-        nvrhi::RefCountPtr<IDXGIOutput> pOutput;
+        nvrhi::AutoPtr<IDXGIOutput> pOutput;
         hres = targetAdapter->EnumOutputs(outputNo++, &pOutput);
 
         if (SUCCEEDED(hres) && pOutput)
@@ -115,7 +115,7 @@ static bool MoveWindowOntoAdapter(IDXGIAdapter* targetAdapter, RECT& rect)
 
 void DeviceManager_DX12::ReportLiveObjects()
 {
-    nvrhi::RefCountPtr<IDXGIDebug> pDebug;
+    nvrhi::AutoPtr<IDXGIDebug> pDebug;
     DXGIGetDebugInterface1(0, IID_PPV_ARGS(&pDebug));
 
     if (pDebug)
@@ -158,7 +158,7 @@ bool DeviceManager_DX12::EnumerateAdapters(std::vector<AdapterInfo>& outAdapters
 
     while (true)
     {
-        RefCountPtr<IDXGIAdapter> adapter;
+        AutoPtr<IDXGIAdapter> adapter;
         HRESULT hr = m_DxgiFactory2->EnumAdapters(uint32_t(outAdapters.size()), &adapter);
         if (FAILED(hr))
             return true;
@@ -189,7 +189,7 @@ bool DeviceManager_DX12::CreateDevice()
 {
     if (m_DeviceParams.enableDebugRuntime)
     {
-        RefCountPtr<ID3D12Debug> pDebug;
+        AutoPtr<ID3D12Debug> pDebug;
         HRESULT hr = D3D12GetDebugInterface(IID_PPV_ARGS(&pDebug));
 
         if (SUCCEEDED(hr))
@@ -200,7 +200,7 @@ bool DeviceManager_DX12::CreateDevice()
 
     if (m_DeviceParams.enableGPUValidation)
     {
-        RefCountPtr<ID3D12Debug3> debugController3;
+        AutoPtr<ID3D12Debug3> debugController3;
         HRESULT hr = D3D12GetDebugInterface(IID_PPV_ARGS(&debugController3));
 
         if (SUCCEEDED(hr))
@@ -255,8 +255,8 @@ bool DeviceManager_DX12::CreateDevice()
 
     if (m_DeviceParams.enableDebugRuntime)
     {
-        RefCountPtr<ID3D12InfoQueue> pInfoQueue;
-        m_Device12->QueryInterface(&pInfoQueue);
+        AutoPtr<ID3D12InfoQueue> pInfoQueue;
+        m_Device12->QueryInterface(IID_PPV_ARGS(&pInfoQueue));
 
         if (pInfoQueue)
         {
@@ -386,7 +386,7 @@ bool DeviceManager_DX12::CreateSwapChain()
         break;
     }
 
-    RefCountPtr<IDXGIFactory5> pDxgiFactory5;
+    AutoPtr<IDXGIFactory5> pDxgiFactory5;
     if (SUCCEEDED(m_DxgiFactory2->QueryInterface(IID_PPV_ARGS(&pDxgiFactory5))))
     {
         BOOL supported = 0;
@@ -406,7 +406,7 @@ bool DeviceManager_DX12::CreateSwapChain()
     m_FullScreenDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
     m_FullScreenDesc.Windowed = TRUE; // DXGI always windowed; fullscreen handled by GLFW
     
-    RefCountPtr<IDXGISwapChain1> pSwapChain1;
+    AutoPtr<IDXGISwapChain1> pSwapChain1;
     hr = m_DxgiFactory2->CreateSwapChainForHwnd(m_GraphicsQueue, m_hWnd, &m_SwapChainDesc, &m_FullScreenDesc, nullptr, &pSwapChain1);
     HR_RETURN(hr)
 

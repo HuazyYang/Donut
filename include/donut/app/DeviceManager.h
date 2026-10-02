@@ -252,7 +252,7 @@ namespace donut::app
         std::optional<LUID> luid;
 
 #if DONUT_WITH_DX11 || DONUT_WITH_DX12
-        nvrhi::RefCountPtr<IDXGIAdapter> dxgiAdapter;
+        nvrhi::AutoPtr<IDXGIAdapter> dxgiAdapter;
 #endif
 #if DONUT_WITH_VULKAN
         VkPhysicalDevice vkPhysicalDevice = nullptr;

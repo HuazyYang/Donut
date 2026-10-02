@@ -36,21 +36,21 @@
 class DeviceManager_DX12 : public donut::app::DeviceManager
 {
 protected:
-    nvrhi::RefCountPtr<IDXGIFactory2>               m_DxgiFactory2;
-    nvrhi::RefCountPtr<ID3D12Device>                m_Device12;
-    nvrhi::RefCountPtr<ID3D12CommandQueue>          m_GraphicsQueue;
-    nvrhi::RefCountPtr<ID3D12CommandQueue>          m_ComputeQueue;
-    nvrhi::RefCountPtr<ID3D12CommandQueue>          m_CopyQueue;
-    nvrhi::RefCountPtr<IDXGISwapChain3>             m_SwapChain;
+    nvrhi::AutoPtr<IDXGIFactory2>               m_DxgiFactory2;
+    nvrhi::AutoPtr<ID3D12Device>                m_Device12;
+    nvrhi::AutoPtr<ID3D12CommandQueue>          m_GraphicsQueue;
+    nvrhi::AutoPtr<ID3D12CommandQueue>          m_ComputeQueue;
+    nvrhi::AutoPtr<ID3D12CommandQueue>          m_CopyQueue;
+    nvrhi::AutoPtr<IDXGISwapChain3>             m_SwapChain;
     DXGI_SWAP_CHAIN_DESC1                           m_SwapChainDesc{};
     DXGI_SWAP_CHAIN_FULLSCREEN_DESC                 m_FullScreenDesc{};
-    nvrhi::RefCountPtr<IDXGIAdapter>                m_DxgiAdapter;
+    nvrhi::AutoPtr<IDXGIAdapter>                m_DxgiAdapter;
     HWND                                            m_hWnd = nullptr;
     bool                                            m_TearingSupported = false;
 
-    std::vector<nvrhi::RefCountPtr<ID3D12Resource>> m_SwapChainBuffers;
+    std::vector<nvrhi::AutoPtr<ID3D12Resource>> m_SwapChainBuffers;
     std::vector<nvrhi::TextureHandle>               m_RhiSwapChainBuffers;
-    nvrhi::RefCountPtr<ID3D12Fence>                 m_FrameFence;
+    nvrhi::AutoPtr<ID3D12Fence>                 m_FrameFence;
     std::vector<HANDLE>                             m_FrameFenceEvents;
 
     UINT64                                          m_FrameCount = 1;

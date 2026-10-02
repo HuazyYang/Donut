@@ -36,17 +36,17 @@
 class DeviceManager_DX11 : public donut::app::DeviceManager
 {
 protected:
-    nvrhi::RefCountPtr<IDXGIFactory1> m_DxgiFactory;
-    nvrhi::RefCountPtr<IDXGIAdapter> m_DxgiAdapter;
-    nvrhi::RefCountPtr<ID3D11Device> m_Device;
-    nvrhi::RefCountPtr<ID3D11DeviceContext> m_ImmediateContext;
-    nvrhi::RefCountPtr<IDXGISwapChain> m_SwapChain;
+    nvrhi::AutoPtr<IDXGIFactory1> m_DxgiFactory;
+    nvrhi::AutoPtr<IDXGIAdapter> m_DxgiAdapter;
+    nvrhi::AutoPtr<ID3D11Device> m_Device;
+    nvrhi::AutoPtr<ID3D11DeviceContext> m_ImmediateContext;
+    nvrhi::AutoPtr<IDXGISwapChain> m_SwapChain;
     DXGI_SWAP_CHAIN_DESC m_SwapChainDesc{};
     HWND m_hWnd = nullptr;
 
     nvrhi::DeviceHandle m_NvrhiDevice;
     nvrhi::TextureHandle m_RhiBackBuffer;
-    nvrhi::RefCountPtr<ID3D11Texture2D> m_D3D11BackBuffer;
+    nvrhi::AutoPtr<ID3D11Texture2D> m_D3D11BackBuffer;
 
     std::string m_RendererString;
 

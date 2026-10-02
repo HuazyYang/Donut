@@ -66,7 +66,7 @@ freely, subject to the following restrictions:
 #include <StreamlineIntegration.h>
 #endif
 
-using nvrhi::RefCountPtr;
+using nvrhi::AutoPtr;
 
 using namespace donut::app;
 
@@ -84,7 +84,7 @@ static bool MoveWindowOntoAdapter(IDXGIAdapter* targetAdapter, RECT& rect)
     unsigned int outputNo = 0;
     while (SUCCEEDED(hres))
     {
-        nvrhi::RefCountPtr<IDXGIOutput> pOutput;
+        nvrhi::AutoPtr<IDXGIOutput> pOutput;
         hres = targetAdapter->EnumOutputs(outputNo++, &pOutput);
 
         if (SUCCEEDED(hres) && pOutput)
@@ -120,7 +120,7 @@ bool DeviceManager_DX11::BeginFrame()
 
 void DeviceManager_DX11::ReportLiveObjects()
 {
-    nvrhi::RefCountPtr<IDXGIDebug> pDebug;
+    nvrhi::AutoPtr<IDXGIDebug> pDebug;
     DXGIGetDebugInterface1(0, IID_PPV_ARGS(&pDebug));
 
     if (pDebug)
@@ -156,7 +156,7 @@ bool DeviceManager_DX11::EnumerateAdapters(std::vector<AdapterInfo>& outAdapters
     
     while (true)
     {
-        RefCountPtr<IDXGIAdapter> adapter;
+        AutoPtr<IDXGIAdapter> adapter;
         HRESULT hr = m_DxgiFactory->EnumAdapters(uint32_t(outAdapters.size()), &adapter);
         if (FAILED(hr))
             return true;
