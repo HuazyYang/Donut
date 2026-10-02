@@ -55,7 +55,7 @@ namespace donut::render
         float maxLightRadiance = 100.f; // clamp for light radiance derived from its angular size, 0 = no clamp
     };
 
-    class SkyPass: nvrhi::ObjectImpl<nvrhi::IObject>
+    class SkyPass : public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
         NVRHI_BEGIN_INTERFACE_TABLE_INLINE(SkyPass)

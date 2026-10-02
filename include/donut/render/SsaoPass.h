@@ -49,7 +49,7 @@ namespace donut::render
         float blurSharpness = 16.f;
     };
 
-    class SsaoPass: nvrhi::ObjectImpl<nvrhi::IObject>
+    class SsaoPass : public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
         NVRHI_BEGIN_INTERFACE_TABLE_INLINE(SsaoPass)

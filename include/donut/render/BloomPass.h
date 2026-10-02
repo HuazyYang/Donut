@@ -39,7 +39,7 @@ namespace donut::engine
 
 namespace donut::render
 {
-    class BloomPass: nvrhi::ObjectImpl<nvrhi::IObject>
+    class BloomPass : public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
         NVRHI_BEGIN_INTERFACE_TABLE_INLINE(BloomPass)

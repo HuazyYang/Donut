@@ -93,7 +93,7 @@ private:
 // AudioCache : cache for audio data with synch & async read from 
 // donut vfs::IFileSystem
 //
-class AudioCache: nvrhi::ObjectImpl<nvrhi::IObject>
+class AudioCache : public nvrhi::ObjectImpl<nvrhi::IObject>
 {
 public:
     NVRHI_BEGIN_INTERFACE_TABLE_INLINE(AudioCache)

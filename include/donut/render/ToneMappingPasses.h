@@ -49,7 +49,7 @@ namespace donut::render
         bool enableColorLUT = true;
     };
 
-    class ToneMappingPass: nvrhi::ObjectImpl<nvrhi::IObject>
+    class ToneMappingPass : public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
         NVRHI_BEGIN_INTERFACE_TABLE_INLINE(ToneMappingPass)
