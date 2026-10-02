@@ -88,6 +88,11 @@ namespace donut::engine
 
     class ShaderFactory: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
+    public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(ShaderFactory)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
     private:
         nvrhi::DeviceHandle m_Device;
         std::unordered_map<std::string, nvrhi::AutoPtr<nvrhi::IDataBlob>> m_BytecodeCache;

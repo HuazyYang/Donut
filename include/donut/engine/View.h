@@ -46,6 +46,10 @@ namespace donut::engine
     class ICompositeView: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(ICompositeView)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
         [[nodiscard]] virtual uint32_t GetNumChildViews(ViewType::Enum supportedTypes) const = 0;
         [[nodiscard]] virtual const IView* GetChildView(ViewType::Enum supportedTypes, uint32_t index) const = 0;
 

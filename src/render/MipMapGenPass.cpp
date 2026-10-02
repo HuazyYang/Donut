@@ -73,6 +73,10 @@ static nvrhi::TextureHandle createNullTexture(nvrhi::DeviceHandle device)
 }
 
 struct MipMapGenPass::NullTextures: nvrhi::ObjectImpl<nvrhi::IObject> {
+    NVRHI_BEGIN_INTERFACE_TABLE_INLINE(NullTextures)
+    NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+    NVRHI_END_INTERFACE_TABLE()
+
 
     nvrhi::TextureHandle lod[NUM_LODS];
 

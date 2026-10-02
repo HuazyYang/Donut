@@ -59,6 +59,11 @@ namespace donut::engine::animation
 
     class Sampler: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
+    public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(Sampler)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
     protected:
         std::vector<Keyframe> m_Keyframes;
         InterpolationMode m_Mode = InterpolationMode::Step;

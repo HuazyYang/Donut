@@ -57,6 +57,11 @@ namespace donut::render
 
     class SkyPass: nvrhi::ObjectImpl<nvrhi::IObject>
     {
+    public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(SkyPass)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
     private:
         nvrhi::ShaderHandle m_PixelShader;
         nvrhi::BufferHandle m_SkyCB;

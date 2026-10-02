@@ -262,6 +262,10 @@ namespace donut::app
     class DeviceManager: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(DeviceManager)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
         static DeviceManager* Create(nvrhi::GraphicsAPI api);
 
         bool CreateHeadlessDevice(const DeviceCreationParameters& params);
@@ -449,6 +453,11 @@ namespace donut::app
 
     class IRenderPass: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
+    public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(IRenderPass)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
     private:
         DeviceManager* m_DeviceManager;
 

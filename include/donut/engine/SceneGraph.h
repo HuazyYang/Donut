@@ -51,6 +51,11 @@ namespace donut::engine
 
     class SceneGraphLeaf: public nvrhi::WeakReferenceSourceImpl<nvrhi::IWeakReferenceSource>
     {
+    public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(SceneGraphLeaf)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IWeakReferenceSource)
+        NVRHI_END_INTERFACE_TABLE()
+
     private:
         friend class SceneGraphNode;
         nvrhi::WeakPtr<SceneGraphNode> m_Node;
@@ -260,6 +265,10 @@ namespace donut::engine
     class SceneGraphNode final : public nvrhi::WeakReferenceSourceImpl<nvrhi::IWeakReferenceSource>
     {
     public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(SceneGraphNode)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IWeakReferenceSource)
+        NVRHI_END_INTERFACE_TABLE()
+
         enum struct DirtyFlags : uint32_t
         {
             None                    = 0,
@@ -413,6 +422,11 @@ namespace donut::engine
 
     class SceneGraphAnimationChannel: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
+    public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(SceneGraphAnimationChannel)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
     private:
         nvrhi::AutoPtr<animation::Sampler> m_Sampler;
         nvrhi::WeakPtr<SceneGraphNode> m_TargetNode;
@@ -531,6 +545,11 @@ namespace donut::engine
     
     class SceneGraph : public nvrhi::WeakReferenceSourceImpl<nvrhi::IWeakReferenceSource>
     {
+    public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(SceneGraph)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IWeakReferenceSource)
+        NVRHI_END_INTERFACE_TABLE()
+
     private:
         friend class SceneGraphNode;
         nvrhi::AutoPtr<SceneGraphNode> m_Root;
@@ -605,6 +624,10 @@ namespace donut::engine
     class SceneTypeFactory: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(SceneTypeFactory)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
         virtual ~SceneTypeFactory() = default;
         virtual nvrhi::AutoPtr<SceneGraph> CreateGraph();
         virtual nvrhi::AutoPtr<SceneGraphLeaf> CreateLeaf(const std::string& type);

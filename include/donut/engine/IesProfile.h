@@ -38,6 +38,10 @@ namespace donut::engine
 
     struct IesProfile: nvrhi::ObjectImpl<nvrhi::IObject>
     {
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(IesProfile)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
         std::string name;
         std::vector<float> rawData;
         nvrhi::TextureHandle texture;

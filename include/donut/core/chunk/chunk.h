@@ -94,6 +94,10 @@ static_assert(sizeof(MeshletInfo) == 56);
 
 struct MeshSetBase: nvrhi::ObjectImpl<nvrhi::IObject>
 {
+    NVRHI_BEGIN_INTERFACE_TABLE_INLINE(MeshSetBase)
+    NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+    NVRHI_END_INTERFACE_TABLE()
+
 
 public:
 

@@ -59,6 +59,10 @@ namespace donut::render
     class IGeometryPass: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(IGeometryPass)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
         [[nodiscard]] virtual engine::ViewType::Enum GetSupportedViewTypes() const = 0;
         virtual void SetupView(GeometryPassContext& context, nvrhi::ICommandList* commandList, const engine::IView* view, const engine::IView* viewPrev) = 0;
         virtual bool SetupMaterial(GeometryPassContext& context, const engine::Material* material, nvrhi::RasterCullMode cullMode, nvrhi::GraphicsState& state) = 0;

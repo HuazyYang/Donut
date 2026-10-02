@@ -61,6 +61,11 @@ namespace donut::render
 
     class TemporalAntiAliasingPass: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
+    public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(TemporalAntiAliasingPass)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
     private:
         nvrhi::AutoPtr<engine::CommonRenderPasses> m_CommonPasses;
 

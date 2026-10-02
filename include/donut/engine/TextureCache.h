@@ -100,6 +100,11 @@ namespace donut::engine
 
     class TextureCache: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
+    public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(TextureCache)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
     protected:
         nvrhi::DeviceHandle m_Device;
         nvrhi::CommandListHandle m_CommandList;

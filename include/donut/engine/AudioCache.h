@@ -51,6 +51,10 @@ class AudioCache;
 class AudioData: public nvrhi::ObjectImpl<nvrhi::IObject>
 {
 public:
+    NVRHI_BEGIN_INTERFACE_TABLE_INLINE(AudioData)
+    NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+    NVRHI_END_INTERFACE_TABLE()
+
 
     // duration of the sample (in seconds)
     float duration() const { return float(samplesSize) / float(byteRate); }
@@ -92,6 +96,10 @@ private:
 class AudioCache: nvrhi::ObjectImpl<nvrhi::IObject>
 {
 public:
+    NVRHI_BEGIN_INTERFACE_TABLE_INLINE(AudioCache)
+    NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+    NVRHI_END_INTERFACE_TABLE()
+
 
     AudioCache(vfs::IFileSystem* fs);
 

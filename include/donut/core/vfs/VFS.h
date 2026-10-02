@@ -57,6 +57,10 @@ namespace donut::vfs
     class IFileSystem: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(IFileSystem)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
         virtual ~IFileSystem() = default;
 
         // Test if a folder exists.
@@ -91,7 +95,11 @@ namespace donut::vfs
     class NativeFileSystem : public IFileSystem
     {
     public:
-        NVRHI_CLASS_INTERFACE_TABLE(NativeFileSystem)
+        NVRHI_DECLARE_UUID_TRAITS(NativeFileSystem)
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(NativeFileSystem)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_IMPLEMENTS_CLASS(NativeFileSystem)
+        NVRHI_END_INTERFACE_TABLE()
 
 		bool folderExists(const std::filesystem::path& name) override;
         bool fileExists(const std::filesystem::path& name) override;

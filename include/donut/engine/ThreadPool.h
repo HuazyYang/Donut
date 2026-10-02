@@ -39,6 +39,10 @@ namespace donut::engine
 class ThreadPoolTask: public nvrhi::ObjectImpl<nvrhi::IObject>
 {
 public:
+    NVRHI_BEGIN_INTERFACE_TABLE_INLINE(ThreadPoolTask)
+    NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+    NVRHI_END_INTERFACE_TABLE()
+
     // Execute the task.
     virtual void Run() = 0;
 };

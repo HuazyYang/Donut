@@ -84,6 +84,11 @@ using namespace donut::engine;
 
 class StbImageBlob : public nvrhi::ObjectImpl<nvrhi::IDataBlob>
 {
+public:
+    NVRHI_BEGIN_INTERFACE_TABLE_INLINE(StbImageBlob)
+    NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IDataBlob)
+    NVRHI_END_INTERFACE_TABLE()
+
 private:
     unsigned char* m_data = nullptr;
 

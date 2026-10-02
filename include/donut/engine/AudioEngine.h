@@ -34,6 +34,10 @@ class AudioData;
 //
 struct Effect: nvrhi::WeakReferenceSourceImpl<nvrhi::IWeakReferenceSource>
 {
+    NVRHI_BEGIN_INTERFACE_TABLE_INLINE(Effect)
+    NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IWeakReferenceSource)
+    NVRHI_END_INTERFACE_TABLE()
+
     // returns the audio sample associated with this effect
     virtual AudioData* getSample() const = 0;    
     

@@ -33,6 +33,10 @@ namespace donut::engine
     class IShadowMap: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(IShadowMap)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
         virtual ~IShadowMap() = default;
         virtual dm::float4x4 GetWorldToUvzwMatrix() const = 0;
         virtual const class ICompositeView& GetView() const = 0;

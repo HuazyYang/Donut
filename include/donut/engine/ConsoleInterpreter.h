@@ -69,6 +69,10 @@ namespace donut::engine
 		class Interpreter: public nvrhi::ObjectImpl<nvrhi::IObject>
 		{
 		public:
+			NVRHI_BEGIN_INTERFACE_TABLE_INLINE(Interpreter)
+			NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+			NVRHI_END_INTERFACE_TABLE()
+
 
 			Interpreter();
 			~Interpreter();

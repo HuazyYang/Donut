@@ -36,6 +36,11 @@ namespace donut::engine
     // Stores a descriptor index in a descriptor table. Releases the descriptor when destroyed.
     class DescriptorHandle: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
+    public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(DescriptorHandle)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
     private:
       friend class DescriptorTableManager;
       DescriptorHandle(DescriptorTableManager *managerPtr,
@@ -66,6 +71,11 @@ namespace donut::engine
 
     class DescriptorTableManager : public nvrhi::WeakReferenceSourceImpl<nvrhi::IWeakReferenceSource>
     {
+    public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(DescriptorTableManager)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IWeakReferenceSource)
+        NVRHI_END_INTERFACE_TABLE()
+
     protected:
         // Custom hasher that doesn't look at the binding slot
         struct BindingSetItemHasher

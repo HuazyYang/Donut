@@ -44,6 +44,10 @@ namespace donut::render
     class DLSS: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
     public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(DLSS)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
         struct InitParameters
         {
             uint32_t inputWidth = 0;

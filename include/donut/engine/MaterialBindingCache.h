@@ -50,6 +50,11 @@ namespace donut::engine
 
     class MaterialBindingCache: public nvrhi::ObjectImpl<nvrhi::IObject>
     {
+    public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(MaterialBindingCache)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
     private:
         nvrhi::DeviceHandle m_Device;
         nvrhi::BindingLayoutHandle m_BindingLayout;

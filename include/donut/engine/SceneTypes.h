@@ -57,6 +57,10 @@ namespace donut::engine
     // It can be from a Data URI (decoded) or from a buffer view.
     struct GltfInlineData: nvrhi::ObjectImpl<nvrhi::IObject>
     {
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(GltfInlineData)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
         nvrhi::AutoPtr<nvrhi::IDataBlob> buffer;
 
         // Object name from glTF, if specified.
@@ -159,6 +163,10 @@ namespace donut::engine
 
     struct LoadedTexture: nvrhi::ObjectImpl<nvrhi::IObject>
     {
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(LoadedTexture)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
         nvrhi::TextureHandle texture;
         TextureAlphaMode alphaMode = TextureAlphaMode::UNKNOWN;
         uint32_t originalBitsPerPixel = 0;
@@ -226,6 +234,10 @@ namespace donut::engine
 
     struct Material: nvrhi::WeakReferenceSourceImpl<nvrhi::IWeakReferenceSource>
     {
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(Material)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IWeakReferenceSource)
+        NVRHI_END_INTERFACE_TABLE()
+
         std::string name;
         std::string modelFileName;      // where this material originated from, e.g. GLTF file name
         int materialIndexInModel = -1;  // index of the material in the model file
@@ -312,6 +324,10 @@ namespace donut::engine
 
     struct BufferGroup: nvrhi::ObjectImpl<nvrhi::IObject>
     {
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(BufferGroup)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
         nvrhi::BufferHandle indexBuffer;
         nvrhi::BufferHandle vertexBuffer;
         nvrhi::BufferHandle instanceBuffer;
@@ -347,6 +363,10 @@ namespace donut::engine
 
     struct MeshGeometry: nvrhi::ObjectImpl<nvrhi::IObject>
     {
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(MeshGeometry)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
         nvrhi::AutoPtr<Material> material;
         dm::box3 objectSpaceBounds;
         uint32_t indexOffsetInMesh = 0;
@@ -372,6 +392,10 @@ namespace donut::engine
 
     struct MeshInfo: nvrhi::ObjectImpl<nvrhi::IObject>
     {
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(MeshInfo)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
         std::string name;
         MeshType type = MeshType::Triangles;
         nvrhi::AutoPtr<BufferGroup> buffers;
@@ -398,6 +422,10 @@ namespace donut::engine
 
     struct LightProbe: nvrhi::ObjectImpl<nvrhi::IObject>
     {
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(LightProbe)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
         std::string name;
         nvrhi::TextureHandle diffuseMap;
         nvrhi::TextureHandle specularMap;
