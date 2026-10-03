@@ -124,7 +124,7 @@ ManipulatorPass::ManipulatorPass(
     viewCBDesc.isConstantBuffer = true;
     viewCBDesc.isVolatile = true;
     viewCBDesc.maxVersions = engine::c_MaxRenderPassConstantBufferVersions;
-    m_ViewCB = device->createBuffer(viewCBDesc);
+    device->createBuffer(viewCBDesc, &m_ViewCB);
 
     nvrhi::BufferDesc manipulatorCBDesc;
     manipulatorCBDesc.byteSize = sizeof(ManipulatorConstants);
@@ -132,7 +132,7 @@ ManipulatorPass::ManipulatorPass(
     manipulatorCBDesc.isConstantBuffer = true;
     manipulatorCBDesc.isVolatile = true;
     manipulatorCBDesc.maxVersions = engine::c_MaxRenderPassConstantBufferVersions;
-    m_ManipulatorCB = device->createBuffer(manipulatorCBDesc);
+    device->createBuffer(manipulatorCBDesc, &m_ManipulatorCB);
 
     nvrhi::BindingLayoutDesc layoutDesc;
     layoutDesc.visibility = nvrhi::ShaderType::All;
@@ -140,14 +140,14 @@ ManipulatorPass::ManipulatorPass(
         nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
         nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)
     };
-    m_BindingLayout = device->createBindingLayout(layoutDesc);
+    device->createBindingLayout(layoutDesc, &m_BindingLayout);
 
     nvrhi::BindingSetDesc bindingSetDesc;
     bindingSetDesc.bindings = {
         nvrhi::BindingSetItem::ConstantBuffer(0, m_ViewCB),
         nvrhi::BindingSetItem::ConstantBuffer(1, m_ManipulatorCB)
     };
-    m_BindingSet = device->createBindingSet(bindingSetDesc, m_BindingLayout);
+    device->createBindingSet(bindingSetDesc, m_BindingLayout, &m_BindingSet);
 
     m_PickScanPass.Init(device, shaderFactory, maxFramesInFlight);
 }
@@ -165,7 +165,7 @@ void ManipulatorPass::PickScanPass::Init(
     cbDesc.isConstantBuffer = true;
     cbDesc.isVolatile = true;
     cbDesc.maxVersions = engine::c_MaxRenderPassConstantBufferVersions;
-    constants = device->createBuffer(cbDesc);
+    device->createBuffer(cbDesc, &constants);
 
     nvrhi::BufferDesc resultDesc;
     resultDesc.byteSize = 2 * sizeof(uint32_t); // [0] = widget id, [1] = winning sample's squared distance
@@ -175,7 +175,7 @@ void ManipulatorPass::PickScanPass::Init(
     resultDesc.initialState = nvrhi::ResourceStates::CopySource;
     resultDesc.keepInitialState = true;
     resultDesc.debugName = "ManipulatorScan/Result";
-    result = device->createBuffer(resultDesc);
+    device->createBuffer(resultDesc, &result);
 
     const uint32_t ringSize = std::max(maxFramesInFlight, 1u) + 1u;
 
@@ -186,7 +186,7 @@ void ManipulatorPass::PickScanPass::Init(
     for (uint32_t slot = 0; slot < ringSize; ++slot)
     {
         readbackDesc.debugName = "ManipulatorScan/Readback" + std::to_string(slot);
-        readbackRing[slot] = device->createBuffer(readbackDesc);
+        device->createBuffer(readbackDesc, &readbackRing[slot]);
     }
 
     nvrhi::BindingLayoutDesc layoutDesc;
@@ -196,12 +196,12 @@ void ManipulatorPass::PickScanPass::Init(
         nvrhi::BindingLayoutItem::Texture_SRV(0),
         nvrhi::BindingLayoutItem::TypedBuffer_UAV(0)
     };
-    bindingLayout = device->createBindingLayout(layoutDesc);
+    device->createBindingLayout(layoutDesc, &bindingLayout);
 
     nvrhi::ComputePipelineDesc pipelineDesc;
     pipelineDesc.bindingLayouts = { bindingLayout };
     pipelineDesc.CS = shader;
-    pipeline = device->createComputePipeline(pipelineDesc);
+    device->createComputePipeline(pipelineDesc, &pipeline);
 }
 
 void ManipulatorPass::PickScanPass::BindSource(nvrhi::IDevice* device, nvrhi::ITexture* pickTexture)
@@ -212,7 +212,7 @@ void ManipulatorPass::PickScanPass::BindSource(nvrhi::IDevice* device, nvrhi::IT
         nvrhi::BindingSetItem::Texture_SRV(0, pickTexture),
         nvrhi::BindingSetItem::TypedBuffer_UAV(0, result)
     };
-    bindingSet = device->createBindingSet(setDesc, bindingLayout);
+    device->createBindingSet(setDesc, bindingLayout, &bindingSet);
 }
 
 void ManipulatorPass::PickScanPass::Dispatch(nvrhi::ICommandList* commandList, int2 pixel, int2 viewportSize)
@@ -292,7 +292,7 @@ const ManipulatorPass::PipelineSet& ManipulatorPass::GetPipelines(const nvrhi::F
                     .setDestBlendAlpha(nvrhi::BlendFactor::InvSrcAlpha);
             }
 
-            set.pipelines[mode][elem] = m_Device->createGraphicsPipeline(pipelineDesc, fbInfo);
+            m_Device->createGraphicsPipeline1(pipelineDesc, fbInfo, &set.pipelines[mode][elem]);
         }
     }
     return m_Pipelines.emplace(fbInfo, set).first->second;
@@ -355,7 +355,7 @@ bool ManipulatorPass::PickRenderTarget::Resize(nvrhi::IDevice* device, int2 size
     if (idTexture && int(idTexture->getDesc().width) >= size.x && int(idTexture->getDesc().height) >= size.y)
         return false;
 
-    idTexture = device->createTexture(nvrhi::TextureDesc()
+    device->createTexture(nvrhi::TextureDesc()
         .setDimension(nvrhi::TextureDimension::Texture2D)
         .setWidth(uint32_t(size.x))
         .setHeight(uint32_t(size.y))
@@ -363,9 +363,9 @@ bool ManipulatorPass::PickRenderTarget::Resize(nvrhi::IDevice* device, int2 size
         .setIsRenderTarget(true)
         .setInitialState(nvrhi::ResourceStates::RenderTarget)
         .setKeepInitialState(true)
-        .setDebugName("ManipulatorIDs"));
+        .setDebugName("ManipulatorIDs"), &idTexture);
 
-    depth = device->createTexture(nvrhi::TextureDesc()
+    device->createTexture(nvrhi::TextureDesc()
         .setDimension(nvrhi::TextureDimension::Texture2D)
         .setWidth(uint32_t(size.x))
         .setHeight(uint32_t(size.y))
@@ -373,7 +373,7 @@ bool ManipulatorPass::PickRenderTarget::Resize(nvrhi::IDevice* device, int2 size
         .setIsRenderTarget(true)
         .setInitialState(nvrhi::ResourceStates::DepthWrite)
         .setKeepInitialState(true)
-        .setDebugName("ManipulatorPickDepth"));
+        .setDebugName("ManipulatorPickDepth"), &depth);
 
     framebuffer = MAKE_RC_OBJ_PTR(FramebufferFactory, device);
     framebuffer->RenderTargets = { idTexture };

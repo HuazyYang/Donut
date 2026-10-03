@@ -58,14 +58,14 @@ IesProfileLoader::IesProfileLoader(
         nvrhi::BindingLayoutItem::TypedBuffer_SRV(0),
         nvrhi::BindingLayoutItem::Texture_UAV(0),
     };
-    m_BindingLayout = device->createBindingLayout(layoutDesc);
+    device->createBindingLayout(layoutDesc, &m_BindingLayout);
 
     m_ComputeShader = m_ShaderFactory->CreateAutoShader("donut/ies_profile_cs.hlsl", "main", DONUT_MAKE_PLATFORM_SHADER(g_ies_profile_cs), nullptr, nvrhi::ShaderType::Compute);
 
     nvrhi::ComputePipelineDesc pipelineDesc;
     pipelineDesc.bindingLayouts = { m_BindingLayout };
     pipelineDesc.CS = m_ComputeShader;
-    m_ComputePipeline = device->createComputePipeline(pipelineDesc);
+    device->createComputePipeline(pipelineDesc, &m_ComputePipeline);
 }
 
 static const char* c_SupportedProfiles[] = {
@@ -257,7 +257,8 @@ void IesProfileLoader::BakeIesProfile(IesProfile& profile, nvrhi::ICommandList* 
     bufferDesc.keepInitialState = true;
     bufferDesc.debugName = "IesProfileData";
     bufferDesc.canHaveTypedViews = true;
-    nvrhi::BufferHandle buffer = m_Device->createBuffer(bufferDesc);
+    nvrhi::BufferHandle buffer;
+    m_Device->createBuffer(bufferDesc, &buffer);
 
     nvrhi::TextureDesc textureDesc;
     textureDesc.dimension = nvrhi::TextureDimension::Texture2D;
@@ -266,14 +267,15 @@ void IesProfileLoader::BakeIesProfile(IesProfile& profile, nvrhi::ICommandList* 
     textureDesc.debugName = profile.name;
     textureDesc.format = nvrhi::Format::R16_FLOAT;
     textureDesc.isUAV = true;
-    profile.texture = m_Device->createTexture(textureDesc);
+    m_Device->createTexture(textureDesc, &profile.texture);
 
     nvrhi::BindingSetDesc bindingSetDesc;
     bindingSetDesc.bindings = {
         nvrhi::BindingSetItem::TypedBuffer_SRV(0, buffer),
         nvrhi::BindingSetItem::Texture_UAV(0, profile.texture)
     };
-    nvrhi::BindingSetHandle bindingSet = m_Device->createBindingSet(bindingSetDesc, m_BindingLayout);
+    nvrhi::BindingSetHandle bindingSet;
+    m_Device->createBindingSet(bindingSetDesc, m_BindingLayout, &bindingSet);
 
     commandList->writeBuffer(buffer, profile.rawData.data(), profile.rawData.size() * sizeof(float));
 

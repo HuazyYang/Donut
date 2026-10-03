@@ -69,7 +69,9 @@ static nvrhi::TextureHandle createNullTexture(nvrhi::DeviceHandle device)
     desc.isUAV = true;
     desc.format = nvrhi::Format::RGBA8_UNORM;
 
-    return device->createTexture(desc);
+    nvrhi::TextureHandle texture;
+    device->createTexture(desc, &texture);
+    return texture;
 }
 
 struct MipMapGenPass::NullTextures: nvrhi::ObjectImpl<nvrhi::IObject> {
@@ -127,7 +129,7 @@ MipMapGenPass::MipMapGenPass(
     constantBufferDesc.isVolatile = true;
     constantBufferDesc.debugName = "MipMapGenPass/Constants";
     constantBufferDesc.maxVersions = c_MaxRenderPassConstantBufferVersions;
-    m_ConstantBuffer = m_Device->createBuffer(constantBufferDesc);
+    m_Device->createBuffer(constantBufferDesc, &m_ConstantBuffer);
 
     // BindingLayout
     nvrhi::BindingLayoutDesc layoutDesc;
@@ -135,7 +137,7 @@ MipMapGenPass::MipMapGenPass(
     layoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
     layoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(0));
     layoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_UAV(0).setSize(NUM_LODS));
-    m_BindingLayout = m_Device->createBindingLayout(layoutDesc);
+    m_Device->createBindingLayout(layoutDesc, &m_BindingLayout);
 
     // BindingSets
     m_BindingSets.resize(MAX_PASSES);
@@ -165,14 +167,14 @@ MipMapGenPass::MipMapGenPass(
                     .setArrayElement(mipLevel - 1));
             }
         }
-        set = m_Device->createBindingSet(setDesc, m_BindingLayout);
+        m_Device->createBindingSet(setDesc, m_BindingLayout, &set);
     }
 
     nvrhi::ComputePipelineDesc computePipelineDesc;
     computePipelineDesc.CS = m_Shader;
     computePipelineDesc.bindingLayouts = { m_BindingLayout };
 
-    m_Pso = device->createComputePipeline(computePipelineDesc);
+    device->createComputePipeline(computePipelineDesc, &m_Pso);
 }
 
 void MipMapGenPass::Dispatch(nvrhi::ICommandList* commandList, int maxLOD) 

@@ -71,7 +71,7 @@ SsaoPass::SsaoPass(
     constantBufferDesc.isConstantBuffer = true;
     constantBufferDesc.isVolatile = true;
     constantBufferDesc.maxVersions = engine::c_MaxRenderPassConstantBufferVersions;
-    m_ConstantBuffer = device->createBuffer(constantBufferDesc);
+    device->createBuffer(constantBufferDesc, &m_ConstantBuffer);
 
     nvrhi::TextureDesc DeinterleavedTextureDesc;
     DeinterleavedTextureDesc.width = (params.dimensions.x + 3) / 4;
@@ -83,13 +83,13 @@ SsaoPass::SsaoPass(
     DeinterleavedTextureDesc.keepInitialState = true;
     DeinterleavedTextureDesc.debugName = "SSAO/DeinterleavedDepth";
     DeinterleavedTextureDesc.format = nvrhi::Format::R32_FLOAT;
-    m_DeinterleavedDepth = device->createTexture(DeinterleavedTextureDesc);
+    device->createTexture(DeinterleavedTextureDesc, &m_DeinterleavedDepth);
 
     m_QuantizedGbufferTextureSize = float2(float(DeinterleavedTextureDesc.width), float(DeinterleavedTextureDesc.height)) * 4.f;
 
     DeinterleavedTextureDesc.debugName = "SSAO/DeinterleavedOcclusion";
     DeinterleavedTextureDesc.format = params.directionalOcclusion ? nvrhi::Format::RGBA16_FLOAT : nvrhi::Format::R8_UNORM;
-    m_DeinterleavedOcclusion = device->createTexture(DeinterleavedTextureDesc);
+    device->createTexture(DeinterleavedTextureDesc, &m_DeinterleavedOcclusion);
     
     {
         std::vector<engine::ShaderMacro> macros = { 
@@ -104,12 +104,12 @@ SsaoPass::SsaoPass(
             nvrhi::BindingLayoutItem::Texture_SRV(0),
             nvrhi::BindingLayoutItem::Texture_UAV(0),
         };
-        m_Deinterleave.BindingLayout = m_Device->createBindingLayout(DeinterleaveBindings);
+        m_Device->createBindingLayout(DeinterleaveBindings, &m_Deinterleave.BindingLayout);
 
         nvrhi::ComputePipelineDesc DeinterleavePipelineDesc;
         DeinterleavePipelineDesc.bindingLayouts = { m_Deinterleave.BindingLayout };
         DeinterleavePipelineDesc.CS = m_Deinterleave.Shader;
-        m_Deinterleave.Pipeline = device->createComputePipeline(DeinterleavePipelineDesc);
+        device->createComputePipeline(DeinterleavePipelineDesc, &m_Deinterleave.Pipeline);
 
         m_Deinterleave.BindingSets.resize(params.numBindingSets);
     }
@@ -129,12 +129,12 @@ SsaoPass::SsaoPass(
             nvrhi::BindingLayoutItem::Texture_SRV(1),
             nvrhi::BindingLayoutItem::Texture_UAV(0),
         };
-        m_Compute.BindingLayout = m_Device->createBindingLayout(ComputeBindings);
+        m_Device->createBindingLayout(ComputeBindings, &m_Compute.BindingLayout);
 
         nvrhi::ComputePipelineDesc ComputePipeline;
         ComputePipeline.bindingLayouts = { m_Compute.BindingLayout };
         ComputePipeline.CS = m_Compute.Shader;
-        m_Compute.Pipeline = device->createComputePipeline(ComputePipeline);
+        device->createComputePipeline(ComputePipeline, &m_Compute.Pipeline);
 
         m_Compute.BindingSets.resize(params.numBindingSets);
     }
@@ -154,12 +154,12 @@ SsaoPass::SsaoPass(
             nvrhi::BindingLayoutItem::Texture_UAV(0),
             nvrhi::BindingLayoutItem::Sampler(0),
         };
-        m_Blur.BindingLayout = m_Device->createBindingLayout(BlurBindings);
+        m_Device->createBindingLayout(BlurBindings, &m_Blur.BindingLayout);
 
         nvrhi::ComputePipelineDesc BlurPipeline;
         BlurPipeline.bindingLayouts = { m_Blur.BindingLayout };
         BlurPipeline.CS = m_Blur.Shader;
-        m_Blur.Pipeline = device->createComputePipeline(BlurPipeline);
+        device->createComputePipeline(BlurPipeline, &m_Blur.Pipeline);
 
         m_Blur.BindingSets.resize(params.numBindingSets);
     }
@@ -198,7 +198,7 @@ void SsaoPass::CreateBindingSet(
         nvrhi::BindingSetItem::Texture_SRV(0, gbufferDepth),
         nvrhi::BindingSetItem::Texture_UAV(0, m_DeinterleavedDepth)
     };
-    m_Deinterleave.BindingSets[bindingSetIndex] = m_Device->createBindingSet(DeinterleaveBindings, m_Deinterleave.BindingLayout);
+    m_Device->createBindingSet(DeinterleaveBindings, m_Deinterleave.BindingLayout, &m_Deinterleave.BindingSets[bindingSetIndex]);
     
     nvrhi::BindingSetDesc ComputeBindings;
     ComputeBindings.bindings = {
@@ -207,7 +207,7 @@ void SsaoPass::CreateBindingSet(
         nvrhi::BindingSetItem::Texture_SRV(1, gbufferNormals),
         nvrhi::BindingSetItem::Texture_UAV(0, m_DeinterleavedOcclusion)
     };
-    m_Compute.BindingSets[bindingSetIndex] = m_Device->createBindingSet(ComputeBindings, m_Compute.BindingLayout);
+    m_Device->createBindingSet(ComputeBindings, m_Compute.BindingLayout, &m_Compute.BindingSets[bindingSetIndex]);
 
     nvrhi::BindingSetDesc BlurBindings;
     BlurBindings.bindings = {
@@ -217,7 +217,7 @@ void SsaoPass::CreateBindingSet(
         nvrhi::BindingSetItem::Texture_UAV(0, destinationTexture),
         nvrhi::BindingSetItem::Sampler(0, m_CommonPasses->m_PointClampSampler)
     };
-    m_Blur.BindingSets[bindingSetIndex] = m_Device->createBindingSet(BlurBindings, m_Blur.BindingLayout);
+    m_Device->createBindingSet(BlurBindings, m_Blur.BindingLayout, &m_Blur.BindingSets[bindingSetIndex]);
 }
 
 void SsaoPass::Render(

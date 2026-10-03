@@ -86,7 +86,7 @@ ToneMappingPass::ToneMappingPass(
     constantBufferDesc.isConstantBuffer = true;
     constantBufferDesc.isVolatile = true;
     constantBufferDesc.maxVersions = params.numConstantBufferVersions;
-    m_ToneMappingCB = device->createBuffer(constantBufferDesc);
+    device->createBuffer(constantBufferDesc, &m_ToneMappingCB);
 
     nvrhi::BufferDesc storageBufferDesc;
     storageBufferDesc.byteSize = sizeof(uint) * m_HistogramBins;
@@ -96,7 +96,7 @@ ToneMappingPass::ToneMappingPass(
     storageBufferDesc.initialState = nvrhi::ResourceStates::UnorderedAccess;
     storageBufferDesc.keepInitialState = true;
     storageBufferDesc.canHaveTypedViews = true;
-    m_HistogramBuffer = device->createBuffer(storageBufferDesc);
+    device->createBuffer(storageBufferDesc, &m_HistogramBuffer);
 
     if (params.exposureBufferOverride)
     {
@@ -107,7 +107,7 @@ ToneMappingPass::ToneMappingPass(
         storageBufferDesc.byteSize = sizeof(uint);
         storageBufferDesc.format = nvrhi::Format::R32_UINT;
         storageBufferDesc.debugName = "ExposureBuffer";
-        m_ExposureBuffer = device->createBuffer(storageBufferDesc);
+        device->createBuffer(storageBufferDesc, &m_ExposureBuffer);
     }
 
     m_ColorLUT = commonPasses->m_BlackTexture;
@@ -136,12 +136,12 @@ ToneMappingPass::ToneMappingPass(
             nvrhi::BindingLayoutItem::Texture_SRV(0),
             nvrhi::BindingLayoutItem::TypedBuffer_UAV(0)
         };
-        m_HistogramBindingLayout = device->createBindingLayout(layoutDesc);
+        device->createBindingLayout(layoutDesc, &m_HistogramBindingLayout);
 
         nvrhi::ComputePipelineDesc computePipelineDesc;
         computePipelineDesc.CS = m_HistogramComputeShader;
         computePipelineDesc.bindingLayouts = { m_HistogramBindingLayout };
-        m_HistogramPso = device->createComputePipeline(computePipelineDesc);
+        device->createComputePipeline(computePipelineDesc, &m_HistogramPso);
     }
 
     {
@@ -152,7 +152,7 @@ ToneMappingPass::ToneMappingPass(
             nvrhi::BindingLayoutItem::TypedBuffer_SRV(0),
             nvrhi::BindingLayoutItem::TypedBuffer_UAV(0)
         };
-        m_ExposureBindingLayout = device->createBindingLayout(layoutDesc);
+        device->createBindingLayout(layoutDesc, &m_ExposureBindingLayout);
 
         nvrhi::BindingSetDesc bindingSetDesc;
         bindingSetDesc.bindings = {
@@ -160,12 +160,12 @@ ToneMappingPass::ToneMappingPass(
             nvrhi::BindingSetItem::TypedBuffer_SRV(0, m_HistogramBuffer),
             nvrhi::BindingSetItem::TypedBuffer_UAV(0, m_ExposureBuffer)
         };
-        m_ExposureBindingSet = device->createBindingSet(bindingSetDesc, m_ExposureBindingLayout);
+        device->createBindingSet(bindingSetDesc, m_ExposureBindingLayout, &m_ExposureBindingSet);
 
         nvrhi::ComputePipelineDesc computePipelineDesc;
         computePipelineDesc.CS = m_ExposureComputeShader;
         computePipelineDesc.bindingLayouts = { m_ExposureBindingLayout };
-        m_ExposurePso = device->createComputePipeline(computePipelineDesc);
+        device->createComputePipeline(computePipelineDesc, &m_ExposurePso);
     }
 
     {
@@ -178,7 +178,7 @@ ToneMappingPass::ToneMappingPass(
             nvrhi::BindingLayoutItem::Texture_SRV(2),
             nvrhi::BindingLayoutItem::Sampler(0)
         };
-        m_RenderBindingLayout = device->createBindingLayout(layoutDesc);
+        device->createBindingLayout(layoutDesc, &m_RenderBindingLayout);
 
         nvrhi::GraphicsPipelineDesc pipelineDesc;
         pipelineDesc.primType = nvrhi::PrimitiveType::TriangleStrip;
@@ -192,7 +192,7 @@ ToneMappingPass::ToneMappingPass(
 
         nvrhi::FramebufferInfo framebufferInfo = m_FramebufferFactory->GetFramebufferInfo();
 
-        m_RenderPso = device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
+        device->createGraphicsPipeline1(pipelineDesc, framebufferInfo, &m_RenderPso);
     }
 }
 
@@ -213,7 +213,7 @@ void ToneMappingPass::Render(
             nvrhi::BindingSetItem::Texture_SRV(2, m_ColorLUT),
             nvrhi::BindingSetItem::Sampler(0, m_CommonPasses->m_LinearClampSampler)
         };
-        bindingSet = m_Device->createBindingSet(bindingSetDesc, m_RenderBindingLayout);
+        m_Device->createBindingSet(bindingSetDesc, m_RenderBindingLayout, &bindingSet);
     }
 
     for (uint viewIndex = 0; viewIndex < compositeView.GetNumChildViews(ViewType::PLANAR); viewIndex++)
@@ -297,7 +297,7 @@ void ToneMappingPass::AddFrameToHistogram(nvrhi::ICommandList* commandList, cons
             nvrhi::BindingSetItem::TypedBuffer_UAV(0, m_HistogramBuffer)
         };
 
-        bindingSet = m_Device->createBindingSet(bindingSetDesc, m_HistogramBindingLayout);
+        m_Device->createBindingSet(bindingSetDesc, m_HistogramBindingLayout, &bindingSet);
     }
 
     for (uint viewIndex = 0; viewIndex < compositeView.GetNumChildViews(ViewType::PLANAR); viewIndex++)

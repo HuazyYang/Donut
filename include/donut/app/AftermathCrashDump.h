@@ -35,14 +35,15 @@ namespace donut::app
     {
     public:
         static void WaitForCrashDump(uint32_t maxTimeoutSeconds = 60);
-        static uint64_t GetShaderHashForBinary(std::pair<const void*, size_t> shaderBinary, nvrhi::GraphicsAPI api);
+        static uint64_t GetShaderHashForBinary(const void* binary, size_t size, nvrhi::GraphicsAPI api);
 
         AftermathCrashDump(DeviceManager& deviceManager);
 
         void EnableCrashDumpTracking();
         // markers are stored with Aftermath as hashed 64bit values
-        // this method resolves the hash back to the original human-readable text
-        const std::string& ResolveMarker(uint64_t markerHash);
+        // this method resolves the hash back to the original human-readable text (owned by the device,
+        // not NUL-terminated: outLength gives its length)
+        const char* ResolveMarker(uint64_t markerHash, size_t& outLength);
 
         DeviceManager& GetDeviceManager();
         std::filesystem::path GetDumpFolder();

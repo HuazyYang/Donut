@@ -55,8 +55,8 @@ namespace donut::render
 
     void donut::render::JointsRenderPass::Init(donut::engine::ShaderFactory& shaderFactory)
     {
-        m_ConstantsBuffer = m_Device->createBuffer(
-            nvrhi::utils::CreateVolatileConstantBufferDesc(sizeof(PlanarViewConstants), "JointsWidget_Constants", 16));
+        m_Device->createBuffer(
+            nvrhi::utils::CreateVolatileConstantBufferDesc(sizeof(PlanarViewConstants), "JointsWidget_Constants", 16), &m_ConstantsBuffer);
 
         std::vector<ShaderMacro> macros;
 
@@ -69,7 +69,7 @@ namespace donut::render
         bindingLayoutDesc.bindings = {
             nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
         };
-        m_BindingLayout = m_Device->createBindingLayout(bindingLayoutDesc);
+        m_Device->createBindingLayout(bindingLayoutDesc, &m_BindingLayout);
 
         nvrhi::VertexAttributeDesc inputDescs[] = {
             nvrhi::VertexAttributeDesc()
@@ -83,7 +83,7 @@ namespace donut::render
                 .setOffset(offsetof(Vertex, color))
                 .setElementStride(sizeof(Vertex)),
         };
-        m_InputLayout = m_Device->createInputLayout(inputDescs, uint32_t(std::size(inputDescs)), m_VertexShader);
+        m_Device->createInputLayout(inputDescs, uint32_t(std::size(inputDescs)), m_VertexShader, &m_InputLayout);
     }
 
     nvrhi::BufferHandle donut::render::JointsRenderPass::CreateVertexBuffer(uint32_t numVertices) const
@@ -96,7 +96,9 @@ namespace donut::render
         bufferDesc.canHaveRawViews = true;
         bufferDesc.keepInitialState = true;
         bufferDesc.canHaveRawViews = true;
-        return m_Device->createBuffer(bufferDesc);
+        nvrhi::BufferHandle buffer;
+        m_Device->createBuffer(bufferDesc, &buffer);
+        return buffer;
     }
 
     void JointsRenderPass::ResetCaches()
@@ -188,7 +190,7 @@ namespace donut::render
 
         commandList->writeBuffer(m_VertexBuffer, m_Vertices.data(), m_Vertices.size() * sizeof(Vertex));
     
-        nvrhi::FramebufferInfo const& framebufferInfo = framebuffer->getFramebufferInfo();
+        nvrhi::FramebufferInfo const framebufferInfo = framebuffer->getFramebufferInfo().getInfo();
 
         if (!m_Pipeline)
         {
@@ -204,7 +206,7 @@ namespace donut::render
             pipelineDesc.renderState.rasterState.fillMode = nvrhi::RasterFillMode::Wireframe;
             pipelineDesc.renderState.depthStencilState.disableDepthTest();
 
-            m_Pipeline = m_Device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
+            m_Device->createGraphicsPipeline1(pipelineDesc, framebufferInfo, &m_Pipeline);
         }
 
         assert(m_Pipeline->getFramebufferInfo() == framebufferInfo);
@@ -215,7 +217,7 @@ namespace donut::render
             bindingSetDesc.bindings = {
                 nvrhi::BindingSetItem::ConstantBuffer(0, m_ConstantsBuffer),
             };
-            m_BindingSet = m_Device->createBindingSet(bindingSetDesc, m_BindingLayout);
+            m_Device->createBindingSet(bindingSetDesc, m_BindingLayout, &m_BindingSet);
         }
 
         nvrhi::GraphicsState state;

@@ -46,7 +46,7 @@ public:
         std::string const& directoryWithExecutable, uint32_t applicationID)
         : DLSS(device, shaderFactory)
     {
-        ID3D12Device* d3ddevice = device->getNativeObject(nvrhi::ObjectTypes::D3D12_Device);
+        ID3D12Device* d3ddevice = static_cast<ID3D12Device*>(device->getNativeObject(nvrhi::ObjectTypes::D3D12_Device));
 
         std::wstring executablePathW;
         executablePathW.assign(directoryWithExecutable.begin(), directoryWithExecutable.end());
@@ -120,7 +120,7 @@ public:
         }
 
         m_featureCommandList->open();
-        ID3D12GraphicsCommandList* d3dcmdlist = m_featureCommandList->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList);
+        ID3D12GraphicsCommandList* d3dcmdlist = static_cast<ID3D12GraphicsCommandList*>(m_featureCommandList->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList));
 
         m_parameters->Set(NVSDK_NGX_Parameter_CreationNodeMask, 1u);
         m_parameters->Set(NVSDK_NGX_Parameter_VisibilityNodeMask, 1u);
@@ -182,7 +182,7 @@ public:
             ComputeExposure(commandList, params.exposureBuffer, params.exposureScale);
         }
 
-        ID3D12GraphicsCommandList* d3dcmdlist = commandList->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList);
+        ID3D12GraphicsCommandList* d3dcmdlist = static_cast<ID3D12GraphicsCommandList*>(commandList->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList));
 
         commandList->setTextureState(params.inputColorTexture, nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
         commandList->setTextureState(params.outputColorTexture, nvrhi::AllSubresources, nvrhi::ResourceStates::UnorderedAccess);
@@ -248,7 +248,7 @@ public:
             m_parameters = nullptr;
         }
 
-        ID3D12Device* d3ddevice = m_device->getNativeObject(nvrhi::ObjectTypes::D3D12_Device);
+        ID3D12Device* d3ddevice = static_cast<ID3D12Device*>(m_device->getNativeObject(nvrhi::ObjectTypes::D3D12_Device));
         NVSDK_NGX_D3D12_Shutdown1(d3ddevice);
     }
 };

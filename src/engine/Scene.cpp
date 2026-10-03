@@ -114,14 +114,14 @@ Scene::Scene(
             nvrhi::BindingLayoutItem::RawBuffer_UAV(0)
         };
 
-        m_SkinningBindingLayout = m_Device->createBindingLayout(layoutDesc);
+        m_Device->createBindingLayout(layoutDesc, &m_SkinningBindingLayout);
     }
 
     {
         nvrhi::ComputePipelineDesc pipelineDesc;
         pipelineDesc.bindingLayouts = { m_SkinningBindingLayout };
         pipelineDesc.CS = m_SkinningShader;
-        m_SkinningPipeline = m_Device->createComputePipeline(pipelineDesc);
+        m_Device->createComputePipeline(pipelineDesc, &m_SkinningPipeline);
     }
 }
 
@@ -603,7 +603,8 @@ nvrhi::AutoPtr<SceneGraph> Scene::CreateSceneGraph()
 
 void Scene::FinishedLoading(uint32_t frameIndex)
 {
-    nvrhi::CommandListHandle commandList = m_Device->createCommandList();
+    nvrhi::CommandListHandle commandList;
+    m_Device->createCommandList(nvrhi::CommandListParameters(), &commandList);
     commandList->open();
     
     CreateMeshBuffers(commandList);
@@ -828,7 +829,9 @@ nvrhi::BufferHandle CreateMaterialConstantBuffer(nvrhi::IDevice* device, const s
     bufferDesc.keepInitialState = true;
     bufferDesc.isVirtual = isVirtual;
 
-    return device->createBuffer(bufferDesc);
+    nvrhi::BufferHandle buffer;
+    device->createBuffer(bufferDesc, &buffer);
+    return buffer;
 }
 
 
@@ -859,7 +862,7 @@ void Scene::CreateMeshBuffers(nvrhi::ICommandList* commandList)
             bufferDesc.format = nvrhi::Format::R32_UINT;
             bufferDesc.isAccelStructBuildInput = m_RayTracingSupported;
 
-            buffers->indexBuffer = m_Device->createBuffer(bufferDesc);
+            m_Device->createBuffer(bufferDesc, &buffers->indexBuffer);
 
             if (m_DescriptorTable)
             {
@@ -944,7 +947,7 @@ void Scene::CreateMeshBuffers(nvrhi::ICommandList* commandList)
 	            continue;
             }
 
-            buffers->vertexBuffer = m_Device->createBuffer(bufferDesc);
+            m_Device->createBuffer(bufferDesc, &buffers->vertexBuffer);
             if (m_DescriptorTable)
             {
                 buffers->vertexBufferDescriptor = 
@@ -1079,7 +1082,7 @@ void Scene::CreateMeshBuffers(nvrhi::ICommandList* commandList)
             bufferDesc.keepInitialState = true;
             bufferDesc.initialState = nvrhi::ResourceStates::VertexBuffer;
 
-            skinnedBuffers->vertexBuffer = m_Device->createBuffer(bufferDesc);
+            m_Device->createBuffer(bufferDesc, &skinnedBuffers->vertexBuffer);
 
             if (m_DescriptorTable)
             {
@@ -1096,7 +1099,7 @@ void Scene::CreateMeshBuffers(nvrhi::ICommandList* commandList)
             jointBufferDesc.keepInitialState = true;
             jointBufferDesc.canHaveRawViews = true;
             jointBufferDesc.byteSize = sizeof(dm::float4x4) * skinnedInstance->joints.size();
-            skinnedInstance->jointBuffer = m_Device->createBuffer(jointBufferDesc);
+            m_Device->createBuffer(jointBufferDesc, &skinnedInstance->jointBuffer);
         }
 
         if (!skinnedInstance->skinningBindingSet)
@@ -1112,7 +1115,7 @@ void Scene::CreateMeshBuffers(nvrhi::ICommandList* commandList)
                 nvrhi::BindingSetItem::RawBuffer_UAV(0, skinnedBuffers->vertexBuffer)
             };
 
-            skinnedInstance->skinningBindingSet = m_Device->createBindingSet(setDesc, m_SkinningBindingLayout);
+            m_Device->createBindingSet(setDesc, m_SkinningBindingLayout, &skinnedInstance->skinningBindingSet);
         }
     }
 }
@@ -1128,7 +1131,9 @@ nvrhi::BufferHandle Scene::CreateMaterialBuffer()
     bufferDesc.initialState = nvrhi::ResourceStates::ShaderResource;
     bufferDesc.keepInitialState = true;
 
-    return m_Device->createBuffer(bufferDesc);
+    nvrhi::BufferHandle buffer;
+    m_Device->createBuffer(bufferDesc, &buffer);
+    return buffer;
 }
 
 nvrhi::BufferHandle Scene::CreateGeometryBuffer()
@@ -1142,7 +1147,9 @@ nvrhi::BufferHandle Scene::CreateGeometryBuffer()
     bufferDesc.initialState = nvrhi::ResourceStates::ShaderResource;
     bufferDesc.keepInitialState = true;
 
-    return m_Device->createBuffer(bufferDesc);
+    nvrhi::BufferHandle buffer;
+    m_Device->createBuffer(bufferDesc, &buffer);
+    return buffer;
 }
 
 nvrhi::BufferHandle Scene::CreateInstanceBuffer()
@@ -1161,7 +1168,9 @@ nvrhi::BufferHandle Scene::CreateInstanceBuffer()
     bufferDesc.initialState = nvrhi::ResourceStates::ShaderResource;
     bufferDesc.keepInitialState = true;
 
-    return m_Device->createBuffer(bufferDesc);
+    nvrhi::BufferHandle buffer;
+    m_Device->createBuffer(bufferDesc, &buffer);
+    return buffer;
 }
 
 nvrhi::BufferHandle Scene::CreateMaterialConstantBuffer(const std::string& debugName)
@@ -1173,7 +1182,9 @@ nvrhi::BufferHandle Scene::CreateMaterialConstantBuffer(const std::string& debug
     bufferDesc.initialState = nvrhi::ResourceStates::ConstantBuffer;
     bufferDesc.keepInitialState = true;
 
-    return m_Device->createBuffer(bufferDesc);
+    nvrhi::BufferHandle buffer;
+    m_Device->createBuffer(bufferDesc, &buffer);
+    return buffer;
 }
 
 void Scene::WriteMaterialBuffer(nvrhi::ICommandList* commandList) const

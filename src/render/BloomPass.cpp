@@ -64,9 +64,9 @@ BloomPass::BloomPass(
     constantBufferDesc.isVolatile = true;
     constantBufferDesc.debugName = "BloomConstantsH";
     constantBufferDesc.maxVersions = engine::c_MaxRenderPassConstantBufferVersions;
-    m_BloomHBlurCB = device->createBuffer(constantBufferDesc);
+    device->createBuffer(constantBufferDesc, &m_BloomHBlurCB);
     constantBufferDesc.debugName = "BloomConstantsV";
-    m_BloomVBlurCB = device->createBuffer(constantBufferDesc);
+    device->createBuffer(constantBufferDesc, &m_BloomVBlurCB);
 
     nvrhi::BindingLayoutDesc layoutDesc;
     layoutDesc.visibility = nvrhi::ShaderType::Pixel;
@@ -75,7 +75,7 @@ BloomPass::BloomPass(
         nvrhi::BindingLayoutItem::Sampler(0),
         nvrhi::BindingLayoutItem::Texture_SRV(0)
     };
-    m_BloomBlurBindingLayout = device->createBindingLayout(layoutDesc);
+    device->createBindingLayout(layoutDesc, &m_BloomBlurBindingLayout);
 
     m_PerViewData.resize(compositeView.GetNumChildViews(ViewType::PLANAR));
     for (uint viewIndex = 0; viewIndex < compositeView.GetNumChildViews(ViewType::PLANAR); viewIndex++)
@@ -99,16 +99,16 @@ BloomPass::BloomPass(
         downscaleTextureDesc.debugName = "bloom src mip1";
         downscaleTextureDesc.initialState = nvrhi::ResourceStates::ShaderResource;
         downscaleTextureDesc.keepInitialState = true;
-        perViewData.textureDownscale1 = m_Device->createTexture(downscaleTextureDesc);
-        perViewData.framebufferDownscale1 = m_Device->createFramebuffer(nvrhi::FramebufferDesc()
-            .addColorAttachment(perViewData.textureDownscale1));
+        m_Device->createTexture(downscaleTextureDesc, &perViewData.textureDownscale1);
+        m_Device->createFramebuffer(nvrhi::FramebufferDesc()
+            .addColorAttachment(perViewData.textureDownscale1), &perViewData.framebufferDownscale1);
 
         downscaleTextureDesc.debugName = "bloom src mip2";
         downscaleTextureDesc.width = (uint32_t)ceil(downscaleTextureDesc.width / 2.f);
         downscaleTextureDesc.height = (uint32_t)ceil(downscaleTextureDesc.height / 2.f);
-        perViewData.textureDownscale2 = m_Device->createTexture(downscaleTextureDesc);
-        perViewData.framebufferDownscale2 = m_Device->createFramebuffer(nvrhi::FramebufferDesc()
-            .addColorAttachment(perViewData.textureDownscale2));
+        m_Device->createTexture(downscaleTextureDesc, &perViewData.textureDownscale2);
+        m_Device->createFramebuffer(nvrhi::FramebufferDesc()
+            .addColorAttachment(perViewData.textureDownscale2), &perViewData.framebufferDownscale2);
 
         // intermediate textures for accumulating blur
         nvrhi::TextureDesc intermediateTextureDesc2;
@@ -121,14 +121,14 @@ BloomPass::BloomPass(
         intermediateTextureDesc2.debugName = "bloom accumulation pass1";
         intermediateTextureDesc2.initialState = nvrhi::ResourceStates::ShaderResource;
         intermediateTextureDesc2.keepInitialState = true;
-        perViewData.texturePass1Blur = m_Device->createTexture(intermediateTextureDesc2);
-        perViewData.framebufferPass1Blur = m_Device->createFramebuffer(nvrhi::FramebufferDesc()
-            .addColorAttachment(perViewData.texturePass1Blur));
+        m_Device->createTexture(intermediateTextureDesc2, &perViewData.texturePass1Blur);
+        m_Device->createFramebuffer(nvrhi::FramebufferDesc()
+            .addColorAttachment(perViewData.texturePass1Blur), &perViewData.framebufferPass1Blur);
 
         intermediateTextureDesc2.debugName = "bloom accumulation pass2";
-        perViewData.texturePass2Blur = m_Device->createTexture(intermediateTextureDesc2);
-        perViewData.framebufferPass2Blur = m_Device->createFramebuffer(nvrhi::FramebufferDesc()
-            .addColorAttachment(perViewData.texturePass2Blur));
+        m_Device->createTexture(intermediateTextureDesc2, &perViewData.texturePass2Blur);
+        m_Device->createFramebuffer(nvrhi::FramebufferDesc()
+            .addColorAttachment(perViewData.texturePass2Blur), &perViewData.framebufferPass2Blur);
 
         nvrhi::GraphicsPipelineDesc graphicsPipelineDesc;
         graphicsPipelineDesc.primType = nvrhi::PrimitiveType::TriangleStrip;
@@ -138,8 +138,8 @@ BloomPass::BloomPass(
         graphicsPipelineDesc.renderState.rasterState.setCullNone();
         graphicsPipelineDesc.renderState.depthStencilState.depthTestEnable = false;
         graphicsPipelineDesc.renderState.depthStencilState.stencilEnable = false;
-        perViewData.bloomBlurPso = device->createGraphicsPipeline(graphicsPipelineDesc,
-            perViewData.framebufferPass1Blur->getFramebufferInfo());
+        device->createGraphicsPipeline1(graphicsPipelineDesc,
+            perViewData.framebufferPass1Blur->getFramebufferInfo().getInfo(), &perViewData.bloomBlurPso);
         
         nvrhi::BindingSetDesc bindingSetDesc;
         bindingSetDesc.bindings = {
@@ -147,14 +147,14 @@ BloomPass::BloomPass(
             nvrhi::BindingSetItem::Sampler(0, m_CommonPasses->m_LinearClampSampler),
             nvrhi::BindingSetItem::Texture_SRV(0, perViewData.textureDownscale2)
         };
-        perViewData.bloomBlurBindingSetPass1 = m_Device->createBindingSet(bindingSetDesc, m_BloomBlurBindingLayout);
+        m_Device->createBindingSet(bindingSetDesc, m_BloomBlurBindingLayout, &perViewData.bloomBlurBindingSetPass1);
 
         bindingSetDesc.bindings = {
             nvrhi::BindingSetItem::ConstantBuffer(0, m_BloomVBlurCB),
             nvrhi::BindingSetItem::Sampler(0, m_CommonPasses->m_LinearClampSampler),
             nvrhi::BindingSetItem::Texture_SRV(0, perViewData.texturePass1Blur)
         };
-        perViewData.bloomBlurBindingSetPass2 = m_Device->createBindingSet(bindingSetDesc, m_BloomBlurBindingLayout);
+        m_Device->createBindingSet(bindingSetDesc, m_BloomBlurBindingLayout, &perViewData.bloomBlurBindingSetPass2);
     }
 }
 

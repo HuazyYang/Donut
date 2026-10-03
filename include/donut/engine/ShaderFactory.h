@@ -27,8 +27,9 @@
 #include <vector>
 #include <unordered_map>
 #include <nvrhi/nvrhi.h>
+#include <nvrhi/common/aftermath.h>
 #include <filesystem>
-#include <functional>
+#include <utility>
 
 
 namespace donut::vfs
@@ -98,6 +99,8 @@ namespace donut::engine
         std::unordered_map<std::string, nvrhi::AutoPtr<nvrhi::IDataBlob>> m_BytecodeCache;
 		nvrhi::AutoPtr<vfs::IFileSystem> m_fs;
 		std::filesystem::path m_basePath;
+        // Registered with the device's Aftermath crash dump helper while Aftermath is enabled.
+        nvrhi::AutoPtr<nvrhi::IAftermathShaderBinaryLookup> m_AftermathLookup;
 
     public:
         ShaderFactory(
@@ -150,6 +153,6 @@ namespace donut::engine
         nvrhi::ShaderLibraryHandle CreateAutoShaderLibrary(const char* fileName, StaticShader dxil, StaticShader spirv, const std::vector<ShaderMacro>* pDefines);
 
         // Looks up a shader binary based on a provided hash and the function used to generate it
-        std::pair<const void*, size_t> FindShaderFromHash(uint64_t hash, std::function<uint64_t(std::pair<const void*, size_t>, nvrhi::GraphicsAPI)> hashGenerator);
+        std::pair<const void*, size_t> FindShaderFromHash(uint64_t hash, nvrhi::PFN_AftermathShaderHashGenerator hashGenerator);
     };
 }

@@ -63,7 +63,7 @@ namespace donut::engine
         size_t operator()(const TextureCacheKey& key) const
         {
             size_t hash = std::hash<std::string>()(key.path);
-            hash ^= size_t(nvrhi::packComponentMapping(key.options.overrideComponentMapping)) << 1;
+            hash ^= size_t(nvrhi::packComponentMapping(key.options.overrideComponentMapping ? &*key.options.overrideComponentMapping : nullptr)) << 1;
             hash ^= size_t(key.options.sRGBMode) << 17;
             hash ^= size_t(key.options.baseMip) << 20;
             return hash;

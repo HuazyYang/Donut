@@ -73,10 +73,10 @@ void donut::render::DeferredLightingPass::Init(engine::ShaderFactory* shaderFact
     auto samplerDesc = nvrhi::SamplerDesc()
         .setAllAddressModes(nvrhi::SamplerAddressMode::Border)
         .setBorderColor(1.0f);
-    m_ShadowSampler = m_Device->createSampler(samplerDesc);
+    m_Device->createSampler(samplerDesc, &m_ShadowSampler);
 
     samplerDesc.setReductionType(nvrhi::SamplerReductionType::Comparison);
-    m_ShadowSamplerComparison = m_Device->createSampler(samplerDesc);
+    m_Device->createSampler(samplerDesc, &m_ShadowSamplerComparison);
 
     nvrhi::BufferDesc constantBufferDesc;
     constantBufferDesc.byteSize = sizeof(DeferredLightingConstants);
@@ -84,7 +84,7 @@ void donut::render::DeferredLightingPass::Init(engine::ShaderFactory* shaderFact
     constantBufferDesc.isConstantBuffer = true;
     constantBufferDesc.isVolatile = true;
     constantBufferDesc.maxVersions = c_MaxRenderPassConstantBufferVersions;
-    m_DeferredLightingCB = m_Device->createBuffer(constantBufferDesc);
+    m_Device->createBuffer(constantBufferDesc, &m_DeferredLightingCB);
     
     {
         nvrhi::BindingLayoutDesc layoutDesc;
@@ -110,13 +110,13 @@ void donut::render::DeferredLightingPass::Init(engine::ShaderFactory* shaderFact
             nvrhi::BindingLayoutItem::Sampler(2),
             nvrhi::BindingLayoutItem::Sampler(3)
         };
-        m_BindingLayout = m_Device->createBindingLayout(layoutDesc);
+        m_Device->createBindingLayout(layoutDesc, &m_BindingLayout);
         
         nvrhi::ComputePipelineDesc pipelineDesc;
         pipelineDesc.CS = CreateComputeShader(*shaderFactory);
         pipelineDesc.bindingLayouts = { m_BindingLayout };
         
-        m_Pso = m_Device->createComputePipeline(pipelineDesc);
+        m_Device->createComputePipeline(pipelineDesc, &m_Pso);
     }
 }
 

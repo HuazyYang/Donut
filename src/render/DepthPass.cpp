@@ -78,8 +78,8 @@ void DepthPass::Init(ShaderFactory& shaderFactory, const CreateParameters& param
     else
         m_MaterialBindings = CreateMaterialBindingCache(*m_CommonPasses);
 
-    m_DepthCB = m_Device->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(sizeof(DepthPassConstants),
-        "DepthPassConstants", params.numConstantBufferVersions));
+    m_Device->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(sizeof(DepthPassConstants),
+        "DepthPassConstants", params.numConstantBufferVersions), &m_DepthCB);
 
     CreateViewBindings(m_ViewBindingLayout, m_ViewBindingSet, params);
 
@@ -126,7 +126,9 @@ nvrhi::InputLayoutHandle DepthPass::CreateInputLayout(nvrhi::IShader* vertexShad
             GetVertexAttributeDesc(VertexAttribute::Transform, "TRANSFORM", 2)
         };
 
-        return m_Device->createInputLayout(aInputDescs, dim(aInputDescs), vertexShader);
+        nvrhi::InputLayoutHandle inputLayout;
+        m_Device->createInputLayout(aInputDescs, dim(aInputDescs), vertexShader, &inputLayout);
+        return inputLayout;
     }
 
     return nullptr;
@@ -140,7 +142,7 @@ void DepthPass::CreateViewBindings(nvrhi::BindingLayoutHandle& layout, nvrhi::Bi
         .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(DEPTH_BINDING_VIEW_CONSTANTS))
         .addItem(nvrhi::BindingLayoutItem::Sampler(DEPTH_BINDING_MATERIAL_SAMPLER));
 
-    layout = m_Device->createBindingLayout(bindingLayoutDesc);
+    m_Device->createBindingLayout(bindingLayoutDesc, &layout);
 
     auto bindingSetDesc = nvrhi::BindingSetDesc()
         .setTrackLiveness(params.trackLiveness)
@@ -148,7 +150,7 @@ void DepthPass::CreateViewBindings(nvrhi::BindingLayoutHandle& layout, nvrhi::Bi
         .addItem(nvrhi::BindingSetItem::Sampler(DEPTH_BINDING_MATERIAL_SAMPLER,
             m_CommonPasses->m_AnisotropicWrapSampler));
 
-    set = m_Device->createBindingSet(bindingSetDesc, layout);
+    m_Device->createBindingSet(bindingSetDesc, layout, &set);
 }
 
 nvrhi::AutoPtr<MaterialBindingCache> DepthPass::CreateMaterialBindingCache(CommonRenderPasses& commonPasses)
@@ -196,7 +198,9 @@ nvrhi::GraphicsPipelineHandle DepthPass::CreateGraphicsPipeline(PipelineKey key,
     if (!m_UseInputAssembler)
         pipelineDesc.bindingLayouts.push_back(m_InputBindingLayout);
 
-    return m_Device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
+    nvrhi::GraphicsPipelineHandle pipeline;
+    m_Device->createGraphicsPipeline1(pipelineDesc, framebufferInfo, &pipeline);
+    return pipeline;
 }
 
 nvrhi::BindingLayoutHandle DepthPass::CreateInputBindingLayout()
@@ -213,7 +217,9 @@ nvrhi::BindingLayoutHandle DepthPass::CreateInputBindingLayout()
         .addItem(nvrhi::BindingLayoutItem::RawBuffer_SRV(DEPTH_BINDING_VERTEX_BUFFER))
         .addItem(nvrhi::BindingLayoutItem::PushConstants(DEPTH_BINDING_PUSH_CONSTANTS, sizeof(DepthPushConstants)));
         
-    return m_Device->createBindingLayout(bindingLayoutDesc);
+    nvrhi::BindingLayoutHandle bindingLayout;
+    m_Device->createBindingLayout(bindingLayoutDesc, &bindingLayout);
+    return bindingLayout;
 }
 
 nvrhi::BindingSetHandle DepthPass::CreateInputBindingSet(const BufferGroup* bufferGroup)
@@ -225,7 +231,9 @@ nvrhi::BindingSetHandle DepthPass::CreateInputBindingSet(const BufferGroup* buff
         .addItem(nvrhi::BindingSetItem::RawBuffer_SRV(DEPTH_BINDING_VERTEX_BUFFER, bufferGroup->vertexBuffer))
         .addItem(nvrhi::BindingSetItem::PushConstants(DEPTH_BINDING_PUSH_CONSTANTS, sizeof(DepthPushConstants)));
 
-    return m_Device->createBindingSet(bindingSetDesc, m_InputBindingLayout);
+    nvrhi::BindingSetHandle bindingSet;
+    m_Device->createBindingSet(bindingSetDesc, m_InputBindingLayout, &bindingSet);
+    return bindingSet;
 }
 
 nvrhi::BindingSetHandle DepthPass::GetOrCreateInputBindingSet(const BufferGroup* bufferGroup)
@@ -319,7 +327,7 @@ bool DepthPass::SetupMaterial(GeometryPassContext& abstractContext, const engine
     if (!m_UseInputAssembler)
         state.bindings.push_back(context.inputBindingSet);
 
-    nvrhi::FramebufferInfo const& framebufferInfo = state.framebuffer->getFramebufferInfo();
+    nvrhi::FramebufferInfo const framebufferInfo = state.framebuffer->getFramebufferInfo().getInfo();
     nvrhi::GraphicsPipelineHandle& pipeline = m_Pipelines[key.value];
 
     if (!pipeline)

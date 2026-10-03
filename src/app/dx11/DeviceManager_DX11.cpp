@@ -237,7 +237,7 @@ bool DeviceManager_DX11::CreateDevice()
 #endif
 
     nvrhi::d3d11::DeviceDesc deviceDesc;
-    deviceDesc.messageCallback = &DefaultMessageCallback::GetInstance();
+    deviceDesc.messageCallback = DefaultMessageCallback::GetInstance();
     deviceDesc.context = m_ImmediateContext;
 #if DONUT_WITH_AFTERMATH
     deviceDesc.aftermathEnabled = m_DeviceParams.enableAftermath;
@@ -370,7 +370,7 @@ bool DeviceManager_DX11::CreateRenderTarget()
     textureDesc.isRenderTarget = true;
     textureDesc.isUAV = false;
 
-    m_RhiBackBuffer = m_NvrhiDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D11_Resource, static_cast<ID3D11Resource*>(m_D3D11BackBuffer.Get()), textureDesc);
+    m_NvrhiDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D11_Resource, static_cast<ID3D11Resource*>(m_D3D11BackBuffer.Get()), textureDesc, &m_RhiBackBuffer);
 
     if (FAILED(hr))
     {

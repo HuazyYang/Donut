@@ -55,7 +55,7 @@ CascadedShadowMap::CascadedShadowMap(
     desc.dimension = nvrhi::TextureDimension::Texture2DArray;
     desc.arraySize = numCascades + numPerObjectShadows;
 	desc.isUAV = isUAV;
-    m_ShadowMapTexture = device->createTexture(desc);
+    device->createTexture(desc, &m_ShadowMapTexture);
 
     nvrhi::Viewport cascadeViewport = nvrhi::Viewport(float(resolution), float(resolution));
 

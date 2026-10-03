@@ -91,10 +91,10 @@ void ForwardShadingPass::Init(ShaderFactory& shaderFactory, const CreateParamete
     auto samplerDesc = nvrhi::SamplerDesc()
         .setAllAddressModes(nvrhi::SamplerAddressMode::Border)
         .setBorderColor(1.0f);
-    m_ShadowSampler = m_Device->createSampler(samplerDesc);
+    m_Device->createSampler(samplerDesc, &m_ShadowSampler);
 
-    m_ForwardViewCB = m_Device->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(sizeof(ForwardShadingViewConstants), "ForwardShadingViewConstants", params.numConstantBufferVersions));
-    m_ForwardLightCB = m_Device->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(sizeof(ForwardShadingLightConstants), "ForwardShadingLightConstants", params.numConstantBufferVersions));
+    m_Device->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(sizeof(ForwardShadingViewConstants), "ForwardShadingViewConstants", params.numConstantBufferVersions), &m_ForwardViewCB);
+    m_Device->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(sizeof(ForwardShadingLightConstants), "ForwardShadingLightConstants", params.numConstantBufferVersions), &m_ForwardLightCB);
 
     m_ViewBindingLayout = CreateViewBindingLayout();
     m_ViewBindingSet = CreateViewBindingSet();
@@ -165,7 +165,9 @@ nvrhi::InputLayoutHandle ForwardShadingPass::CreateInputLayout(nvrhi::IShader* v
             GetVertexAttributeDesc(VertexAttribute::Transform, "TRANSFORM", 5),
         };
 
-        return m_Device->createInputLayout(inputDescs, uint32_t(std::size(inputDescs)), vertexShader);
+        nvrhi::InputLayoutHandle inputLayout;
+        m_Device->createInputLayout(inputDescs, uint32_t(std::size(inputDescs)), vertexShader, &inputLayout);
+        return inputLayout;
     }
     
     return nullptr;
@@ -178,7 +180,9 @@ nvrhi::BindingLayoutHandle ForwardShadingPass::CreateViewBindingLayout()
         .setRegisterSpaceAndDescriptorSet(FORWARD_SPACE_VIEW)
         .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(FORWARD_BINDING_VIEW_CONSTANTS));
 
-    return m_Device->createBindingLayout(bindingLayoutDesc);
+    nvrhi::BindingLayoutHandle bindingLayout;
+    m_Device->createBindingLayout(bindingLayoutDesc, &bindingLayout);
+    return bindingLayout;
 }
 
 
@@ -188,7 +192,9 @@ nvrhi::BindingSetHandle ForwardShadingPass::CreateViewBindingSet()
         .setTrackLiveness(m_TrackLiveness)
         .addItem(nvrhi::BindingSetItem::ConstantBuffer(FORWARD_BINDING_VIEW_CONSTANTS, m_ForwardViewCB));
 
-    return m_Device->createBindingSet(bindingSetDesc, m_ViewBindingLayout);
+    nvrhi::BindingSetHandle bindingSet;
+    m_Device->createBindingSet(bindingSetDesc, m_ViewBindingLayout, &bindingSet);
+    return bindingSet;
 }
 
 nvrhi::BindingLayoutHandle ForwardShadingPass::CreateShadingBindingLayout()
@@ -206,7 +212,9 @@ nvrhi::BindingLayoutHandle ForwardShadingPass::CreateShadingBindingLayout()
         .addItem(nvrhi::BindingLayoutItem::Sampler(FORWARD_BINDING_LIGHT_PROBE_SAMPLER))
         .addItem(nvrhi::BindingLayoutItem::Sampler(FORWARD_BINDING_ENVIRONMENT_BRDF_SAMPLER));
 
-    return m_Device->createBindingLayout(bindingLayoutDesc);
+    nvrhi::BindingLayoutHandle bindingLayout;
+    m_Device->createBindingLayout(bindingLayoutDesc, &bindingLayout);
+    return bindingLayout;
 }
 
 nvrhi::BindingSetHandle ForwardShadingPass::CreateShadingBindingSet(nvrhi::ITexture* shadowMapTexture,
@@ -232,7 +240,9 @@ nvrhi::BindingSetHandle ForwardShadingPass::CreateShadingBindingSet(nvrhi::IText
         .addItem(nvrhi::BindingSetItem::Sampler(FORWARD_BINDING_ENVIRONMENT_BRDF_SAMPLER,
             m_CommonPasses->m_LinearClampSampler));
 
-    return m_Device->createBindingSet(bindingSetDesc, m_ShadingBindingLayout);
+    nvrhi::BindingSetHandle bindingSet;
+    m_Device->createBindingSet(bindingSetDesc, m_ShadingBindingLayout, &bindingSet);
+    return bindingSet;
 }
 
 
@@ -300,7 +310,9 @@ nvrhi::GraphicsPipelineHandle ForwardShadingPass::CreateGraphicsPipeline(Forward
         return nullptr;
     }
 
-    return m_Device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
+    nvrhi::GraphicsPipelineHandle pipeline;
+    m_Device->createGraphicsPipeline1(pipelineDesc, framebufferInfo, &pipeline);
+    return pipeline;
 }
 
 nvrhi::AutoPtr<MaterialBindingCache> ForwardShadingPass::CreateMaterialBindingCache(CommonRenderPasses& commonPasses)
@@ -494,13 +506,13 @@ bool ForwardShadingPass::SetupMaterial(GeometryPassContext& abstractContext, con
         std::lock_guard<std::mutex> lockGuard(m_Mutex);
 
         if (!pipeline)
-            pipeline = CreateGraphicsPipeline(key, state.framebuffer->getFramebufferInfo());
+            pipeline = CreateGraphicsPipeline(key, state.framebuffer->getFramebufferInfo().getInfo());
 
         if (!pipeline)
             return false;
     }
 
-    assert(pipeline->getFramebufferInfo() == state.framebuffer->getFramebufferInfo());
+    assert(pipeline->getFramebufferInfo() == state.framebuffer->getFramebufferInfo().getInfo());
 
     state.pipeline = pipeline;
     state.bindings = { materialBindingSet, m_ViewBindingSet, context.shadingBindingSet };
@@ -552,7 +564,9 @@ nvrhi::BindingLayoutHandle ForwardShadingPass::CreateInputBindingLayout()
         .addItem(nvrhi::BindingLayoutItem::RawBuffer_SRV(FORWARD_BINDING_VERTEX_BUFFER))
         .addItem(nvrhi::BindingLayoutItem::PushConstants(FORWARD_BINDING_PUSH_CONSTANTS, sizeof(ForwardPushConstants)));
         
-    return m_Device->createBindingLayout(bindingLayoutDesc);
+    nvrhi::BindingLayoutHandle bindingLayout;
+    m_Device->createBindingLayout(bindingLayoutDesc, &bindingLayout);
+    return bindingLayout;
 }
 
 nvrhi::BindingSetHandle ForwardShadingPass::CreateInputBindingSet(const BufferGroup* bufferGroup)
@@ -564,7 +578,9 @@ nvrhi::BindingSetHandle ForwardShadingPass::CreateInputBindingSet(const BufferGr
         .addItem(nvrhi::BindingSetItem::RawBuffer_SRV(FORWARD_BINDING_VERTEX_BUFFER, bufferGroup->vertexBuffer))
         .addItem(nvrhi::BindingSetItem::PushConstants(FORWARD_BINDING_PUSH_CONSTANTS, sizeof(ForwardPushConstants)));
 
-    return m_Device->createBindingSet(bindingSetDesc, m_InputBindingLayout);
+    nvrhi::BindingSetHandle bindingSet;
+    m_Device->createBindingSet(bindingSetDesc, m_InputBindingLayout, &bindingSet);
+    return bindingSet;
 }
 
 nvrhi::BindingSetHandle ForwardShadingPass::GetOrCreateInputBindingSet(const BufferGroup* bufferGroup)

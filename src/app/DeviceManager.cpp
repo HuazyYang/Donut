@@ -563,12 +563,12 @@ void DeviceManager::BackBufferResized()
         nvrhi::FramebufferDesc framebufferDesc = nvrhi::FramebufferDesc()
             .addColorAttachment(GetBackBuffer(index));
         
-        m_SwapChainFramebuffers[index] = GetDevice()->createFramebuffer(framebufferDesc);
+        GetDevice()->createFramebuffer(framebufferDesc, &m_SwapChainFramebuffers[index]);
 
         if (m_DepthBuffer)
         {
             framebufferDesc.setDepthAttachment(m_DepthBuffer);
-            m_SwapChainWithDepthFramebuffers[index] = GetDevice()->createFramebuffer(framebufferDesc);
+            GetDevice()->createFramebuffer(framebufferDesc, &m_SwapChainWithDepthFramebuffers[index]);
         }
         else
         {
@@ -606,7 +606,7 @@ void DeviceManager::CreateDepthBuffer()
         .setIsRenderTarget(true)
         .enableAutomaticStateTracking(nvrhi::ResourceStates::DepthWrite);
 
-    m_DepthBuffer = GetDevice()->createTexture(textureDesc);
+    GetDevice()->createTexture(textureDesc, &m_DepthBuffer);
 }
 
 void DeviceManager::Animate(double elapsedTime, bool windowIsFocused)
@@ -1204,13 +1204,13 @@ donut::app::DeviceManager* donut::app::DeviceManager::Create(nvrhi::GraphicsAPI 
     }
 }
 
-DefaultMessageCallback& DefaultMessageCallback::GetInstance()
+DefaultMessageCallback* DefaultMessageCallback::GetInstance()
 {
-    static DefaultMessageCallback Instance;
-    return Instance;
+    static nvrhi::AutoPtr<DefaultMessageCallback> Instance = MAKE_RC_OBJ_PTR(DefaultMessageCallback);
+    return Instance.Get();
 }
 
-void DefaultMessageCallback::message(nvrhi::MessageSeverity severity, const char* messageText)
+void DefaultMessageCallback::message(nvrhi::MessageSeverity severity, const char* messageText) noexcept
 {
     donut::log::Severity donutSeverity = donut::log::Severity::Info;
     switch (severity)

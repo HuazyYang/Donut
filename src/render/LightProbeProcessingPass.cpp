@@ -81,7 +81,7 @@ LightProbeProcessingPass::LightProbeProcessingPass(
         nvrhi::BindingLayoutItem::Sampler(0),
         nvrhi::BindingLayoutItem::Texture_SRV(0),
     };
-    m_BindingLayout = device->createBindingLayout(layoutDesc);
+    device->createBindingLayout(layoutDesc, &m_BindingLayout);
 
     nvrhi::BufferDesc constantBufferDesc;
     constantBufferDesc.byteSize = sizeof(LightProbeProcessingConstants);
@@ -89,7 +89,7 @@ LightProbeProcessingPass::LightProbeProcessingPass(
     constantBufferDesc.isConstantBuffer = true;
     constantBufferDesc.isVolatile = true;
     constantBufferDesc.maxVersions = 64;
-    m_LightProbeCB = device->createBuffer(constantBufferDesc);
+    device->createBuffer(constantBufferDesc, &m_LightProbeCB);
 
     assert(intermediateTextureSize > 0);
 
@@ -106,7 +106,7 @@ LightProbeProcessingPass::LightProbeProcessingPass(
     cubemapDesc.clearValue = nvrhi::Color(0.f);
     cubemapDesc.useClearValue = true;
 
-    m_IntermediateTexture = m_Device->createTexture(cubemapDesc);
+    m_Device->createTexture(cubemapDesc, &m_IntermediateTexture);
 
     m_EnvironmentBrdfTextureSize = 64;
 
@@ -121,7 +121,7 @@ LightProbeProcessingPass::LightProbeProcessingPass(
     brdfTextureDesc.useClearValue = true;
     brdfTextureDesc.debugName = "EnvironmentBrdf";
 
-    m_EnvironmentBrdfTexture = m_Device->createTexture(brdfTextureDesc);
+    m_Device->createTexture(brdfTextureDesc, &m_EnvironmentBrdfTexture);
 }
 
 nvrhi::FramebufferHandle LightProbeProcessingPass::GetCachedFramebuffer(nvrhi::ITexture* texture, nvrhi::TextureSubresourceSet subresources)
@@ -133,7 +133,7 @@ nvrhi::FramebufferHandle LightProbeProcessingPass::GetCachedFramebuffer(nvrhi::I
     nvrhi::FramebufferHandle& framebuffer = m_FramebufferCache[key];
     if (!framebuffer)
     {
-        framebuffer = m_Device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(texture, subresources));
+        m_Device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(texture, subresources), &framebuffer);
     }
 
     return framebuffer;
@@ -156,7 +156,7 @@ nvrhi::BindingSetHandle LightProbeProcessingPass::GetCachedBindingSet(nvrhi::ITe
             nvrhi::BindingSetItem::Texture_SRV(0, texture, nvrhi::Format::UNKNOWN, subresources),
         };
 
-        bindingSet = m_Device->createBindingSet(bindingSetDesc, m_BindingLayout);
+        m_Device->createBindingSet(bindingSetDesc, m_BindingLayout, &bindingSet);
     }
 
     return bindingSet;
@@ -175,7 +175,7 @@ void LightProbeProcessingPass::BlitCubemap(nvrhi::ICommandList* commandList, nvr
     
     nvrhi::FramebufferHandle framebuffer = GetCachedFramebuffer(outCubeMap, nvrhi::TextureSubresourceSet(outMipLevel, 1, outBaseArraySlice, 6));
 
-    nvrhi::FramebufferInfo const& framebufferInfo = framebuffer->getFramebufferInfo();
+    nvrhi::FramebufferInfo const framebufferInfo = framebuffer->getFramebufferInfo().getInfo();
     nvrhi::GraphicsPipelineHandle& pso = m_BlitPsoCache[framebufferInfo];
 
     if (!pso)
@@ -189,7 +189,7 @@ void LightProbeProcessingPass::BlitCubemap(nvrhi::ICommandList* commandList, nvr
         psoDesc.renderState.rasterState.setCullNone();
         psoDesc.renderState.depthStencilState.depthTestEnable = false;
         psoDesc.renderState.depthStencilState.stencilEnable = false;
-        pso = m_Device->createGraphicsPipeline(psoDesc, framebufferInfo);
+        m_Device->createGraphicsPipeline1(psoDesc, framebufferInfo, &pso);
     }
 
     LightProbeProcessingConstants constants = {};
@@ -254,7 +254,7 @@ void LightProbeProcessingPass::RenderDiffuseMap(
 
     nvrhi::FramebufferHandle framebuffer = GetCachedFramebuffer(m_IntermediateTexture, nvrhi::TextureSubresourceSet(intermediateMipLevel, 1, 0, 6));
 
-    nvrhi::FramebufferInfo const& framebufferInfo = framebuffer->getFramebufferInfo();
+    nvrhi::FramebufferInfo const framebufferInfo = framebuffer->getFramebufferInfo().getInfo();
     nvrhi::GraphicsPipelineHandle& pso = m_DiffusePsoCache[framebufferInfo];
 
     if (!pso)
@@ -268,7 +268,7 @@ void LightProbeProcessingPass::RenderDiffuseMap(
         psoDesc.renderState.rasterState.setCullNone();
         psoDesc.renderState.depthStencilState.depthTestEnable = false;
         psoDesc.renderState.depthStencilState.stencilEnable = false;
-        pso = m_Device->createGraphicsPipeline(psoDesc, framebufferInfo);
+        m_Device->createGraphicsPipeline1(psoDesc, framebufferInfo, &pso);
     }
 
     LightProbeProcessingConstants constants = {};
@@ -314,7 +314,7 @@ void LightProbeProcessingPass::RenderSpecularMap(nvrhi::ICommandList* commandLis
 
     nvrhi::FramebufferHandle framebuffer = GetCachedFramebuffer(m_IntermediateTexture, nvrhi::TextureSubresourceSet(intermediateMipLevel, 1, 0, 6));
 
-    nvrhi::FramebufferInfo const& framebufferInfo = framebuffer->getFramebufferInfo();
+    nvrhi::FramebufferInfo const framebufferInfo = framebuffer->getFramebufferInfo().getInfo();
     nvrhi::GraphicsPipelineHandle& pso = m_SpecularPsoCache[framebufferInfo];
 
     if (!pso)
@@ -328,7 +328,7 @@ void LightProbeProcessingPass::RenderSpecularMap(nvrhi::ICommandList* commandLis
         psoDesc.renderState.rasterState.setCullNone();
         psoDesc.renderState.depthStencilState.depthTestEnable = false;
         psoDesc.renderState.depthStencilState.stencilEnable = false;
-        pso = m_Device->createGraphicsPipeline(psoDesc, framebufferInfo);
+        m_Device->createGraphicsPipeline1(psoDesc, framebufferInfo, &pso);
     }
 
     LightProbeProcessingConstants constants = {};
@@ -363,8 +363,9 @@ void LightProbeProcessingPass::RenderEnvironmentBrdfTexture(nvrhi::ICommandList*
 {
     commandList->beginMarker("Environment BRDF");
 
-    nvrhi::FramebufferHandle framebuffer = m_Device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(m_EnvironmentBrdfTexture));
-    nvrhi::FramebufferInfo const& framebufferInfo = framebuffer->getFramebufferInfo();
+    nvrhi::FramebufferHandle framebuffer;
+    m_Device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(m_EnvironmentBrdfTexture), &framebuffer);
+    nvrhi::FramebufferInfo const framebufferInfo = framebuffer->getFramebufferInfo().getInfo();
 
     nvrhi::GraphicsPipelineDesc psoDesc;
     psoDesc.VS = m_CommonPasses->m_FullscreenVS;
@@ -373,7 +374,8 @@ void LightProbeProcessingPass::RenderEnvironmentBrdfTexture(nvrhi::ICommandList*
     psoDesc.renderState.rasterState.setCullNone();
     psoDesc.renderState.depthStencilState.depthTestEnable = false;
     psoDesc.renderState.depthStencilState.stencilEnable = false;
-    nvrhi::GraphicsPipelineHandle pso = m_Device->createGraphicsPipeline(psoDesc, framebufferInfo);
+    nvrhi::GraphicsPipelineHandle pso;
+    m_Device->createGraphicsPipeline1(psoDesc, framebufferInfo, &pso);
 
     nvrhi::GraphicsState state;
     state.pipeline = pso;

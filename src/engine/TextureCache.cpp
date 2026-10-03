@@ -106,11 +106,11 @@ public:
         }
     }
 
-    virtual void Resize(size_t) override { NVRHI_VERIFY(false, "Operation forbidden"); }
+    virtual void Resize(size_t) noexcept override { NVRHI_VERIFY(false, "Operation forbidden"); }
 
-    void* GetDataPtr() override { return m_data; }
+    void* GetDataPtr() noexcept override { return m_data; }
 
-    size_t GetSize() override {
+    size_t GetSize() noexcept override {
         NVRHI_VERIFY(false, "Operation forbidden");
         return 0;
     }
@@ -431,7 +431,7 @@ void TextureCache::FinalizeTexture(
     textureDesc.isRenderTarget = texture->isRenderTarget;
     textureDesc.isTypeless = texture->format == nvrhi::Format::D24S8 ? true : false;
     textureDesc.defaultComponentMapping = texture->ResolveComponentMapping();
-    texture->texture = m_Device->createTexture(textureDesc);
+    m_Device->createTexture(textureDesc, &texture->texture);
 
     commandList->beginTrackingTextureState(texture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
 
@@ -449,7 +449,8 @@ void TextureCache::FinalizeTexture(
         tempTextureDesc.mipLevels = 1;
         tempTextureDesc.dimension = textureDesc.dimension;
 
-        nvrhi::TextureHandle tempTexture = m_Device->createTexture(tempTextureDesc);
+        nvrhi::TextureHandle tempTexture;
+        m_Device->createTexture(tempTextureDesc, &tempTexture);
         assert(tempTexture);
         commandList->beginTrackingTextureState(tempTexture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
 
@@ -461,8 +462,9 @@ void TextureCache::FinalizeTexture(
                 layout.rowPitch, layout.depthPitch);
         }
 
-        nvrhi::FramebufferHandle framebuffer = m_Device->createFramebuffer(nvrhi::FramebufferDesc()
-            .addColorAttachment(texture->texture));
+        nvrhi::FramebufferHandle framebuffer;
+        m_Device->createFramebuffer(nvrhi::FramebufferDesc()
+            .addColorAttachment(texture->texture), &framebuffer);
         
         passes->BlitTexture(commandList, framebuffer, tempTexture);
     }
@@ -484,11 +486,12 @@ void TextureCache::FinalizeTexture(
 
     for (uint mipLevel = texture->mipLevels; mipLevel < textureDesc.mipLevels; mipLevel++)
     {
-        nvrhi::FramebufferHandle framebuffer = m_Device->createFramebuffer(nvrhi::FramebufferDesc()
+        nvrhi::FramebufferHandle framebuffer;
+        m_Device->createFramebuffer(nvrhi::FramebufferDesc()
             .addColorAttachment(nvrhi::FramebufferAttachment()
                 .setTexture(texture->texture)
                 .setArraySlice(0)
-                .setMipLevel(mipLevel)));
+                .setMipLevel(mipLevel)), &framebuffer);
         
         BlitParameters blitParams;
         blitParams.sourceTexture = texture->texture;
@@ -803,7 +806,7 @@ bool TextureCache::ProcessRenderingThreadCommands(CommonRenderPasses& passes, fl
 
             if (!m_CommandList)
             {
-                m_CommandList = m_Device->createCommandList();
+                m_Device->createCommandList(nvrhi::CommandListParameters(), &m_CommandList);
             }
 
             m_CommandList->open();
@@ -872,7 +875,8 @@ namespace donut::engine
         nvrhi::TextureHandle tempTexture;
         nvrhi::FramebufferHandle tempFramebuffer;
 
-        nvrhi::CommandListHandle commandList = device->createCommandList();
+        nvrhi::CommandListHandle commandList;
+        device->createCommandList(nvrhi::CommandListParameters(), &commandList);
         commandList->open();
 
         if (textureState != nvrhi::ResourceStates::Unknown)
@@ -893,15 +897,16 @@ namespace donut::engine
             desc.initialState = nvrhi::ResourceStates::RenderTarget;
             desc.keepInitialState = true;
 
-            tempTexture = device->createTexture(desc);
-            tempFramebuffer = device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(tempTexture));
+            device->createTexture(desc, &tempTexture);
+            device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(tempTexture), &tempFramebuffer);
             
             pPasses->BlitTexture(commandList, tempFramebuffer, texture);
         }
 
         // Create a staging texture to access the data from the CPU, copy the data into it
-        nvrhi::StagingTextureHandle stagingTexture = device->createStagingTexture(desc, nvrhi::CpuAccessMode::Read);
-        commandList->copyTexture(stagingTexture, nvrhi::TextureSlice(), tempTexture, nvrhi::TextureSlice());
+        nvrhi::StagingTextureHandle stagingTexture;
+        device->createStagingTexture(desc, nvrhi::CpuAccessMode::Read, &stagingTexture);
+        commandList->copyTexture2(stagingTexture, nvrhi::TextureSlice(), tempTexture, nvrhi::TextureSlice());
 
         if (textureState != nvrhi::ResourceStates::Unknown)
         {
@@ -915,7 +920,7 @@ namespace donut::engine
         // Map the staging texture
         size_t rowPitch = 0;
         uint8_t const* pData = static_cast<uint8_t const*>(device->mapStagingTexture(
-            stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch));
+            stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, rowPitch));
 
         if (!pData)
             return false;

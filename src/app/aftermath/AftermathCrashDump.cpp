@@ -63,14 +63,16 @@ static void DumpFileCallback(const void* pGpuCrashDump, const uint32_t gpuCrashD
             {
                 GFSDK_Aftermath_ShaderBinaryHash shaderHash = {};
                 GFSDK_Aftermath_GetShaderHashForShaderInfo(decoder, &shaderInfo, &shaderHash);
-                nvrhi::AftermathCrashDumpHelper& crashDumpHelper = dumper->GetDeviceManager().GetDevice()->getAftermathCrashDumpHelper();
-                nvrhi::BinaryBlob shaderLookupResult = crashDumpHelper.findShaderBinary(shaderHash.hash, donut::app::AftermathCrashDump::GetShaderHashForBinary);
-                if (shaderLookupResult.second > 0)
+                nvrhi::IAftermathCrashDumpHelper* crashDumpHelper = dumper->GetDeviceManager().GetDevice()->getAftermathCrashDumpHelper();
+                const void* shaderBinary = nullptr;
+                size_t shaderBinarySize = 0;
+                if (crashDumpHelper && crashDumpHelper->findShaderBinary(shaderHash.hash, donut::app::AftermathCrashDump::GetShaderHashForBinary, shaderBinary, shaderBinarySize)
+                    && shaderBinarySize > 0)
                 {
                     std::stringstream ss;
                     ss << std::hex << shaderHash.hash << ".bin";
                     std::filesystem::path shaderPath = dumper->GetDumpFolder() / ss.str();
-                    nativeFS->writeFile(shaderPath, shaderLookupResult.first, shaderLookupResult.second);
+                    nativeFS->writeFile(shaderPath, shaderBinary, shaderBinarySize);
                 }
             }
         }
@@ -102,14 +104,14 @@ static void DescriptionCallback(PFN_GFSDK_Aftermath_AddGpuCrashDumpDescription a
 }
 
 // this callback should call into the nvrhi device which has the necessary information
-static void ResolveMarkerCallback(const void* pMarkerData, const uint32_t markerDataSize, void* pUserData, void** ppResolvedMarkerData, uint32_t* pResolvedMarkerDataSize)
+static void ResolveMarkerCallback(const void* pMarkerData, const uint32_t markerDataSize, void* pUserData, PFN_GFSDK_Aftermath_ResolveMarker resolveMarker)
 {
     donut::app::AftermathCrashDump* dumper = reinterpret_cast<donut::app::AftermathCrashDump*>(pUserData);
     const uint64_t markerAsHash = reinterpret_cast<const uint64_t>(pMarkerData);
-    // as long as the device is not yet destroyed, these references should be ok to pass back
-    const std::string& resolvedMarker = dumper->ResolveMarker(markerAsHash);
-    *ppResolvedMarkerData = (void*) resolvedMarker.data();
-    *pResolvedMarkerDataSize = uint32_t(resolvedMarker.length());
+    // Aftermath copies the resolved marker data before resolveMarker returns
+    size_t resolvedMarkerLength = 0;
+    const char* resolvedMarker = dumper->ResolveMarker(markerAsHash, resolvedMarkerLength);
+    resolveMarker(resolvedMarker, uint32_t(resolvedMarkerLength));
 }
 
 void donut::app::AftermathCrashDump::WaitForCrashDump(uint32_t maxTimeoutSeconds)
@@ -129,14 +131,14 @@ void donut::app::AftermathCrashDump::WaitForCrashDump(uint32_t maxTimeoutSeconds
     }
 }
 
-uint64_t donut::app::AftermathCrashDump::GetShaderHashForBinary(std::pair<const void*, size_t> shaderBinary, nvrhi::GraphicsAPI api)
+uint64_t donut::app::AftermathCrashDump::GetShaderHashForBinary(const void* binary, size_t size, nvrhi::GraphicsAPI api)
 {
 #if DONUT_WITH_VULKAN
     if (api == nvrhi::GraphicsAPI::VULKAN)
     {
         GFSDK_Aftermath_SpirvCode spirv = {};
-        spirv.pData = shaderBinary.first;
-        spirv.size = uint32_t(shaderBinary.second);
+        spirv.pData = binary;
+        spirv.size = uint32_t(size);
         GFSDK_Aftermath_ShaderBinaryHash hash = {};
         GFSDK_Aftermath_GetShaderHashSpirv(GFSDK_Aftermath_Version_API, &spirv, &hash);
         return hash.hash;
@@ -146,8 +148,8 @@ uint64_t donut::app::AftermathCrashDump::GetShaderHashForBinary(std::pair<const 
     if (api == nvrhi::GraphicsAPI::D3D11 || api == nvrhi::GraphicsAPI::D3D12)
     {
         D3D12_SHADER_BYTECODE dxil = {};
-        dxil.pShaderBytecode = shaderBinary.first;
-        dxil.BytecodeLength = shaderBinary.second;
+        dxil.pShaderBytecode = binary;
+        dxil.BytecodeLength = size;
         GFSDK_Aftermath_ShaderBinaryHash hash = {};
         GFSDK_Aftermath_GetShaderHash(GFSDK_Aftermath_Version_API, &dxil, &hash);
         return hash.hash;
@@ -206,9 +208,13 @@ void donut::app::AftermathCrashDump::EnableCrashDumpTracking()
     m_dumpFolder = app::GetDirectoryWithExecutable() / folder.str();
 }
 
-const std::string& donut::app::AftermathCrashDump::ResolveMarker(uint64_t markerHash)
+const char* donut::app::AftermathCrashDump::ResolveMarker(uint64_t markerHash, size_t& outLength)
 {
-    auto [found, markerString] = m_deviceManager.GetDevice()->getAftermathCrashDumpHelper().ResolveMarker(markerHash);
+    // When the marker is not found, the helper returns an error message instead.
+    const char* markerString = "";
+    outLength = 0;
+    if (nvrhi::IAftermathCrashDumpHelper* crashDumpHelper = m_deviceManager.GetDevice()->getAftermathCrashDumpHelper())
+        crashDumpHelper->resolveMarker(markerHash, markerString, outLength);
     return markerString;
 }
 

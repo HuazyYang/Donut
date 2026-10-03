@@ -745,6 +745,15 @@ bool DeviceManager_VK::createDevice()
     physicalDeviceFeatures2.pNext = pNext;
     m_VulkanPhysicalDevice.getFeatures2(&physicalDeviceFeatures2);
 
+    // Optional Vulkan 1.2 features. Queried with a chain of their own, because VkPhysicalDeviceVulkan12Features
+    // overlaps the per-feature structures (bufferDeviceAddressFeatures) in the chain above.
+    vk::PhysicalDeviceVulkan12Features supportedVulkan12Features;
+    {
+        vk::PhysicalDeviceFeatures2 query;
+        query.pNext = &supportedVulkan12Features;
+        m_VulkanPhysicalDevice.getFeatures2(&query);
+    }
+
     std::unordered_set<int> uniqueQueueFamilies = {
         m_GraphicsQueueFamily };
 
@@ -885,6 +894,11 @@ bool DeviceManager_VK::createDevice()
         .setDescriptorBindingUpdateUnusedWhilePending(true)
         .setTimelineSemaphore(true)
         .setShaderSampledImageArrayNonUniformIndexing(true)
+        // NonUniformResourceIndex() on a bindless RWTexture/RWBuffer array makes DXC declare the
+        // StorageImage/StorageBufferArrayNonUniformIndexing SPIR-V capabilities, which need these features.
+        // Storage buffers are required with descriptorIndexing; storage images are optional.
+        .setShaderStorageBufferArrayNonUniformIndexing(supportedVulkan12Features.shaderStorageBufferArrayNonUniformIndexing)
+        .setShaderStorageImageArrayNonUniformIndexing(supportedVulkan12Features.shaderStorageImageArrayNonUniformIndexing)
         .setBufferDeviceAddress(bufferDeviceAddressFeatures.bufferDeviceAddress)
         .setShaderSubgroupExtendedTypes(true)
         .setScalarBlockLayout(true)
@@ -1043,7 +1057,7 @@ bool DeviceManager_VK::createSwapChain()
         textureDesc.keepInitialState = true;
         textureDesc.isRenderTarget = true;
 
-        sci.rhiHandle = m_NvrhiDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image, nvrhi::Object(sci.image), textureDesc);
+        m_NvrhiDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image, static_cast<VkImage>(sci.image), textureDesc, &sci.rhiHandle);
         m_SwapChainImages.push_back(sci);
     }
 
@@ -1194,7 +1208,7 @@ bool DeviceManager_VK::CreateDevice()
     auto vecDeviceExt = stringSetToVector(enabledExtensions.device);
 
     nvrhi::vulkan::DeviceDesc deviceDesc;
-    deviceDesc.errorCB = &DefaultMessageCallback::GetInstance();
+    deviceDesc.errorCB = DefaultMessageCallback::GetInstance();
     deviceDesc.instance = m_VulkanInstance;
     deviceDesc.physicalDevice = m_VulkanPhysicalDevice;
     deviceDesc.device = m_VulkanDevice;
@@ -1417,7 +1431,7 @@ bool DeviceManager_VK::Present()
     }
     else
     {
-        query = m_NvrhiDevice->createEventQuery();
+        m_NvrhiDevice->createEventQuery(&query);
     }
 
     m_NvrhiDevice->resetEventQuery(query);

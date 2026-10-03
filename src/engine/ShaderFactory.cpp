@@ -33,6 +33,45 @@ using namespace std;
 using namespace donut::vfs;
 using namespace donut::engine;
 
+#if DONUT_WITH_AFTERMATH
+namespace
+{
+    // Answers the Aftermath crash dump helper's shader binary queries from a ShaderFactory's bytecode cache.
+    // Holds a plain back-pointer: the factory unregisters it before it is destroyed.
+    class AftermathShaderLookup : public nvrhi::ObjectImpl<nvrhi::IAftermathShaderBinaryLookup>
+    {
+    public:
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(AftermathShaderLookup)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IAftermathShaderBinaryLookup)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IObject)
+        NVRHI_END_INTERFACE_TABLE()
+
+        explicit AftermathShaderLookup(ShaderFactory* factory) : m_Factory(factory) { }
+
+        bool findShaderBinary(uint64_t shaderHash, nvrhi::PFN_AftermathShaderHashGenerator hashGenerator,
+                              const void*& outBinary, size_t& outSize) noexcept override
+        {
+            try
+            {
+                auto [binary, size] = m_Factory->FindShaderFromHash(shaderHash, hashGenerator);
+                if (size == 0)
+                    return false;
+                outBinary = binary;
+                outSize = size;
+                return true;
+            }
+            catch (...)
+            {
+                return false;
+            }
+        }
+
+    private:
+        ShaderFactory* m_Factory;
+    };
+}
+#endif
+
 // Builds the "permutation not found" message using the two-call sizing convention
 // of ShaderToolBlobFormatNotFoundMessage (the required length excludes the NUL,
 // the capacity passed with a buffer must include it).
@@ -62,16 +101,22 @@ ShaderFactory::ShaderFactory(nvrhi::IDevice *rendererInterface,
 	, m_basePath(basePath)
 {
 #if DONUT_WITH_AFTERMATH
-    if (m_Device->isAftermathEnabled())
-        m_Device->getAftermathCrashDumpHelper().registerShaderBinaryLookupCallback(this, std::bind(&ShaderFactory::FindShaderFromHash, this, std::placeholders::_1, std::placeholders::_2));
+    if (nvrhi::IAftermathCrashDumpHelper* crashDumpHelper = m_Device->isAftermathEnabled() ? m_Device->getAftermathCrashDumpHelper() : nullptr)
+    {
+        m_AftermathLookup = MAKE_RC_OBJ_PTR(AftermathShaderLookup, this);
+        crashDumpHelper->registerShaderBinaryLookup(m_AftermathLookup);
+    }
 #endif
 }
 
 ShaderFactory::~ShaderFactory()
 {
 #if DONUT_WITH_AFTERMATH
-    if (m_Device->isAftermathEnabled())
-        m_Device->getAftermathCrashDumpHelper().unRegisterShaderBinaryLookupCallback(this);
+    if (m_AftermathLookup)
+    {
+        if (nvrhi::IAftermathCrashDumpHelper* crashDumpHelper = m_Device->getAftermathCrashDumpHelper())
+            crashDumpHelper->unregisterShaderBinaryLookup(m_AftermathLookup);
+    }
 #endif
 }
 
@@ -166,7 +211,9 @@ nvrhi::ShaderHandle ShaderFactory::CreateStaticShader(StaticShader shader, const
         return nullptr;
     }
 
-    return m_Device->createShader(desc, permutationBytecode, permutationSize);
+    nvrhi::ShaderHandle shaderHandle;
+    m_Device->createShader(desc, permutationBytecode, permutationSize, &shaderHandle);
+    return shaderHandle;
 }
 
 nvrhi::ShaderHandle ShaderFactory::CreateStaticShader(StaticShader shader, const std::vector<ShaderMacro>* pDefines, nvrhi::ShaderType shaderType)
@@ -220,7 +267,9 @@ nvrhi::ShaderLibraryHandle ShaderFactory::CreateStaticShaderLibrary(StaticShader
         return nullptr;
     }
 
-    return m_Device->createShaderLibrary(permutationBytecode, permutationSize);
+    nvrhi::ShaderLibraryHandle shaderLibrary;
+    m_Device->createShaderLibrary(permutationBytecode, permutationSize, &shaderLibrary);
+    return shaderLibrary;
 }
 
 nvrhi::ShaderLibraryHandle ShaderFactory::CreateStaticPlatformShaderLibrary(StaticShader dxil, StaticShader spirv, const std::vector<ShaderMacro>* pDefines)
@@ -269,7 +318,7 @@ nvrhi::ShaderLibraryHandle ShaderFactory::CreateAutoShaderLibrary(const char* fi
     return CreateShaderLibrary(fileName, pDefines);
 }
 
-std::pair<const void*, size_t> donut::engine::ShaderFactory::FindShaderFromHash(uint64_t hash, std::function<uint64_t(std::pair<const void*, size_t>, nvrhi::GraphicsAPI)> hashGenerator)
+std::pair<const void*, size_t> donut::engine::ShaderFactory::FindShaderFromHash(uint64_t hash, nvrhi::PFN_AftermathShaderHashGenerator hashGenerator)
 {
     for (auto& entry : m_BytecodeCache)
     {
@@ -318,7 +367,7 @@ std::pair<const void*, size_t> donut::engine::ShaderFactory::FindShaderFromHash(
                 if (ShaderToolBlobFindPermutation(shaderBytes, shaderSize, permutationConstants.data(),
                     permutationConstants.size(), &permutationBytecode, &permutationSize) == 0)
                 {
-                    uint64_t entryHash = hashGenerator(std::make_pair(permutationBytecode, permutationSize), m_Device->getGraphicsAPI());
+                    uint64_t entryHash = hashGenerator(permutationBytecode, permutationSize, m_Device->getGraphicsAPI());
                     if (entryHash == hash)
                     {
                         return std::make_pair(permutationBytecode, permutationSize);
@@ -328,7 +377,7 @@ std::pair<const void*, size_t> donut::engine::ShaderFactory::FindShaderFromHash(
         }
         else
         {
-            uint64_t entryHash = hashGenerator(std::make_pair(shaderBytes, shaderSize), m_Device->getGraphicsAPI());
+            uint64_t entryHash = hashGenerator(shaderBytes, shaderSize, m_Device->getGraphicsAPI());
             if (entryHash == hash)
             {
                 return std::make_pair(shaderBytes, shaderSize);

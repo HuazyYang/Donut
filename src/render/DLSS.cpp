@@ -52,13 +52,13 @@ DLSS::DLSS(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory)
         .addItem(nvrhi::BindingLayoutItem::Texture_UAV(0))
         .addItem(nvrhi::BindingLayoutItem::PushConstants(0, sizeof(float)));
 
-    m_exposureBindingLayout = device->createBindingLayout(layoutDesc);
+    device->createBindingLayout(layoutDesc, &m_exposureBindingLayout);
 
     auto pipelineDesc = nvrhi::ComputePipelineDesc()
         .addBindingLayout(m_exposureBindingLayout)
         .setComputeShader(m_exposureShader);
 
-    m_exposurePipeline = device->createComputePipeline(pipelineDesc);
+    device->createComputePipeline(pipelineDesc, &m_exposurePipeline);
 
     auto textureDesc = nvrhi::TextureDesc()
         .setWidth(1)
@@ -70,9 +70,9 @@ DLSS::DLSS(nvrhi::IDevice* device, donut::engine::ShaderFactory& shaderFactory)
         .setDimension(nvrhi::TextureDimension::Texture2D)
         .setIsUAV(true);
 
-    m_exposureTexture = device->createTexture(textureDesc);
+    device->createTexture(textureDesc, &m_exposureTexture);
 
-    m_featureCommandList = device->createCommandList();
+    device->createCommandList(nvrhi::CommandListParameters(), &m_featureCommandList);
 }
 
 bool DLSS::IsDlssSupported() const
@@ -110,7 +110,7 @@ void DLSS::ComputeExposure(nvrhi::ICommandList* commandList, nvrhi::IBuffer* ton
             .addItem(nvrhi::BindingSetItem::Texture_UAV(0, m_exposureTexture))
             .addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(float)));
 
-        m_exposureBindingSet = m_device->createBindingSet(setDesc, m_exposureBindingLayout);
+        m_device->createBindingSet(setDesc, m_exposureBindingLayout, &m_exposureBindingSet);
     }
 
     auto state = nvrhi::ComputeState()

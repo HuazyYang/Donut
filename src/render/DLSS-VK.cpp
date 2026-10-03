@@ -48,9 +48,9 @@ public:
         std::string const& directoryWithExecutable, uint32_t applicationID)
         : DLSS(device, shaderFactory)
     {
-        VkInstance vkInstance = device->getNativeObject(nvrhi::ObjectTypes::VK_Instance);
-        VkPhysicalDevice vkPhysicalDevice = device->getNativeObject(nvrhi::ObjectTypes::VK_PhysicalDevice);
-        VkDevice vkDevice= device->getNativeObject(nvrhi::ObjectTypes::VK_Device);
+        VkInstance vkInstance = static_cast<VkInstance>(device->getNativeObject(nvrhi::ObjectTypes::VK_Instance));
+        VkPhysicalDevice vkPhysicalDevice = static_cast<VkPhysicalDevice>(device->getNativeObject(nvrhi::ObjectTypes::VK_PhysicalDevice));
+        VkDevice vkDevice = static_cast<VkDevice>(device->getNativeObject(nvrhi::ObjectTypes::VK_Device));
 
         std::wstring executablePathW;
         executablePathW.assign(directoryWithExecutable.begin(), directoryWithExecutable.end());
@@ -125,7 +125,7 @@ public:
         }
 
         m_featureCommandList->open();
-        VkCommandBuffer vkCmdBuf = m_featureCommandList->getNativeObject(nvrhi::ObjectTypes::VK_CommandBuffer);
+        VkCommandBuffer vkCmdBuf = static_cast<VkCommandBuffer>(m_featureCommandList->getNativeObject(nvrhi::ObjectTypes::VK_CommandBuffer));
 
         m_parameters->Set(NVSDK_NGX_Parameter_CreationNodeMask, 1u);
         m_parameters->Set(NVSDK_NGX_Parameter_VisibilityNodeMask, 1u);
@@ -178,8 +178,8 @@ public:
         resource.Type = NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW;
 
         auto& viewInfo = resource.Resource.ImageViewInfo;
-        viewInfo.Image = texture->getNativeObject(nvrhi::ObjectTypes::VK_Image);
-        viewInfo.ImageView = texture->getNativeView(nvrhi::ObjectTypes::VK_ImageView);
+        viewInfo.Image = static_cast<VkImage>(texture->getNativeObject(nvrhi::ObjectTypes::VK_Image));
+        viewInfo.ImageView = static_cast<VkImageView>(texture->getNativeView(nvrhi::ObjectTypes::VK_ImageView));
         viewInfo.Format = VkFormat(nvrhi::vulkan::convertFormat(desc.format));
         viewInfo.Width = desc.width;
         viewInfo.Height = desc.height;
@@ -206,7 +206,7 @@ public:
             ComputeExposure(commandList, params.exposureBuffer, params.exposureScale);
         }
 
-        VkCommandBuffer vkCmdBuf = commandList->getNativeObject(nvrhi::ObjectTypes::VK_CommandBuffer);
+        VkCommandBuffer vkCmdBuf = static_cast<VkCommandBuffer>(commandList->getNativeObject(nvrhi::ObjectTypes::VK_CommandBuffer));
 
         NVSDK_NGX_Resource_VK inColorResource;
         NVSDK_NGX_Resource_VK outColorResource;
@@ -295,7 +295,7 @@ public:
             m_parameters = nullptr;
         }
 
-        VkDevice vkDevice = m_device->getNativeObject(nvrhi::ObjectTypes::VK_Device);
+        VkDevice vkDevice = static_cast<VkDevice>(m_device->getNativeObject(nvrhi::ObjectTypes::VK_Device));
         NVSDK_NGX_VULKAN_Shutdown1(vkDevice);
     }
 };

@@ -84,7 +84,7 @@ donut::engine::DescriptorIndex donut::engine::DescriptorHandle::GetIndexInHeap()
 
 donut::engine::DescriptorTableManager::DescriptorTableManager(nvrhi::IDevice* device, nvrhi::IBindingLayout* layout)
     : m_Device(device) {
-    m_DescriptorTable = m_Device->createDescriptorTable(layout);
+    m_Device->createDescriptorTable(layout, &m_DescriptorTable);
 
     size_t capacity = m_DescriptorTable->getCapacity();
     m_DescriptorRefCounts.resize(capacity);

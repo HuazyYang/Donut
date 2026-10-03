@@ -76,7 +76,7 @@ MaterialBindingCache::MaterialBindingCache(
         layoutDesc.bindings.push_back(layoutItem);
     }
 
-    m_BindingLayout = m_Device->createBindingLayout(layoutDesc);
+    m_Device->createBindingLayout(layoutDesc, &m_BindingLayout);
 }
 
 nvrhi::IBindingLayout* donut::engine::MaterialBindingCache::GetLayout() const
@@ -169,5 +169,7 @@ nvrhi::BindingSetHandle donut::engine::MaterialBindingCache::CreateMaterialBindi
         bindingSetDesc.bindings.push_back(setItem);
     }
 
-    return m_Device->createBindingSet(bindingSetDesc, m_BindingLayout);
+    nvrhi::BindingSetHandle bindingSet;
+    m_Device->createBindingSet(bindingSetDesc, m_BindingLayout, &bindingSet);
+    return bindingSet;
 }

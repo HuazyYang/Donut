@@ -106,9 +106,10 @@ bool ImGui_ImplNVRHI_CreateDeviceObjects() {
              sizeof(ImDrawVert), false},
         };
 
-        auto shaderAttribLayout = bd->Device->createInputLayout(
+        nvrhi::InputLayoutHandle shaderAttribLayout;
+        bd->Device->createInputLayout(
             vertexAttribLayout, sizeof(vertexAttribLayout) / sizeof(vertexAttribLayout[0]),
-            vs);
+            vs, &shaderAttribLayout);
 
         // create PSO
         {
@@ -143,7 +144,7 @@ bool ImGui_ImplNVRHI_CreateDeviceObjects() {
                 nvrhi::BindingLayoutItem::PushConstants(0, sizeof(VERTEX_CONSTANT_BUFFER_NVRHI)),
                 nvrhi::BindingLayoutItem::Texture_SRV(0),
                 nvrhi::BindingLayoutItem::Sampler(0)};
-            bd->BindingLayout = bd->Device->createBindingLayout(layoutDesc);
+            bd->Device->createBindingLayout(layoutDesc, &bd->BindingLayout);
 
             nvrhi::GraphicsPipelineDesc basePSODesc;
             basePSODesc.primType = nvrhi::PrimitiveType::TriangleList;
@@ -156,7 +157,7 @@ bool ImGui_ImplNVRHI_CreateDeviceObjects() {
             nvrhi::FramebufferInfo fbInfo;
             fbInfo.colorFormats = { bd->InitInfo.RTVFormat };
 
-            bd->PSO = bd->Device->createGraphicsPipeline(basePSODesc, fbInfo);
+            bd->Device->createGraphicsPipeline1(basePSODesc, fbInfo, &bd->PSO);
         }
     }
 
@@ -165,7 +166,7 @@ bool ImGui_ImplNVRHI_CreateDeviceObjects() {
             .setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
             .setAllFilters(true);
 
-        bd->FontSampler = bd->Device->createSampler(desc);
+        bd->Device->createSampler(desc, &bd->FontSampler);
 
         if (bd->FontSampler == nullptr)
             return false;
@@ -209,7 +210,7 @@ void Imgui_ImplNVRHI_UpdateTexture(ImTextureData *tex) {
         desc.keepInitialState = true;
         desc.debugName = "ImGui texture";
 
-        backend_tex->Texture = bd->Device->createTexture(desc);
+        bd->Device->createTexture(desc, &backend_tex->Texture);
 
         nvrhi::BindingSetDesc bindingDesc;
         bindingDesc.bindings = {
@@ -218,7 +219,7 @@ void Imgui_ImplNVRHI_UpdateTexture(ImTextureData *tex) {
             nvrhi::BindingSetItem::Sampler(0, bd->FontSampler)
         };
         IM_ASSERT(bd->BindingLayout);
-        backend_tex->BindingSet = bd->Device->createBindingSet(bindingDesc, bd->BindingLayout);
+        bd->Device->createBindingSet(bindingDesc, bd->BindingLayout, &backend_tex->BindingSet);
 
         tex->SetTexID((ImTextureID)backend_tex->BindingSet.Get());
         tex->BackendUserData = backend_tex;
@@ -248,18 +249,17 @@ void Imgui_ImplNVRHI_UpdateTexture(ImTextureData *tex) {
             desc.width = upload_w;
             desc.height = upload_h;
             desc.format = nvrhi::Format::RGBA8_UNORM;
-            backend_tex->UploadBuffer =
-                bd->Device->createStagingTexture(desc, nvrhi::CpuAccessMode::Write);
+            bd->Device->createStagingTexture(desc, nvrhi::CpuAccessMode::Write, &backend_tex->UploadBuffer);
         }
 
         size_t row_pitch;
         auto data = (uint8_t *)bd->Device->mapStagingTexture(
-            backend_tex->UploadBuffer, {}, nvrhi::CpuAccessMode::Write, &row_pitch);
+            backend_tex->UploadBuffer, {}, nvrhi::CpuAccessMode::Write, row_pitch);
         for (uint32_t y = 0; y < upload_h; ++y, data += row_pitch)
             memcpy(data, tex->GetPixelsAt(upload_x, y + upload_y), upload_w * tex->BytesPerPixel);
         bd->Device->unmapStagingTexture(backend_tex->UploadBuffer);
 
-        bd->CommandList->copyTexture(
+        bd->CommandList->copyTexture3(
             backend_tex->Texture,
             nvrhi::TextureSlice{upload_x, upload_y, 0, upload_w, upload_h, 1},
             backend_tex->UploadBuffer,
@@ -349,7 +349,7 @@ void ImGui_ImplNVRHI_RenderDrawData(ImDrawData *draw_data, nvrhi::IFramebuffer *
         desc.initialState = nvrhi::ResourceStates::VertexBuffer;
         desc.keepInitialState = true;
 
-        bd->VertexBuffer = bd->Device->createBuffer(desc);
+        bd->Device->createBuffer(desc, &bd->VertexBuffer);
         bd->VtxBufferCache.resize(bd->VertexBufferSize);
     }
     if(bd->IndexBuffer == nullptr || bd->IndexBufferSize < (uint32_t)draw_data->TotalIdxCount) {
@@ -361,7 +361,7 @@ void ImGui_ImplNVRHI_RenderDrawData(ImDrawData *draw_data, nvrhi::IFramebuffer *
         desc.initialState = nvrhi::ResourceStates::IndexBuffer;
         desc.keepInitialState = true;
 
-        bd->IndexBuffer = bd->Device->createBuffer(desc);
+        bd->Device->createBuffer(desc, &bd->IndexBuffer);
         bd->IdxBufferCache.resize(bd->IndexBufferSize);
     }
 
@@ -496,7 +496,7 @@ bool ImGuiRenderPass::Init(engine::ShaderFactory *pShaderFactory) {
 
     m_imContext = ImGui::CreateContext();
 
-    m_commandList = GetDevice()->createCommandList();
+    GetDevice()->createCommandList(nvrhi::CommandListParameters(), &m_commandList);
 
     m_shaderFactory = pShaderFactory;
 

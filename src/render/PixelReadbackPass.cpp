@@ -73,12 +73,12 @@ PixelReadbackPass::PixelReadbackPass(
     bufferDesc.keepInitialState = true;
     bufferDesc.debugName = "PixelReadbackPass/IntermediateBuffer";
     bufferDesc.canHaveTypedViews = true;
-    m_IntermediateBuffer = m_Device->createBuffer(bufferDesc);
+    m_Device->createBuffer(bufferDesc, &m_IntermediateBuffer);
 
     bufferDesc.canHaveUAVs = false;
     bufferDesc.cpuAccess = nvrhi::CpuAccessMode::Read;
     bufferDesc.debugName = "PixelReadbackPass/ReadbackBuffer";
-    m_ReadbackBuffer = m_Device->createBuffer(bufferDesc);
+    m_Device->createBuffer(bufferDesc, &m_ReadbackBuffer);
 
     nvrhi::BufferDesc constantBufferDesc;
     constantBufferDesc.byteSize = sizeof(PixelReadbackConstants);
@@ -86,7 +86,7 @@ PixelReadbackPass::PixelReadbackPass(
     constantBufferDesc.isVolatile = true;
     constantBufferDesc.debugName = "PixelReadbackPass/Constants";
     constantBufferDesc.maxVersions = engine::c_MaxRenderPassConstantBufferVersions;
-    m_ConstantBuffer = m_Device->createBuffer(constantBufferDesc);
+    m_Device->createBuffer(constantBufferDesc, &m_ConstantBuffer);
 
     nvrhi::BindingLayoutDesc layoutDesc;
     layoutDesc.visibility = nvrhi::ShaderType::Compute;
@@ -96,7 +96,7 @@ PixelReadbackPass::PixelReadbackPass(
         nvrhi::BindingLayoutItem::TypedBuffer_UAV(0)
     };
 
-    m_BindingLayout = m_Device->createBindingLayout(layoutDesc);
+    m_Device->createBindingLayout(layoutDesc, &m_BindingLayout);
 
     nvrhi::BindingSetDesc setDesc;
     setDesc.bindings = {
@@ -105,12 +105,12 @@ PixelReadbackPass::PixelReadbackPass(
         nvrhi::BindingSetItem::TypedBuffer_UAV(0, m_IntermediateBuffer)
     };
 
-    m_BindingSet = m_Device->createBindingSet(setDesc, m_BindingLayout);
+    m_Device->createBindingSet(setDesc, m_BindingLayout, &m_BindingSet);
 
     nvrhi::ComputePipelineDesc pipelineDesc;
     pipelineDesc.bindingLayouts = { m_BindingLayout };
     pipelineDesc.CS = m_Shader;
-    m_Pipeline = m_Device->createComputePipeline(pipelineDesc);
+    m_Device->createComputePipeline(pipelineDesc, &m_Pipeline);
 }
 
 

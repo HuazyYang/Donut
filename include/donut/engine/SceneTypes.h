@@ -26,6 +26,7 @@
 #include <donut/engine/DescriptorTableManager.h>
 #include <donut/shaders/light_types.h>
 #include <nvrhi/nvrhi.h>
+#include <array>
 #include <optional>
 
 struct MaterialConstants;

@@ -91,8 +91,8 @@ void GBufferFillPass::Init(ShaderFactory& shaderFactory, const CreateParameters&
     else
         m_MaterialBindings = CreateMaterialBindingCache(*m_CommonPasses);
 
-    m_GBufferCB = m_Device->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(sizeof(GBufferFillConstants),
-        "GBufferFillConstants", params.numConstantBufferVersions));
+    m_Device->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(sizeof(GBufferFillConstants),
+        "GBufferFillConstants", params.numConstantBufferVersions), &m_GBufferCB);
 
     CreateViewBindings(m_ViewBindingLayout, m_ViewBindings, params);
 
@@ -182,7 +182,9 @@ nvrhi::InputLayoutHandle GBufferFillPass::CreateInputLayout(nvrhi::IShader* vert
             inputDescs.push_back(GetVertexAttributeDesc(VertexAttribute::PrevTransform, "PREV_TRANSFORM", 5));
         }
 
-        return m_Device->createInputLayout(inputDescs.data(), static_cast<uint32_t>(inputDescs.size()), vertexShader);
+        nvrhi::InputLayoutHandle inputLayout;
+        m_Device->createInputLayout(inputDescs.data(), static_cast<uint32_t>(inputDescs.size()), vertexShader, &inputLayout);
+        return inputLayout;
     }
 
     return nullptr;
@@ -196,7 +198,7 @@ void GBufferFillPass::CreateViewBindings(nvrhi::BindingLayoutHandle& layout, nvr
         .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(GBUFFER_BINDING_VIEW_CONSTANTS))
         .addItem(nvrhi::BindingLayoutItem::Sampler(GBUFFER_BINDING_MATERIAL_SAMPLER));
 
-    layout = m_Device->createBindingLayout(bindingLayoutDesc);
+    m_Device->createBindingLayout(bindingLayoutDesc, &layout);
 
     auto bindingSetDesc = nvrhi::BindingSetDesc()
         .setTrackLiveness(params.trackLiveness)
@@ -204,7 +206,7 @@ void GBufferFillPass::CreateViewBindings(nvrhi::BindingLayoutHandle& layout, nvr
         .addItem(nvrhi::BindingSetItem::Sampler(GBUFFER_BINDING_MATERIAL_SAMPLER,
             m_CommonPasses->m_AnisotropicWrapSampler));
 
-    set = m_Device->createBindingSet(bindingSetDesc, layout);
+    m_Device->createBindingSet(bindingSetDesc, layout, &set);
 }
 
 nvrhi::GraphicsPipelineHandle GBufferFillPass::CreateGraphicsPipeline(PipelineKey key, nvrhi::FramebufferInfo const& framebufferInfo)
@@ -257,7 +259,9 @@ nvrhi::GraphicsPipelineHandle GBufferFillPass::CreateGraphicsPipeline(PipelineKe
         pipelineDesc.PS = m_PixelShader;
     }
 
-    return m_Device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
+    nvrhi::GraphicsPipelineHandle pipeline;
+    m_Device->createGraphicsPipeline1(pipelineDesc, framebufferInfo, &pipeline);
+    return pipeline;
 }
 
 nvrhi::AutoPtr<MaterialBindingCache> GBufferFillPass::CreateMaterialBindingCache(CommonRenderPasses& commonPasses)
@@ -329,7 +333,7 @@ bool GBufferFillPass::SetupMaterial(GeometryPassContext& abstractContext, const 
     if (!materialBindingSet)
         return false;
 
-    nvrhi::FramebufferInfo const& framebufferInfo = state.framebuffer->getFramebufferInfo();
+    nvrhi::FramebufferInfo const framebufferInfo = state.framebuffer->getFramebufferInfo().getInfo();
     nvrhi::GraphicsPipelineHandle& pipeline = m_Pipelines[key.value];
 
     if (!pipeline)
@@ -396,7 +400,9 @@ nvrhi::BindingLayoutHandle GBufferFillPass::CreateInputBindingLayout()
         .addItem(nvrhi::BindingLayoutItem::RawBuffer_SRV(GBUFFER_BINDING_VERTEX_BUFFER))
         .addItem(nvrhi::BindingLayoutItem::PushConstants(GBUFFER_BINDING_PUSH_CONSTANTS, sizeof(GBufferPushConstants)));
         
-    return m_Device->createBindingLayout(bindingLayoutDesc);
+    nvrhi::BindingLayoutHandle bindingLayout;
+    m_Device->createBindingLayout(bindingLayoutDesc, &bindingLayout);
+    return bindingLayout;
 }
 
 nvrhi::BindingSetHandle GBufferFillPass::CreateInputBindingSet(const BufferGroup* bufferGroup)
@@ -408,7 +414,9 @@ nvrhi::BindingSetHandle GBufferFillPass::CreateInputBindingSet(const BufferGroup
         .addItem(nvrhi::BindingSetItem::RawBuffer_SRV(GBUFFER_BINDING_VERTEX_BUFFER, bufferGroup->vertexBuffer))
         .addItem(nvrhi::BindingSetItem::PushConstants(GBUFFER_BINDING_PUSH_CONSTANTS, sizeof(GBufferPushConstants)));
 
-    return m_Device->createBindingSet(bindingSetDesc, m_InputBindingLayout);
+    nvrhi::BindingSetHandle bindingSet;
+    m_Device->createBindingSet(bindingSetDesc, m_InputBindingLayout, &bindingSet);
+    return bindingSet;
 }
 
 nvrhi::BindingSetHandle GBufferFillPass::GetOrCreateInputBindingSet(const BufferGroup* bufferGroup)

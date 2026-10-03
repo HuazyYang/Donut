@@ -309,7 +309,7 @@ bool DeviceManager_DX12::CreateDevice()
     }
 
     nvrhi::d3d12::DeviceDesc deviceDesc;
-    deviceDesc.errorCB = m_DeviceParams.messageCallback ? m_DeviceParams.messageCallback : &DefaultMessageCallback::GetInstance();
+    deviceDesc.errorCB = m_DeviceParams.messageCallback ? m_DeviceParams.messageCallback : DefaultMessageCallback::GetInstance();
     deviceDesc.pDevice = m_Device12;
     deviceDesc.pGraphicsCommandQueue = m_GraphicsQueue;
     deviceDesc.pComputeCommandQueue = m_ComputeQueue;
@@ -483,7 +483,7 @@ bool DeviceManager_DX12::CreateRenderTargets()
         textureDesc.initialState = nvrhi::ResourceStates::Present;
         textureDesc.keepInitialState = true;
 
-        m_RhiSwapChainBuffers[n] = m_NvrhiDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(m_SwapChainBuffers[n]), textureDesc);
+        m_NvrhiDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, m_SwapChainBuffers[n].Get(), textureDesc, &m_RhiSwapChainBuffers[n]);
     }
 
     return true;

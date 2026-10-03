@@ -75,16 +75,16 @@ CommonRenderPasses::CommonRenderPasses(nvrhi::IDevice* device, ShaderFactory *sh
     auto samplerDesc = nvrhi::SamplerDesc()
         .setAllFilters(false)
         .setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
-    m_PointClampSampler = m_Device->createSampler(samplerDesc);
+    m_Device->createSampler(samplerDesc, &m_PointClampSampler);
 
     samplerDesc.setAllFilters(true);
-    m_LinearClampSampler = m_Device->createSampler(samplerDesc);
+    m_Device->createSampler(samplerDesc, &m_LinearClampSampler);
     
     samplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap);
-    m_LinearWrapSampler = m_Device->createSampler(samplerDesc);
+    m_Device->createSampler(samplerDesc, &m_LinearWrapSampler);
 
     samplerDesc.setMaxAnisotropy(16);
-    m_AnisotropicWrapSampler = m_Device->createSampler(samplerDesc);
+    m_Device->createSampler(samplerDesc, &m_AnisotropicWrapSampler);
 
     {
         unsigned int blackImage = 0xff000000;
@@ -98,29 +98,29 @@ CommonRenderPasses::CommonRenderPasses(nvrhi::IDevice* device, ShaderFactory *sh
         textureDesc.mipLevels = 1;
 
         textureDesc.debugName = "BlackTexture";
-        m_BlackTexture = m_Device->createTexture(textureDesc);
+        m_Device->createTexture(textureDesc, &m_BlackTexture);
 
         textureDesc.debugName = "GrayTexture";
-        m_GrayTexture = m_Device->createTexture(textureDesc);
+        m_Device->createTexture(textureDesc, &m_GrayTexture);
 
         textureDesc.debugName = "WhiteTexture";
-        m_WhiteTexture = m_Device->createTexture(textureDesc);
+        m_Device->createTexture(textureDesc, &m_WhiteTexture);
 
         textureDesc.dimension = nvrhi::TextureDimension::TextureCubeArray;
         textureDesc.debugName = "BlackCubeMapArray";
         textureDesc.arraySize = 6;
-        m_BlackCubeMapArray = m_Device->createTexture(textureDesc);
+        m_Device->createTexture(textureDesc, &m_BlackCubeMapArray);
 
         textureDesc.dimension = nvrhi::TextureDimension::Texture2DArray;
         textureDesc.debugName = "BlackTexture2DArray";
         textureDesc.arraySize = 1;
-        m_BlackTexture2DArray = m_Device->createTexture(textureDesc);
+        m_Device->createTexture(textureDesc, &m_BlackTexture2DArray);
         textureDesc.debugName = "WhiteTexture2DArray";
-        m_WhiteTexture2DArray = m_Device->createTexture(textureDesc);
+        m_Device->createTexture(textureDesc, &m_WhiteTexture2DArray);
 
         textureDesc.dimension = nvrhi::TextureDimension::Texture3D;
         textureDesc.debugName = "BlackTexture3D";
-        m_BlackTexture3D = m_Device->createTexture(textureDesc);
+        m_Device->createTexture(textureDesc, &m_BlackTexture3D);
 
         const nvrhi::Format dsFormatCandidates[] = {
             nvrhi::Format::D24S8,
@@ -139,15 +139,16 @@ CommonRenderPasses::CommonRenderPasses(nvrhi::IDevice* device, ShaderFactory *sh
         textureDesc.isRenderTarget = true;
         textureDesc.isTypeless = true;
         textureDesc.debugName = "BlackDepthStencilTexture";
-        m_BlackDepthStencilTexture = m_Device->createTexture(textureDesc);
+        m_Device->createTexture(textureDesc, &m_BlackDepthStencilTexture);
 
         textureDesc.dimension = nvrhi::TextureDimension::Texture2DArray;
         textureDesc.debugName = "BlackDepthStencilTexture2DArray";
-        m_BlackDepthStencilTexture2DArray = m_Device->createTexture(textureDesc);
+        m_Device->createTexture(textureDesc, &m_BlackDepthStencilTexture2DArray);
 
         // Write the textures using a temporary CL
 
-        nvrhi::CommandListHandle commandList = m_Device->createCommandList();
+        nvrhi::CommandListHandle commandList;
+        m_Device->createCommandList(nvrhi::CommandListParameters(), &commandList);
         commandList->open();
 
         commandList->beginTrackingTextureState(m_BlackTexture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
@@ -198,7 +199,7 @@ CommonRenderPasses::CommonRenderPasses(nvrhi::IDevice* device, ShaderFactory *sh
             nvrhi::BindingLayoutItem::Sampler(0)
         };
 
-        m_BlitBindingLayout = m_Device->createBindingLayout(layoutDesc);
+        m_Device->createBindingLayout(layoutDesc, &m_BlitBindingLayout);
     }
 }
 
@@ -256,7 +257,7 @@ void CommonRenderPasses::BlitTexture(nvrhi::ICommandList* commandList, const Bli
     default: assert(false);
     }
     
-    nvrhi::GraphicsPipelineHandle& pso = m_BlitPsoCache[PsoCacheKey{ fbinfo, shader, params.blendState }];
+    nvrhi::GraphicsPipelineHandle& pso = m_BlitPsoCache[PsoCacheKey{ fbinfo.getInfo(), shader, params.blendState }];
     if (!pso)
     {
         nvrhi::GraphicsPipelineDesc psoDesc;
@@ -269,7 +270,7 @@ void CommonRenderPasses::BlitTexture(nvrhi::ICommandList* commandList, const Bli
         psoDesc.renderState.depthStencilState.stencilEnable = false;
         psoDesc.renderState.blendState.targets[0] = params.blendState;
 
-        pso = m_Device->createGraphicsPipeline(psoDesc, fbinfo);
+        m_Device->createGraphicsPipeline1(psoDesc, fbinfo.getInfo(), &pso);
     }
     
     nvrhi::BindingSetDesc bindingSetDesc;
@@ -293,7 +294,7 @@ void CommonRenderPasses::BlitTexture(nvrhi::ICommandList* commandList, const Bli
     if (bindingCache)
         sourceBindingSet = bindingCache->GetOrCreateBindingSet(bindingSetDesc, m_BlitBindingLayout);
     else
-        sourceBindingSet = m_Device->createBindingSet(bindingSetDesc, m_BlitBindingLayout);
+        m_Device->createBindingSet(bindingSetDesc, m_BlitBindingLayout, &sourceBindingSet);
 
     nvrhi::GraphicsState state;
     state.pipeline = pso;

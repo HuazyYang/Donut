@@ -70,7 +70,7 @@ nvrhi::BindingSetHandle BindingCache::GetOrCreateBindingSet(const nvrhi::Binding
         nvrhi::BindingSetHandle& entry = m_BindingSets[hash];
         if (!entry)
         {
-            result = m_Device->createBindingSet(desc, layout);
+            m_Device->createBindingSet(desc, layout, &result);
             entry = result;
         }
         else

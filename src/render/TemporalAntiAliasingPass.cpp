@@ -106,7 +106,7 @@ TemporalAntiAliasingPass::TemporalAntiAliasingPass(
     nvrhi::SamplerDesc samplerDesc;
     samplerDesc.addressU = samplerDesc.addressV = samplerDesc.addressW = nvrhi::SamplerAddressMode::Border;
     samplerDesc.borderColor = nvrhi::Color(0.0f);
-    m_BilinearSampler = device->createSampler(samplerDesc);
+    device->createSampler(samplerDesc, &m_BilinearSampler);
 
     m_ResolvedColorSize = float2(float(resolvedColorDesc.width), float(resolvedColorDesc.height));
 
@@ -116,7 +116,7 @@ TemporalAntiAliasingPass::TemporalAntiAliasingPass(
     constantBufferDesc.isConstantBuffer = true;
     constantBufferDesc.isVolatile = true;
     constantBufferDesc.maxVersions = params.numConstantBufferVersions;
-    m_TemporalAntiAliasingCB = device->createBuffer(constantBufferDesc);
+    device->createBuffer(constantBufferDesc, &m_TemporalAntiAliasingCB);
 
     if(params.sourceDepth)
     {
@@ -132,7 +132,7 @@ TemporalAntiAliasingPass::TemporalAntiAliasingPass(
             layoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(1));
         }
 
-        m_MotionVectorsBindingLayout = device->createBindingLayout(layoutDesc);
+        device->createBindingLayout(layoutDesc, &m_MotionVectorsBindingLayout);
 
         nvrhi::BindingSetDesc bindingSetDesc;
         bindingSetDesc.bindings = {
@@ -143,7 +143,7 @@ TemporalAntiAliasingPass::TemporalAntiAliasingPass(
         {
             bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(1, params.sourceDepth, stencilFormat));
         }
-        m_MotionVectorsBindingSet = device->createBindingSet(bindingSetDesc, m_MotionVectorsBindingLayout);
+        device->createBindingSet(bindingSetDesc, m_MotionVectorsBindingLayout, &m_MotionVectorsBindingSet);
 
         m_MotionVectorsFramebufferFactory = MAKE_RC_OBJ_PTR(FramebufferFactory, device);
         m_MotionVectorsFramebufferFactory->RenderTargets = { params.motionVectors };
@@ -160,7 +160,7 @@ TemporalAntiAliasingPass::TemporalAntiAliasingPass(
 
         nvrhi::FramebufferInfo framebufferInfo = m_MotionVectorsFramebufferFactory->GetFramebufferInfo();
 
-        m_MotionVectorsPso = device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
+        device->createGraphicsPipeline1(pipelineDesc, framebufferInfo, &m_MotionVectorsPso);
     }
 
     {
@@ -191,13 +191,13 @@ TemporalAntiAliasingPass::TemporalAntiAliasingPass(
         // Swap resolvedColor and resolvedColorPrevious (t2 and u0)
         bindingSetDesc.bindings[4].resourceHandle = params.feedback2;
         bindingSetDesc.bindings[6].resourceHandle = params.feedback1;
-        m_ResolveBindingSetPrevious = device->createBindingSet(bindingSetDesc, m_ResolveBindingLayout);
+        device->createBindingSet(bindingSetDesc, m_ResolveBindingLayout, &m_ResolveBindingSetPrevious);
 
         nvrhi::ComputePipelineDesc pipelineDesc;
         pipelineDesc.CS = m_TemporalAntiAliasingCS;
         pipelineDesc.bindingLayouts = { m_ResolveBindingLayout };
 
-        m_ResolvePso = device->createComputePipeline(pipelineDesc);
+        device->createComputePipeline(pipelineDesc, &m_ResolvePso);
     }
 }
 

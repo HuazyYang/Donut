@@ -1164,7 +1164,7 @@ void StreamlineIntegration::ReleaseResourceCallback(sl::Resource* resource, void
     }
 };
 
-nvrhi::Object StreamlineIntegration::GetNativeCommandList(nvrhi::ICommandList* commandList)
+nvrhi::NativeObject StreamlineIntegration::GetNativeCommandList(nvrhi::ICommandList* commandList)
 {
 #if DONUT_WITH_DX11
     if (m_api == nvrhi::GraphicsAPI::D3D11)

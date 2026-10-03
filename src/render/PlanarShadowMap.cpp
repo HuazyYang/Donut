@@ -46,7 +46,7 @@ PlanarShadowMap::PlanarShadowMap(
     desc.initialState = nvrhi::ResourceStates::ShaderResource;
     desc.keepInitialState = true;
     desc.dimension = nvrhi::TextureDimension::Texture2DArray;
-    m_ShadowMapTexture = device->createTexture(desc);
+    device->createTexture(desc, &m_ShadowMapTexture);
     
     m_ShadowMapSize = float2(static_cast<float>(resolution));
     m_TextureSize = m_ShadowMapSize;

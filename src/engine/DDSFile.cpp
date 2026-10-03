@@ -814,7 +814,8 @@ namespace donut::engine
         desc.debugName = debugName;
         desc.defaultComponentMapping = info.ResolveComponentMapping();
 
-        nvrhi::TextureHandle texture = device->createTexture(desc);
+        nvrhi::TextureHandle texture;
+        device->createTexture(desc, &texture);
 
         if (!texture)
             return nullptr;
@@ -954,7 +955,7 @@ namespace donut::engine
                 slice.mipLevel = mipLevel;
 
                 size_t rowPitch = 0;
-                const char* sliceData = reinterpret_cast<const char*>(device->mapStagingTexture(stagingTexture, slice, nvrhi::CpuAccessMode::Read, &rowPitch));
+                const char* sliceData = reinterpret_cast<const char*>(device->mapStagingTexture(stagingTexture, slice, nvrhi::CpuAccessMode::Read, rowPitch));
 
                 const TextureSubresourceData& subresourceData = textureInfo.dataLayout[arraySlice][mipLevel];
 

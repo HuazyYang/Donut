@@ -891,7 +891,7 @@ nvrhi::MonoPtr<Engine::Implementation> Xaudio2Implementation::create(Options con
 
     result->startUpdateThread();
 
-    return nvrhi::MonoPtr<Engine::Implementation>(result);
+    return nvrhi::MonoPtr<Engine::Implementation>(std::move(result));
 }
 
 

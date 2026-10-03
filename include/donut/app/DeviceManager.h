@@ -82,6 +82,7 @@ freely, subject to the following restrictions:
 #include <nvrhi/nvrhi.h>
 #include <donut/core/log.h>
 
+#include <array>
 #include <functional>
 #include <optional>
 
@@ -89,11 +90,17 @@ freely, subject to the following restrictions:
 
 namespace donut::app
 {
-    struct DefaultMessageCallback : public nvrhi::IMessageCallback
+    struct DefaultMessageCallback : public nvrhi::ObjectImpl<nvrhi::IMessageCallback>
     {
-        static DefaultMessageCallback& GetInstance();
+        NVRHI_BEGIN_INTERFACE_TABLE_INLINE(DefaultMessageCallback)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IMessageCallback)
+        NVRHI_IMPLEMENTS_INTERFACE(nvrhi::IRHIObject)
+        NVRHI_END_INTERFACE_TABLE()
 
-        void message(nvrhi::MessageSeverity severity, const char* messageText) override;
+        // The shared instance; devices keep their own reference to it.
+        static DefaultMessageCallback* GetInstance();
+
+        void message(nvrhi::MessageSeverity severity, const char* messageText) noexcept override;
     };
 
     struct InstanceParameters

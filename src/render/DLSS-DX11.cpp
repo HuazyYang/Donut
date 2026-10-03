@@ -45,7 +45,7 @@ public:
         std::string const& directoryWithExecutable, uint32_t applicationID)
         : DLSS(device, shaderFactory)
     {
-        ID3D11Device* d3ddevice = device->getNativeObject(nvrhi::ObjectTypes::D3D11_Device);
+        ID3D11Device* d3ddevice = static_cast<ID3D11Device*>(device->getNativeObject(nvrhi::ObjectTypes::D3D11_Device));
 
         std::wstring executablePathW;
         executablePathW.assign(directoryWithExecutable.begin(), directoryWithExecutable.end());
@@ -101,7 +101,7 @@ public:
             m_dlssInitialized = false;
         }
 
-        ID3D11DeviceContext* d3dcontext = m_device->getNativeObject(nvrhi::ObjectTypes::D3D11_DeviceContext);
+        ID3D11DeviceContext* d3dcontext = static_cast<ID3D11DeviceContext*>(m_device->getNativeObject(nvrhi::ObjectTypes::D3D11_DeviceContext));
 
         NVSDK_NGX_DLSS_Create_Params dlssParams = {};
         dlssParams.Feature.InWidth = params.inputWidth;
@@ -144,7 +144,7 @@ public:
             ComputeExposure(commandList, params.exposureBuffer, params.exposureScale);
         }
 
-        ID3D11DeviceContext* d3dcontext = commandList->getNativeObject(nvrhi::ObjectTypes::D3D11_DeviceContext);
+        ID3D11DeviceContext* d3dcontext = static_cast<ID3D11DeviceContext*>(commandList->getNativeObject(nvrhi::ObjectTypes::D3D11_DeviceContext));
 
         commandList->setTextureState(params.inputColorTexture, nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
         commandList->setTextureState(params.outputColorTexture, nvrhi::AllSubresources, nvrhi::ResourceStates::UnorderedAccess);
@@ -157,12 +157,12 @@ public:
         commandList->commitBarriers();
 
         NVSDK_NGX_D3D11_DLSS_Eval_Params evalParams = {};
-        evalParams.Feature.pInColor = params.inputColorTexture->getNativeObject(nvrhi::ObjectTypes::D3D11_Resource);
-        evalParams.Feature.pInOutput = params.outputColorTexture->getNativeObject(nvrhi::ObjectTypes::D3D11_Resource);
+        evalParams.Feature.pInColor = static_cast<ID3D11Resource*>(params.inputColorTexture->getNativeObject(nvrhi::ObjectTypes::D3D11_Resource));
+        evalParams.Feature.pInOutput = static_cast<ID3D11Resource*>(params.outputColorTexture->getNativeObject(nvrhi::ObjectTypes::D3D11_Resource));
         evalParams.Feature.InSharpness = params.sharpness;
-        evalParams.pInDepth = params.depthTexture->getNativeObject(nvrhi::ObjectTypes::D3D11_Resource);
-        evalParams.pInMotionVectors = params.motionVectorsTexture->getNativeObject(nvrhi::ObjectTypes::D3D11_Resource);
-        evalParams.pInExposureTexture = useExposureBuffer ? m_exposureTexture->getNativeObject(nvrhi::ObjectTypes::D3D11_Resource) : nullptr;
+        evalParams.pInDepth = static_cast<ID3D11Resource*>(params.depthTexture->getNativeObject(nvrhi::ObjectTypes::D3D11_Resource));
+        evalParams.pInMotionVectors = static_cast<ID3D11Resource*>(params.motionVectorsTexture->getNativeObject(nvrhi::ObjectTypes::D3D11_Resource));
+        evalParams.pInExposureTexture = useExposureBuffer ? static_cast<ID3D11Resource*>(m_exposureTexture->getNativeObject(nvrhi::ObjectTypes::D3D11_Resource)) : nullptr;
         evalParams.InReset = params.resetHistory;
         evalParams.InJitterOffsetX = view.GetPixelOffset().x;
         evalParams.InJitterOffsetY = view.GetPixelOffset().y;
@@ -196,7 +196,7 @@ public:
             m_parameters = nullptr;
         }
 
-        ID3D11Device* d3ddevice = m_device->getNativeObject(nvrhi::ObjectTypes::D3D11_Device);
+        ID3D11Device* d3ddevice = static_cast<ID3D11Device*>(m_device->getNativeObject(nvrhi::ObjectTypes::D3D11_Device));
         NVSDK_NGX_D3D11_Shutdown1(d3ddevice);
     }
 };

@@ -62,7 +62,7 @@ SkyPass::SkyPass(
     constantBufferDesc.isConstantBuffer = true;
     constantBufferDesc.isVolatile = true;
     constantBufferDesc.maxVersions = engine::c_MaxRenderPassConstantBufferVersions;
-    m_SkyCB = device->createBuffer(constantBufferDesc);
+    device->createBuffer(constantBufferDesc, &m_SkyCB);
 
     const IView* sampleView = compositeView.GetChildView(ViewType::PLANAR, 0);
 
@@ -72,13 +72,13 @@ SkyPass::SkyPass(
         layoutDesc.bindings = {
             nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)
         };
-        m_RenderBindingLayout = device->createBindingLayout(layoutDesc);
+        device->createBindingLayout(layoutDesc, &m_RenderBindingLayout);
 
         nvrhi::BindingSetDesc bindingSetDesc;
         bindingSetDesc.bindings = {
             nvrhi::BindingSetItem::ConstantBuffer(0, m_SkyCB)
         };
-        m_RenderBindingSet = device->createBindingSet(bindingSetDesc, m_RenderBindingLayout);
+        device->createBindingSet(bindingSetDesc, m_RenderBindingLayout, &m_RenderBindingSet);
 
         nvrhi::GraphicsPipelineDesc pipelineDesc;
         pipelineDesc.primType = nvrhi::PrimitiveType::TriangleStrip;
@@ -97,7 +97,7 @@ SkyPass::SkyPass(
 
         nvrhi::FramebufferInfo framebufferInfo = m_FramebufferFactory->GetFramebufferInfo();
 
-        m_RenderPso = device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
+        device->createGraphicsPipeline1(pipelineDesc, framebufferInfo, &m_RenderPso);
     }
 }
 

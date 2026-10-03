@@ -123,7 +123,7 @@ private:
     void UpdateFeatureAvailable();
     uint32_t CheckNumSupportedFeatures(const sl::AdapterInfo& adapterInfo);
 
-    nvrhi::Object GetNativeCommandList(nvrhi::ICommandList* commandList);
+    nvrhi::NativeObject GetNativeCommandList(nvrhi::ICommandList* commandList);
 
     bool m_slInitialized = false;
     nvrhi::GraphicsAPI m_api = nvrhi::GraphicsAPI::D3D12;

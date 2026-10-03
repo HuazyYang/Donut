@@ -41,7 +41,7 @@ nvrhi::IFramebuffer* FramebufferFactory::GetFramebuffer(const nvrhi::TextureSubr
         if (ShadingRateSurface)
             desc.setShadingRateAttachment(ShadingRateSurface, subresources);
 
-        item = m_Device->createFramebuffer(desc);
+        m_Device->createFramebuffer(desc, &item);
     }
     
     return item;

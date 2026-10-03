@@ -71,7 +71,7 @@ EnvironmentMapPass::EnvironmentMapPass(
     constantBufferDesc.isConstantBuffer = true;
     constantBufferDesc.isVolatile = true;
     constantBufferDesc.maxVersions = engine::c_MaxRenderPassConstantBufferVersions;
-    m_SkyCB = device->createBuffer(constantBufferDesc);
+    device->createBuffer(constantBufferDesc, &m_SkyCB);
 
     const IView* sampleView = compositeView.GetChildView(ViewType::PLANAR, 0);
 
@@ -83,7 +83,7 @@ EnvironmentMapPass::EnvironmentMapPass(
             nvrhi::BindingLayoutItem::Texture_SRV(0),
             nvrhi::BindingLayoutItem::Sampler(0)
         };
-        m_RenderBindingLayout = device->createBindingLayout(layoutDesc);
+        device->createBindingLayout(layoutDesc, &m_RenderBindingLayout);
 
         nvrhi::BindingSetDesc bindingSetDesc;
         bindingSetDesc.bindings = {
@@ -91,7 +91,7 @@ EnvironmentMapPass::EnvironmentMapPass(
             nvrhi::BindingSetItem::Texture_SRV(0, environmentMap),
             nvrhi::BindingSetItem::Sampler(0, commonPasses->m_LinearWrapSampler)
         };
-        m_RenderBindingSet = device->createBindingSet(bindingSetDesc, m_RenderBindingLayout);
+        device->createBindingSet(bindingSetDesc, m_RenderBindingLayout, &m_RenderBindingSet);
 
         nvrhi::GraphicsPipelineDesc pipelineDesc;
         pipelineDesc.primType = nvrhi::PrimitiveType::TriangleStrip;
@@ -108,7 +108,7 @@ EnvironmentMapPass::EnvironmentMapPass(
                 ? nvrhi::ComparisonFunc::GreaterOrEqual
                 : nvrhi::ComparisonFunc::LessOrEqual);
 
-        m_RenderPso = device->createGraphicsPipeline(pipelineDesc, m_FramebufferFactory->GetFramebufferInfo());
+        device->createGraphicsPipeline1(pipelineDesc, m_FramebufferFactory->GetFramebufferInfo(), &m_RenderPso);
     }
 }
 
