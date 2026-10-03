@@ -13,6 +13,6 @@
 [submodule "thirdparty/cgltf"]
 	path = thirdparty/cgltf
 	url = https://github.com/jkuhlmann/cgltf
-[submodule "thirdparty/shadertool"]
-	path = thirdparty/shadertool
+[submodule "thirdparty/shader-tool"]
+	path = thirdparty/shader-tool
 	url = git@github.com:HuazyYang/shader-tool.git

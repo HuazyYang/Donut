@@ -86,7 +86,7 @@ if (DONUT_WITH_NVRHI AND NOT TARGET glfw)
 endif()
 
 if (DONUT_WITH_NVRHI AND NOT TARGET ShaderTool)
-    add_subdirectory(shadertool)
+    add_subdirectory(shader-tool)
     set_target_properties(ShaderTool PROPERTIES FOLDER ${third_party_folder})
     set_target_properties(ShaderToolBlob PROPERTIES FOLDER ${third_party_folder})
 endif()

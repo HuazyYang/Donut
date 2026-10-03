@@ -20,7 +20,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/shadertool/cmake/ShaderToolFunctions.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/shader-tool/cmake/ShaderToolFunctions.cmake)
 
 file(GLOB donut_shaders
 	"*.hlsl"

@@ -20,12 +20,12 @@
 # DEALINGS IN THE SOFTWARE.
 
 
-# ShaderMake has been replaced by ShaderTool (thirdparty/shadertool), so
+# ShaderMake has been replaced by ShaderTool (thirdparty/shader-tool), so
 # donut_compile_shaders() and donut_compile_shaders_all_platforms() no longer
 # exist. Call shadertool_add_shader_objects() instead; shaders/CMakeLists.txt
 # is a worked example.
 message(FATAL_ERROR
     "compileshaders.cmake and donut_compile_shaders*() have been removed: Donut now "
     "builds shaders with ShaderTool. Include "
-    "thirdparty/shadertool/cmake/ShaderToolFunctions.cmake and call "
+    "thirdparty/shader-tool/cmake/ShaderToolFunctions.cmake and call "
     "shadertool_add_shader_objects(); see shaders/CMakeLists.txt for an example.")
